@@ -1,0 +1,9 @@
+dist
+node_modules
+prototype
+docs
+reference
+.agents
+.aider-desk
+skills-lock.json
+host/public

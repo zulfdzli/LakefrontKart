@@ -1,0 +1,80 @@
+:root {
+  --ink: #1d1b2e;
+  --body: #eef1f6;
+  --glow: #3fa9f5;
+  --font: 'Fredoka', system-ui, sans-serif;
+}
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--body);
+  color: var(--ink);
+  font-family: var(--font);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
+  overflow: hidden;
+}
+main {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+h1 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.state {
+  font-weight: 600;
+  font-size: 20px;
+}
+.state.ok {
+  color: #2e7d32;
+}
+.rtt {
+  font-size: 40px;
+  font-weight: 700;
+}
+button {
+  font: inherit;
+  font-weight: 700;
+  font-size: 26px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  border: none;
+  color: #5b6170;
+  background: radial-gradient(circle at 35% 30%, #fff, #dfe3ea 70%);
+  box-shadow:
+    0 8px 0 #c3c8d2,
+    0 12px 24px rgba(0, 0, 0, 0.18);
+  transition:
+    transform 0.08s,
+    box-shadow 0.08s;
+}
+button.on {
+  transform: translateY(6px) scale(0.97);
+  box-shadow:
+    0 2px 0 #c3c8d2,
+    0 0 0 6px var(--glow),
+    0 0 26px var(--glow);
+}
+.hint {
+  margin: 0;
+  opacity: 0.6;
+  font-size: 14px;
+  text-align: center;
+  padding: 0 20px;
+}

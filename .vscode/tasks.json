@@ -1,0 +1,18 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev",
+      "type": "npm",
+      "script": "dev",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "turbo-karts",
+        "pattern": { "regexp": "^x^" },
+        "background": { "activatesPattern": "> dev", "endsPattern": "Host screen:" }
+      }
+    },
+    { "label": "test", "type": "npm", "script": "test", "group": "test", "problemMatcher": [] },
+    { "label": "typecheck", "type": "npm", "script": "typecheck", "problemMatcher": ["$tsc"] }
+  ]
+}

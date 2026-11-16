@@ -1,0 +1,35 @@
+{
+  "name": "turbo-karts",
+  "private": true,
+  "type": "module",
+  "description": "Local multiplayer kart racer: one host screen, phones as controllers.",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "workspaces": [
+    "shared",
+    "server",
+    "host",
+    "controller"
+  ],
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false server/src/index.ts",
+    "build": "vite build",
+    "start": "tsx server/src/index.ts --prod",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.5",
+    "eslint": "^10.15.0",
+    "prettier": "^3.10.1",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}

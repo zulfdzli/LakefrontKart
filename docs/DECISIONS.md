@@ -193,6 +193,33 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 - **A**: Headless Chrome with `--use-angle=d3d11`, which renders on the GTX 1650 (confirmed by the WebGL renderer string). This replaces a headed browser or SwiftShader.
 - **Why**: It uses the real GPU and gives real numbers, without popping windows up on your screen during captures.
 
+### D19 · Who scores the driving feel (2026-11-16, phase 1 gate)
+- **Q**: Who scores the gameplay "feel" items in POLISH.md?
+- **A**: Claude scores from measurements. You do a short hands-on check at two points:
+  - about 5 minutes on the keyboard after phase 4, to confirm the port feels the same as the prototype;
+  - about 10 minutes with your iPhone after phase 5.
+
+  Your verdict replaces Claude's score for each feel item, and anything rated under 4 goes on the fix list.
+- **Why**: Feel can't be measured headlessly, and phone feel differs from keyboard feel.
+
+### D20 · Toolchain versions (2026-11-16, phase 2, my decision)
+- **Q**: Which toolchain versions does the project use?
+- **A**:
+  - **TypeScript 6.0.3**, not 7.0. typescript-eslint 8.72 only supports TypeScript below 6.1.
+  - **Node 22.13 or newer**, not the prompt's "20+". Vite 8, Vitest 5 and ESLint 10 require it. This machine has 22.16.
+  - Other versions: Three.js 0.187, Vite 8.3, Express 5.3, Socket.IO 4.8.
+- **Why**: These are the newest versions that work together.
+
+### D21 · Server runtime (2026-11-16, phase 2, my decision)
+- **Q**: How does the server run in dev and production?
+- **A**: Both run the server's TypeScript directly with `tsx` (`npm run dev` uses `tsx watch`; `npm start` uses `tsx … --prod`). Only the host and controller are bundled by Vite into `dist/`. One root `vite.config.ts` has two HTML entries: `/` is the host and `/play` is the controller. Dev runs Vite in middleware mode, and its HMR shares the HTTP server, so everything uses one port.
+- **Why**: There is no separate server build step, and phones only need one port.
+
+### D22 · Socket.IO namespaces (2026-11-16, phase 2, my decision)
+- **Q**: How are host and phone messages kept apart?
+- **A**: Two namespaces: `/host` and `/controller`. Each one is typed with its own event maps from `shared/src/protocol.ts`. Phase 2 adds `net:info`, `net:rtt` and `net:presence` for the connectivity check and the later debug overlay. Rooms and slots (`server/src/rooms.ts`) arrive in phase 5 as planned.
+- **Why**: A host can never send phone events, and a phone can never send host events, and both are type-checked.
+
 ---
 
 ## Gate 0 status
