@@ -17,7 +17,7 @@ export type Phase = 'lobby' | 'countdown' | 'race' | 'paused' | 'results';
 export type SteeringScheme = 'buttons' | 'slider';
 export type ItemFire = 'forward' | 'back' | null;
 export type GameMode = 'single' | 'gp';
-export type Difficulty = 'easy' | 'normal' | 'hard';
+import type { Difficulty } from './ai';
 export type HapticKind = 'hit' | 'boost' | 'item' | 'finish' | 'drift1' | 'drift2' | 'drift3';
 export type JoinErrorReason = 'room-not-found' | 'room-full' | 'race-in-progress' | 'name-taken' | 'bad-request';
 

@@ -68,3 +68,34 @@ Gameplay scores marked * come from metrics and code reading only. They still nee
 | Gameplay | AI believability | 3* | No orbits, rescues or unfinished karts; the Normal-to-Hard gap is too small |
 | Gameplay | Input latency | n/a | Local keyboard only; measured from phase 5 |
 | Gameplay | Frame-time stability | 4 | p95 is 2.3 ms for 1 view and 6.6 ms for 5 views |
+
+---
+
+## Phase 3: logic port (2026-11-16)
+
+### What changed
+The game logic moved to `shared/` (TypeScript, seeded RNG, multi-human API). **No behaviour changed.**
+- `tests/prototype-parity.test.ts` runs the prototype's own logic next to the port, in 6 configurations (seed, difficulty, items, character).
+- Kart positions, speeds, laps, ranks, items, boosts and events are **bit-for-bit identical** at every step of full 3-lap races.
+- The test catches a 0.001 m/s change to the boost speed within 5 seconds of race time.
+
+### Capture
+- **Screenshots**: none this phase, because the host does not render the game yet (phase 4).
+- **Metrics**: `npm run sim-report`, saved to `docs/sim-report-phase3.json`.
+
+| Items | Diff | Driver lap | AI lap | Driver place | Rescues / race | Items / race | Unfinished | Max stuck |
+|---|---|---|---|---|---|---|---|---|
+| off | easy | 48.2 s | 50.8 s | 1.85 | 0 | 0 | 0 | 0.1 s |
+| off | normal | 48.7 s | 48.9 s | 2.95 | 0 | 0 | 0 | 0.1 s |
+| off | hard | 48.8 s | 47.6 s | 5.10 | 0 | 0 | 0 | 0.1 s |
+| on | easy | 48.7 s | 49.5 s | 2.50 | 0 | 77.7 | 0 | 0.1 s |
+| on | normal | 49.3 s | 48.5 s | 3.70 | 0 | 78.1 | 0 | 0.1 s |
+| on | hard | 49.1 s | 47.5 s | 4.90 | 0 | 80.2 | 0 | 0.1 s |
+
+- **AI gaps**: Easy to Normal 4.0 %, Normal to Hard **2.7 %** (target 3 %; retuned in phase 11 per D9).
+- **Character spread**: 2.67 %.
+- **Simulation cost**: 0.005 ms per step on average (p99 0.024 ms), against a 2 ms budget.
+- Driver places differ slightly from phase 1 because the default grid now puts humans last instead of 5th (see gate question G3-1).
+
+### Scores
+All scores are unchanged from phase 1, because the logic is identical by construction and no rendering changed. The three lowest items (lighting, road materials and scenery, all at 2) are art work that this logic-only phase cannot touch. See gate question G3-2.

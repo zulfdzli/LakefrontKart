@@ -220,6 +220,34 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 - **A**: Two namespaces: `/host` and `/controller`. Each one is typed with its own event maps from `shared/src/protocol.ts`. Phase 2 adds `net:info`, `net:rtt` and `net:presence` for the connectivity check and the later debug overlay. Rooms and slots (`server/src/rooms.ts`) arrive in phase 5 as planned.
 - **Why**: A host can never send phone events, and a phone can never send host events, and both are type-checked.
 
+### D23 · Game API shape (2026-11-16, phase 3, my decision)
+- **Q**: What does the `shared` game API look like?
+- **A**:
+  - **Entry point**: `createGame(opts)` returns a `Game` with:
+    - `startCountdown()`
+    - `setInput(slot, input)`: latest input wins; `item` is a one-shot that the next step consumes.
+    - `setHumanAi(slot, on)`: phone disconnect handover.
+    - `step(dt)`: exactly one fixed step; the host owns the accumulator.
+    - `drainEvents()`
+    - `getSnapshot()`
+  - **Phases**: `grid → countdown → race → finished`. Karts keep driving in `finished`, so the host can show the cool-down.
+  - **Events**: they carry the kart id (`kart`), not an object reference, so they can be forwarded to phones as they are.
+  - **AI driving**: a kart is driven by the AI when `k.ai || k.finished`.
+  - **Rubber-banding**: AI rubber-banding compares against the average progress of the humans still racing.
+- **Why**: Section 8's API, made deterministic and parity-testable.
+
+### D24 · Test driver skill (2026-11-16, phase 3, my decision)
+- **Q**: The prompt describes "the prototype's autopilot with skill 0.93", but the prototype's autopilot uses 0.95. Which is used where?
+- **A**:
+  - **0.95**: drives a disconnected or finished human (the prototype's value, kept for parity).
+  - **0.93**: the steady test driver used by `sim-report` and the lap-time targets, as section 11.1 states.
+- **Why**: The parity test needs the prototype's exact value, and the metrics need the prompt's stated driver.
+
+### D25 · Not every lap counts in tests (2026-11-16, phase 3, my decision)
+- **Q**: How do the metrics measure lap times when the race may end early?
+- **A**: `sim-report` sets `raceEndGrace` very high, so every kart races to the flag. This means every lap is measured, rather than the race closing 30 s after the human finishes.
+- **Why**: Lap-time statistics need complete races.
+
 ---
 
 ## Gate 0 status
