@@ -99,3 +99,55 @@ The game logic moved to `shared/` (TypeScript, seeded RNG, multi-human API). **N
 
 ### Scores
 All scores are unchanged from phase 1, because the logic is identical by construction and no rendering changed. The three lowest items (lighting, road materials and scenery, all at 2) are art work that this logic-only phase cannot touch. See gate question G3-2.
+
+---
+
+## Phase 4: renderer port (2026-11-16)
+
+### What changed
+The prototype renderer is ported to Three.js 0.187 from npm, as TypeScript modules under `host/src/` (`art/*`, `renderer`, `camera`, `hud`, `session`, `audio`, `debug`).
+- **Built for split-screen**: one `World` renders a list of views (scissored viewports); camera and HUD are per player.
+- **Colour management**: sRGB output, with light intensities × π to match the prototype's pre-r155 lighting. Tone mapping stays off until the art pass.
+- **Karts**: painted in the slot colour (P1 red, AI orange) per D11.
+- **Reproducible captures**: scenery placement and effects use seeded generators.
+
+### Capture (`npm run capture -- --phase phase4`, GTX 1650, 1600 × 900)
+`docs/screens/phase4/`: title, countdown, race start, mid-drift, mid-boost, 40 s, 75 s and podium. The capture logged no console errors.
+
+| | Prototype (phase 1) | Port (phase 4) |
+|---|---|---|
+| Median frame, 1080p, vsync off | 1.6 ms | 1.6 ms |
+| p95 frame, 1080p, vsync off | 3.7 ms | 3.4 ms |
+| Draw calls (single view) | 65–68 | 87–133, depending on view |
+| Triangles | 134k | 168k |
+
+The draw-call increase comes from the shadow pass: each kart casts shadows from 5 separate meshes (41 shadow casters in total). The fix (merged kart parts, a cheaper shadow tier) is scheduled for phase 13 and is needed before 5 viewports can fit the 400-call budget.
+
+### Fixes this loop (the 3 lowest items this phase can touch, per D27)
+1. **Readability of name tags.** Tags are now sized by distance, so far tags stay readable and near ones small. They fade in at 9–14 m and fade out at 48–60 m (section 9), and are evaluated per viewport.
+2. **UI finish.** On wide screens the results panel sits beside the podium, and the podium camera frames the ceremony left of centre. Overlays fade in instead of popping.
+3. **Camera after a fast-forward.** The chase camera snaps after a simulation jump. The capture tool showed it trailing 60 m behind before this fix.
+
+### Scores (compared with phase 3)
+| Area | Item | Score | Reason |
+|---|---|---|---|
+| Graphics | Aliasing and shimmer | 3 | Same as before: MSAA, with thin far stripes still shimmering |
+| Graphics | Lighting and shadow quality | 2 | Deferred to the art pass (D27) |
+| Graphics | Road, kerb and terrain material | 2 | Deferred to phase 9 |
+| Graphics | Texture tiling visibility | 3 | Unchanged |
+| Graphics | Scenery density and variety | 2 | Deferred to phases 8–10 |
+| Graphics | Kart and character detail | 2 | Deferred to the art pass |
+| Graphics | Effect quality | 3 | Ported 1:1; flame flicker is now deterministic |
+| Graphics | Readability at 1/5 screen | 3 | Tags improved; split-screen is not built yet, so this is not measurable until phase 6 |
+| Graphics | Colour harmony | 3 | Slot paint reads clearly; five orange AI karts lose some variety (accepted in D11) |
+| Graphics | UI finish | 3 | Better: the podium is visible beside the results and overlays fade in. The HUD is still the prototype's |
+| Gameplay | Steering smoothness | 3* | Logic unchanged (parity test) |
+| Gameplay | Drift feel | 3* | Unchanged |
+| Gameplay | Camera smoothness | 3 | Same smoothing; snaps correctly after jumps. No collision yet (phase 11) |
+| Gameplay | Collision feel | 3* | Unchanged |
+| Gameplay | Item fairness | 3* | Unchanged |
+| Gameplay | AI believability | 3* | Unchanged |
+| Gameplay | Input latency | n/a | Phase 5 |
+| Gameplay | Frame-time stability | 4 | p95 3.4 ms (1080p, vsync off); a steady 60 FPS with vsync |
+
+No score dropped. Your keyboard feel check (D19) is due at this gate.

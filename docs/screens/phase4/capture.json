@@ -1,0 +1,17 @@
+{
+  "phase": "phase4",
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 (0x00001F9D) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "viewport": "1600x900",
+  "seed": 7,
+  "racePerf": {
+    "fps": 60,
+    "p50": 16.7,
+    "p95": 16.8
+  },
+  "render": {
+    "calls": 121,
+    "triangles": 168420,
+    "pixelRatio": 1
+  },
+  "errors": []
+}

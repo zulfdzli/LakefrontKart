@@ -2,110 +2,176 @@ import '@fontsource/fredoka/500.css';
 import '@fontsource/fredoka/600.css';
 import '@fontsource/fredoka/700.css';
 import './style.css';
-import * as THREE from 'three';
-import QRCode from 'qrcode';
-import { io, type Socket } from 'socket.io-client';
-import type { HostToServer, ServerToHost, NetInfo } from '@tk/shared';
+import { CHARS, type Difficulty, type Kart } from '@tk/shared';
+import { World } from './renderer';
+import { RaceSession } from './session';
+import { Audio } from './audio';
+import { Keyboard } from './input-keyboard';
+import { DebugOverlay } from './debug';
+import { fmtT, ord } from './hud';
 
-const $ = <T extends HTMLElement>(id: string): T => {
-  const el = document.getElementById(id);
-  if (!el) throw new Error(`#${id} missing`);
-  return el as T;
+/*
+ * Phase 4: single player on the keyboard, to check the port against the prototype.
+ * Phase 5 replaces the title screen with the QR lobby and phone controllers.
+ */
+
+const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+const world = new World($<HTMLCanvasElement>('c'));
+const audio = new Audio();
+const keyboard = new Keyboard();
+const debug = new DebugOverlay(world, $('debug'));
+
+const settings = {
+  ci: Number(localStorage.getItem('tk_char') ?? 1) % CHARS.length,
+  diff: (localStorage.getItem('tk_diff') as Difficulty | null) ?? 'normal',
+  laps: 2,
+  seed: Math.floor(Math.random() * 1e9),
 };
 
-/* ---- Three.js from npm, with current colour management (proves no-CDN rendering works) ---- */
-const renderer = new THREE.WebGLRenderer({ canvas: $<HTMLCanvasElement>('bg'), antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-const scene = new THREE.Scene();
-scene.background = new THREE.Color('#4ea7ea');
-const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
-camera.position.set(0, 1.5, 7);
-scene.add(new THREE.HemisphereLight('#eaf6ff', '#7da35c', 1.4));
-const sun = new THREE.DirectionalLight('#fff1d6', 2.2);
-sun.position.set(3, 5, 4);
-scene.add(sun);
-const cube = new THREE.Mesh(
-  new THREE.BoxGeometry(1.6, 1.6, 1.6),
-  new THREE.MeshStandardMaterial({ color: '#e53935', roughness: 0.45 }),
-);
-cube.position.set(-4.2, 0.4, -2);
-scene.add(cube);
-function resize(): void {
-  renderer.setSize(innerWidth, innerHeight, false);
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-}
-addEventListener('resize', resize);
-resize();
-renderer.setAnimationLoop((t) => {
-  cube.rotation.set(t * 0.0004, t * 0.0007, 0);
-  renderer.render(scene, camera);
-});
+let session: RaceSession | null = null;
+let autopilot = false;
 
-/* ---- network: QR, URL, connected phones ---- */
-const socket: Socket<ServerToHost, HostToServer> = io('/host', { transports: ['websocket', 'polling'] });
-
-async function showQr(base: string): Promise<void> {
-  const url = `${base}/play`;
-  $('url').textContent = url;
-  $('qr').innerHTML = await QRCode.toString(url, {
-    type: 'svg',
-    margin: 1,
-    errorCorrectionLevel: 'M',
-    color: { dark: '#1d1b2e', light: '#ffffff' },
-  });
+function fullRect() {
+  return { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
 }
 
-function applyNet(info: NetInfo): void {
-  const sel = $<HTMLSelectElement>('netSel');
-  const options = info.publicUrl ? [{ name: 'PUBLIC_URL', url: info.publicUrl }] : info.candidates;
-  const first = options[0];
-  if (!first) {
-    $('url').textContent = 'No LAN address found. Connect this computer to Wi-Fi, or set PUBLIC_URL.';
-    return;
+function newSession(): void {
+  session?.dispose();
+  const names = new Map<number, string>([[0, 'You']]);
+  session = new RaceSession(
+    { seed: settings.seed, humans: [{ slot: 0, ci: settings.ci, name: 'You' }], aiFill: true, laps: settings.laps, difficulty: settings.diff, itemsOn: true },
+    world, audio, $('huds'), names,
+  );
+  session.layout([fullRect()]);
+  session.onResults = showResults;
+  if (autopilot) session.game.setHumanAi(0, true);
+  updateTitle();
+}
+
+function startRace(): void {
+  audio.unlock();
+  audio.click();
+  if (!session || session.stage !== 'preview') { settings.seed = Math.floor(Math.random() * 1e9); newSession(); }
+  $('title').classList.add('hidden');
+  $('results').classList.add('hidden');
+  session!.start();
+}
+
+function toTitle(): void {
+  $('results').classList.add('hidden');
+  $('pause').classList.add('hidden');
+  newSession();
+  $('title').classList.remove('hidden');
+}
+
+function updateTitle(): void {
+  const c = CHARS[settings.ci]!;
+  $('charName').textContent = `${c.emoji} ${c.name}`;
+  $('diffName').textContent = settings.diff[0]!.toUpperCase() + settings.diff.slice(1);
+}
+
+function showResults(order: Kart[]): void {
+  const me = session!.players[0]!.kart;
+  const place = me.rank + 1;
+  $('resTitle').textContent = place === 1 ? '🏆 YOU WIN!' : `${place}${ord(place)} PLACE`;
+  $('standings').innerHTML = order
+    .map((k, i) => `<li class="${k === me ? 'me' : ''}"><span>${i + 1}. ${k.ch.emoji} ${k === me ? 'You' : k.name}</span><span>${k.finished ? fmtT(k.finishTime) : '—'}</span></li>`)
+    .join('');
+  $('resBest').textContent = me.bestLap ? `Your best lap: ${fmtT(me.bestLap)}` : '';
+  $('results').classList.remove('hidden');
+}
+
+function setPaused(p: boolean): void {
+  if (!session || session.stage !== 'racing') return;
+  session.paused = p;
+  $('pause').classList.toggle('hidden', !p);
+}
+
+/* ---------------- keys ---------------- */
+window.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  const onTitle = !$('title').classList.contains('hidden');
+  if (e.key === 'Enter') {
+    if (onTitle || !$('results').classList.contains('hidden')) startRace();
+  } else if (e.key === 'Escape') {
+    if (session?.stage === 'racing' && !session.paused) setPaused(true);
+    else toTitle();
+  } else if (e.key === 'p' || e.key === 'P') setPaused(!session?.paused);
+  else if (e.key === 'm' || e.key === 'M') { audio.unlock(); audio.setMuted(!audio.muted); }
+  else if (e.key === 'f' || e.key === 'F') debug.toggleFps();
+  else if (e.key === 'd' || e.key === 'D') debug.toggleFull();
+  else if (onTitle && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    settings.ci = (settings.ci + (e.key === 'ArrowRight' ? 1 : CHARS.length - 1)) % CHARS.length;
+    localStorage.setItem('tk_char', String(settings.ci));
+    audio.unlock(); audio.click();
+    newSession();
+  } else if (onTitle && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    const order: Difficulty[] = ['easy', 'normal', 'hard'];
+    settings.diff = order[(order.indexOf(settings.diff) + (e.key === 'ArrowUp' ? 1 : 2)) % 3]!;
+    localStorage.setItem('tk_diff', settings.diff);
+    audio.unlock(); audio.click();
+    updateTitle();
   }
-  sel.innerHTML = '';
-  for (const o of options) sel.add(new Option(`${o.name} — ${o.url}`, o.url));
-  $('netPick').hidden = options.length < 2;
-  sel.onchange = () => void showQr(sel.value);
-  void showQr(first.url);
-  const warn = $('warn');
-  warn.hidden = !info.publicNetworkProfile;
-  warn.textContent =
-    'Your Wi-Fi is set to Public, so Windows Firewall blocks phones. Switch it to Private in Settings → Network & internet → Wi-Fi.';
-}
+});
+$('startBtn').addEventListener('click', startRace);
+$('againBtn').addEventListener('click', startRace);
+$('menuBtn').addEventListener('click', toTitle);
+$('resumeBtn').addEventListener('click', () => setPaused(false));
+$('quitBtn').addEventListener('click', toTitle);
+document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
+window.addEventListener('resize', () => { world.resize(); session?.layout([fullRect()]); });
 
-socket.on('connect', () => {
-  $('status').textContent = 'Connected to server. Scan the code with a phone on the same Wi-Fi.';
-  socket.emit('net:info', applyNet);
-  // the firewall check finishes a moment after server start; ask again so the warning appears
-  setTimeout(() => socket.emit('net:info', applyNet), 7000);
-});
-socket.on('disconnect', () => {
-  $('status').textContent = 'Server connection lost. Reconnecting…';
-});
-// update rows in place, so a row only animates in once (not on every RTT update)
-const rows = new Map<string, HTMLLIElement>();
-socket.on('net:presence', (p) => {
-  $('count').textContent = String(p.controllers.length);
-  const list = $('phones');
-  const live = new Set(p.controllers.map((c) => c.id));
-  for (const [id, li] of rows) {
-    if (live.has(id)) continue;
-    li.remove();
-    rows.delete(id);
+/* ---------------- loop ---------------- */
+world.resize();
+newSession();
+let last = performance.now();
+function frame(now: number): void {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  const t0 = performance.now();
+  if (session) {
+    if (session.stage === 'racing' && !autopilot && !session.paused) session.setInput(0, keyboard.read());
+    session.frame(dt);
+    world.render(session.views(), (v) => session!.focusOf(v));
   }
-  p.controllers.forEach((c, i) => {
-    let li = rows.get(c.id);
-    if (!li) {
-      li = document.createElement('li');
-      li.append(document.createElement('span'), document.createElement('b'));
-      rows.set(c.id, li);
-      list.append(li); // presence arrives in connection order, so appending keeps the order
-    }
-    li.children[0]!.textContent = `Phone ${i + 1} · ${c.device}`;
-    li.children[1]!.textContent = c.rttMs === null ? '…' : `${c.rttMs} ms`;
-  });
-});
+  debug.frame(dt, performance.now() - t0);
+}
+requestAnimationFrame(frame);
+
+/* ---------------- automation hook (tools/capture.ts) ---------------- */
+declare global {
+  interface Window {
+    __tk: {
+      ready: boolean;
+      race(opts: { seed?: number; ci?: number; diff?: Difficulty; laps?: number; autopilot?: boolean }): void;
+      advance(seconds: number): void;
+      state(): unknown;
+      session(): RaceSession | null;
+      info(): { calls: number; triangles: number; pixelRatio: number };
+    };
+  }
+}
+window.__tk = {
+  ready: true,
+  race(opts) {
+    if (opts.seed !== undefined) settings.seed = opts.seed;
+    if (opts.ci !== undefined) settings.ci = opts.ci;
+    if (opts.diff) settings.diff = opts.diff;
+    if (opts.laps) settings.laps = opts.laps;
+    autopilot = !!opts.autopilot;
+    newSession();
+    $('title').classList.add('hidden');
+    session!.start();
+  },
+  advance(seconds) {
+    session?.advance(seconds);
+  },
+  state() {
+    const s = session?.s;
+    return s ? { phase: s.phase, raceTime: s.raceTime, stage: session!.stage } : null;
+  },
+  session: () => session,
+  info: () => ({ calls: world.renderer.info.render.calls, triangles: world.renderer.info.render.triangles, pixelRatio: world.pixelRatio }),
+};

@@ -2,7 +2,7 @@
 
 A local multiplayer kart racer. One computer shows the race on a big screen, and up to 5 players use their phones as controllers over the same Wi-Fi. No internet, accounts or app install needed.
 
-> Work in progress: phase 3 (game logic ported to `shared/`). See `docs/PROMPT.md` for the plan and `docs/DECISIONS.md` for decisions.
+> Work in progress: phase 4 (renderer ported; single-player keyboard test drive at http://localhost:3000). See `docs/PROMPT.md` for the plan and `docs/DECISIONS.md` for decisions.
 
 ## Quick start
 
@@ -45,6 +45,7 @@ Open the host screen on the computer (or press **F5** in VS Code), then scan the
 | `npm start` | Serves the production build |
 | `npm test` | Runs the Vitest tests (including the prototype parity test) |
 | `npm run sim-report` | Headless lap times, balance, rescues and simulation cost |
+| `npm run capture -- --phase <name>` | Polish-loop screenshots and frame stats into `docs/screens/<name>/` |
 | `npm run typecheck` | Type-checks every workspace |
 | `npm run lint` / `npm run format` | ESLint / Prettier |
 

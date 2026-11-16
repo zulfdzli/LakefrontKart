@@ -6,22 +6,42 @@
     <title>Turbo Karts</title>
   </head>
   <body>
-    <canvas id="bg"></canvas>
-    <main id="app">
-      <h1 class="logo">TURBO <span>KARTS</span></h1>
-      <p class="sub">Phase 2 connectivity check</p>
-      <section class="card">
-        <div id="qr" aria-label="QR code for the controller"></div>
-        <div class="info">
-          <label id="netPick" hidden>Network <select id="netSel"></select></label>
-          <div class="url" id="url">…</div>
-          <div class="warn" id="warn" hidden></div>
-          <h2>Phones connected: <b id="count">0</b></h2>
-          <ul id="phones"></ul>
+    <canvas id="c"></canvas>
+    <div id="huds"></div>
+    <div id="debug" class="debug"></div>
+
+    <div id="title" class="overlay">
+      <h1 class="logo">TURBO<br /><span>KARTS</span></h1>
+      <div class="panel">
+        <div class="pick">
+          <span class="arrow">◀</span><b id="charName">Pip</b><span class="arrow">▶</span>
+          <span class="dot">·</span><span>Difficulty <b id="diffName">Normal</b> (▲▼)</span>
         </div>
-      </section>
-      <p class="foot" id="status">Connecting to server…</p>
-    </main>
+        <button class="big" id="startBtn">START RACE</button>
+        <p class="sub">
+          Keyboard test drive (phase 4). <b>←→</b> steer · <b>↑</b> gas · <b>↓</b> brake · <b>Space</b> drift · <b>E</b> item (hold
+          ↓ to throw back) · <b>P</b> pause · <b>M</b> mute · <b>F</b> FPS · <b>D</b> debug
+        </p>
+      </div>
+    </div>
+
+    <div id="pause" class="overlay dim hidden">
+      <h2>PAUSED</h2>
+      <button class="big" id="resumeBtn">RESUME</button>
+      <button class="alt" id="quitBtn">Back to title</button>
+    </div>
+
+    <div id="results" class="overlay hidden">
+      <div id="resWrap">
+        <div id="resTitle">FINISH!</div>
+        <ul id="standings"></ul>
+        <div id="resBest"></div>
+        <div class="row">
+          <button class="big" id="againBtn">RACE AGAIN</button><button class="alt" id="menuBtn">Title</button>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/host/src/main.ts"></script>
   </body>
 </html>

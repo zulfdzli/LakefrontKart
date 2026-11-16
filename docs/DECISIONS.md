@@ -248,6 +248,41 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 - **A**: `sim-report` sets `raceEndGrace` very high, so every kart races to the flag. This means every lap is measured, rather than the race closing 30 s after the human finishes.
 - **Why**: Lap-time statistics need complete races.
 
+### D26 · Grid order (2026-11-16, phase 3 gate)
+- **Q**: Where do humans start on the grid?
+- **A**: Humans start **behind** the AI, in join order, with P1 frontmost of the humans. The AI karts take the front rows.
+- **Why**: The difficulty was tuned for climbing through the field (the prototype started the player 5th). A pole start would turn races into holding the lead.
+
+### D27 · Polish-loop scope (2026-11-16, phase 3 gate)
+- **Q**: Which items does the "fix the 3 lowest scores" rule apply to?
+- **A**: Each phase fixes the 3 lowest items **that the phase can touch**, plus any score that dropped. The big art items (lighting, materials, scenery, kart detail) are fixed in phases 9 and 10. No score may ever drop, and every POLISH.md entry names the items deferred because of scope.
+- **Why**: Applied literally, the rule would pull the art pass ahead of multiplayer, which you ranked first.
+
+### D28 · Matching the prototype under current Three.js (2026-11-16, phase 4, my decision)
+- **Q**: How does the port keep the prototype's look under current Three.js?
+- **A**:
+  - sRGB output.
+  - Hemisphere and sun intensities × π, because three.js r155+ uses physical light units.
+  - `NoToneMapping` until the art pass, where ACES arrives with the PBR materials (D5).
+  - The toon ramp uses `RedFormat`, which is correct now that three.js samples `.r`.
+  - The sky shader includes the tone-mapping and colour-space chunks.
+- **Why**: Phase 4's goal is to match the prototype first; the look changes in phase 10.
+
+### D29 · Host keyboard (2026-11-16, phase 4, my decision)
+- **Q**: Which keys drive the host keyboard test?
+- **A**: Arrows steer, accelerate (↑) and brake (↓). Space or Shift drifts, E/X/Ctrl fires the item (with ↓ held to fire backward). Letters are reserved for host shortcuts: D debug, F FPS, M mute, P pause, Enter start, Esc pause or title. On the title screen, ←→ picks the character and ▲▼ the difficulty.
+- **Why**: The prompt's `D` debug shortcut clashed with WASD steering. This title screen is temporary until the phase 5 lobby.
+
+### D30 · Capture method details (2026-11-16, phase 4, my decision)
+- **Q**: How does `tools/capture.ts` produce reproducible shots?
+- **A**:
+  - It starts its own server on port 3100.
+  - It loads `/?noadapt=1`, so adaptive resolution doesn't react to the capture's synchronous fast-forwards.
+  - It drives a seeded autopilot race (`window.__tk.race`).
+  - It fast-forwards with `__tk.advance`; cameras snap after a fast-forward.
+  - Scenery placement and particle effects use seeded generators, so a capture is reproducible.
+- **Why**: Comparable screenshots from phase to phase.
+
 ---
 
 ## Gate 0 status
