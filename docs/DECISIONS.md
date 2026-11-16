@@ -183,6 +183,16 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **(b) Best-effort iOS haptics.** A hidden switch-control trick for iOS 18 and later, behind a feature check, with the screen flash as the fallback. It is not guaranteed if Apple changes Safari.
 - **Why**: It gives the best iPhone experience possible over plain HTTP.
 
+### D17 · Prototype fixes in place (2026-11-16, my decision)
+- **Q**: Where do the phase 1 rendering fixes go?
+- **A**: They are edited directly into `prototype/turbokarts-prototype.html`. The untouched original is in git commit `792999e`.
+- **Why**: There is one reference file, and the history keeps the original.
+
+### D18 · Capture method (2026-11-16, my decision)
+- **Q**: How are screenshots captured?
+- **A**: Headless Chrome with `--use-angle=d3d11`, which renders on the GTX 1650 (confirmed by the WebGL renderer string). This replaces a headed browser or SwiftShader.
+- **Why**: It uses the real GPU and gives real numbers, without popping windows up on your screen during captures.
+
 ---
 
 ## Gate 0 status

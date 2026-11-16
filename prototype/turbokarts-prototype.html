@@ -295,14 +295,19 @@
     }
 
     #hint {
-      left: 0;
-      right: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: calc(100% - 40px);
       top: calc(env(safe-area-inset-top) + 150px);
       text-align: center;
       font-size: 17px;
       opacity: 0;
       transition: opacity .3s;
-      padding: 0 20px
+      padding: 7px 18px;
+      border-radius: 999px;
+      background: rgba(29, 27, 46, .72);
+      text-shadow: none;
+      color: #fff
     }
 
     #hint.on {
@@ -1715,9 +1720,10 @@
 
       /* ---------------- materials ---------------- */
       const grad = (() => {
-        const data = new Uint8Array([95, 175, 255]);
-        const fmt = renderer.capabilities.isWebGL2 ? THREE.RedFormat : THREE.LuminanceFormat;
-        const t = new THREE.DataTexture(data, data.length, 1, fmt);
+        // RGBA, not RedFormat: the toon shader reads gradientMap.rgb, and a red-only texture tinted all direct light red
+        const steps = [95, 175, 255], data = new Uint8Array(steps.length * 4);
+        steps.forEach((v, i) => { data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = v; data[i * 4 + 3] = 255; });
+        const t = new THREE.DataTexture(data, steps.length, 1, THREE.RGBAFormat);
         t.minFilter = THREE.NearestFilter; t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true;
         return t;
       })();
@@ -2658,7 +2664,12 @@
           v.drone.visible = k.rescue > 0; if (k.rescue > 0) { v.drone.position.y = 5.3; v.drone.rotation.y += dt * 3; }
           v.shadow.position.y = 0.06 - lift - v.sus * 0;
           v.shadow.scale.setScalar(1 - Math.min(0.5, (hop + lift) * 0.1));
-          if (!k.isPlayer) { const d = Math.hypot(ix - camera.position.x, iz - camera.position.z); v.tag.visible = d < 75 && d > 4 && view === 'race'; }
+          if (!k.isPlayer) {
+            // world-sized sprites blow up near the camera: fade out under 14 m, hide under 9 m
+            const d = Math.hypot(ix - camera.position.x, iz - camera.position.z);
+            v.tag.visible = d < 75 && d > 9 && view === 'race';
+            v.tag.material.opacity = smooth01((d - 9) / 5);
+          }
           if (view !== 'race') continue;
           // effects
           const dCam = Math.hypot(ix - camera.position.x, iz - camera.position.z);
