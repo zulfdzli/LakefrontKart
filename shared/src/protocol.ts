@@ -83,6 +83,7 @@ export interface LobbyPlayer {
 }
 
 export interface LobbyUpdate {
+  room: string;
   players: LobbyPlayer[];
   config: LeaderConfig;
 }
@@ -192,12 +193,8 @@ export interface ServerToHost {
   'player:settings': (p: { slot: number; settings: PlayerSettings }) => void;
   'player:latency': (p: { slot: number; rttMs: number }) => void;
   'leader:config': (p: LeaderConfig) => void;
-  /** Connected phones and their round-trip times (debug overlay, and the phase 2 connectivity check). */
-  'net:presence': (p: NetPresence) => void;
-}
-
-export interface NetPresence {
-  controllers: { id: string; device: string; rttMs: number | null }[];
+  /** Which kind of phone a slot uses (debug overlay, haptics expectations). */
+  'player:device': (p: { slot: number; device: 'iOS' | 'Android' | 'Desktop' }) => void;
 }
 
 /* ---------------- validation helpers (shared by server and host) ---------------- */

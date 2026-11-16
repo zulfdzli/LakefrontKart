@@ -2,7 +2,7 @@
 
 A local multiplayer kart racer. One computer shows the race on a big screen, and up to 5 players use their phones as controllers over the same Wi-Fi. No internet, accounts or app install needed.
 
-> Work in progress: phase 4 (renderer ported; single-player keyboard test drive at http://localhost:3000). See `docs/PROMPT.md` for the plan and `docs/DECISIONS.md` for decisions.
+> Work in progress: phase 5 (QR lobby and phone controllers work; split-screen polish comes next). See `docs/PROMPT.md` for the plan and `docs/DECISIONS.md` for decisions.
 
 ## Quick start
 
@@ -22,6 +22,10 @@ Controller:   http://192.168.x.x:3000/play    ← phones open this (or scan the 
 ```
 
 Open the host screen on the computer (or press **F5** in VS Code), then scan the QR code with each phone.
+
+**How phones join:** scan the QR code (or open the URL and type the 4-letter room code), type a name and tap **JOIN**. Up to 5 phones can join. The first phone to join is the party leader (👑): it presses **START RACE**. Enter on the computer also starts. On iPhone, tap Share → "Add to Home Screen" for a full-screen controller.
+
+**Controller:** hold the phone sideways. The left side steers (◀ ▶, or a slider in Controls). The big round button brakes, **DRIFT** is held, and **ITEM** is tapped; swipe down on ITEM, or hold BRAKE, to throw backwards. The kart accelerates by itself.
 
 ## Before the first game (Windows)
 
@@ -46,6 +50,8 @@ Open the host screen on the computer (or press **F5** in VS Code), then scan the
 | `npm test` | Runs the Vitest tests (including the prototype parity test) |
 | `npm run sim-report` | Headless lap times, balance, rescues and simulation cost |
 | `npm run capture -- --phase <name>` | Polish-loop screenshots and frame stats into `docs/screens/<name>/` |
+| `npm run e2e -- --phase <name>` | End-to-end multiplayer check with emulated phones |
+| `npm run bots -- --room ABCD --n 3` | Adds simulated phones to your room (testing without 5 phones) |
 | `npm run typecheck` | Type-checks every workspace |
 | `npm run lint` / `npm run format` | ESLint / Prettier |
 

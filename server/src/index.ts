@@ -1,19 +1,26 @@
 /**
- * Turbo Karts server: a thin relay. It serves the host and controller apps on one port,
- * and relays Socket.IO messages between phones and the host screen. It never simulates the game.
+ * Turbo Karts server: a thin relay. It serves the host and controller apps on one port, manages rooms
+ * and slots, validates what phones send, and relays messages between phones and the host screen.
+ * It never simulates the game (section 4).
  */
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { Server, type Namespace } from 'socket.io';
-import type { ControllerToServer, ServerToController, HostToServer, ServerToHost, NetInfo, NetPresence } from '@tk/shared';
+import { Server, type Namespace, type Socket } from 'socket.io';
+import {
+  sanitizeInput,
+  type ControllerToServer, type ServerToController, type HostToServer, type ServerToHost, type NetInfo, type PlayerSettings,
+} from '@tk/shared';
 import { lanCandidates, publicUrlFromEnv, windowsPublicProfile } from './lan';
+import { RoomManager, type Room } from './rooms';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const PROD = process.argv.includes('--prod');
 const PORT = Number(process.env.PORT) || 3000;
+/** Section 5.4: at most 60 input messages per second per phone. */
+const INPUT_CAP_PER_S = 60;
 
 const app = express();
 app.disable('x-powered-by');
@@ -30,51 +37,191 @@ const netInfo = (): NetInfo => ({ port: PORT, candidates, publicUrl, publicNetwo
 
 const io = new Server(httpServer, {
   transports: ['websocket', 'polling'],
-  // phones on a LAN: keep heartbeats short so a locked phone is noticed quickly
-  pingInterval: 5000,
-  pingTimeout: 6000,
+  // phones on a LAN: short heartbeats so a locked phone is noticed quickly
+  pingInterval: 4000,
+  pingTimeout: 5000,
+  maxHttpBufferSize: 16 * 1024,
 });
-
 const hostNs: Namespace<HostToServer, ServerToHost> = io.of('/host');
 const ctrlNs: Namespace<ControllerToServer, ServerToController> = io.of('/controller');
+const rooms = new RoomManager();
 
-const presence = new Map<string, { device: string; rttMs: number | null }>();
-function broadcastPresence(): void {
-  const p: NetPresence = { controllers: [...presence].map(([id, v]) => ({ id, ...v })) };
-  hostNs.emit('net:presence', p);
+const hostRoom = (code: string): string => `h:${code}`;
+const ctrlRoom = (code: string): string => `r:${code}`;
+
+function broadcastLobby(room: Room): void {
+  const u = rooms.lobbyUpdate(room);
+  hostNs.to(hostRoom(room.code)).emit('lobby:update', u);
+  ctrlNs.to(ctrlRoom(room.code)).emit('lobby:update', u);
 }
 
-hostNs.on('connection', (socket) => {
-  socket.on('net:info', (ack) => {
-    if (typeof ack === 'function') ack(netInfo());
-  });
-  socket.on('ping', (t, ack) => {
-    if (typeof ack === 'function') ack(typeof t === 'number' ? t : 0);
-  });
-  broadcastPresence();
-});
-
-ctrlNs.on('connection', (socket) => {
+function deviceOf(socket: Socket): 'iOS' | 'Android' | 'Desktop' {
   const ua = String(socket.handshake.headers['user-agent'] ?? '');
-  const device = /iPhone|iPad/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : 'Desktop';
-  presence.set(socket.id, { device, rttMs: null });
-  broadcastPresence();
+  return /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : 'Desktop';
+}
 
-  socket.on('ping', (t, ack) => {
-    if (typeof ack === 'function') ack(typeof t === 'number' ? t : 0);
+const isFn = (f: unknown): f is (...a: never[]) => void => typeof f === 'function';
+
+/* ---- host screen ---- */
+hostNs.on('connection', (socket) => {
+  let room: Room | null = null;
+  const attach = (r: Room): void => {
+    room = r;
+    void socket.join(hostRoom(r.code));
+    ctrlNs.to(ctrlRoom(r.code)).emit('host:status', { online: true });
+    broadcastLobby(r);
+  };
+
+  socket.on('host:create', (ack) => {
+    if (!isFn(ack)) return;
+    if (room) return ack({ room: room.code, hostToken: room.hostToken });
+    const r = rooms.createRoom(socket.id);
+    attach(r);
+    ack({ room: r.code, hostToken: r.hostToken });
   });
-  socket.on('net:rtt', (rtt) => {
-    const entry = presence.get(socket.id);
-    if (entry && typeof rtt === 'number' && Number.isFinite(rtt)) {
-      entry.rttMs = Math.max(0, Math.min(10000, Math.round(rtt)));
-      broadcastPresence();
+  socket.on('host:resume', (p, ack) => {
+    if (!isFn(ack)) return;
+    const r = rooms.resumeHost(p?.room, p?.hostToken, socket.id);
+    if (r) attach(r);
+    ack({ ok: !!r });
+  });
+  socket.on('net:info', (ack) => { if (isFn(ack)) ack(netInfo()); });
+  socket.on('ping', (t, ack) => { if (isFn(ack)) ack(typeof t === 'number' ? t : 0); });
+
+  socket.on('host:state', (st) => {
+    if (!room || typeof st !== 'object' || st === null) return;
+    if (rooms.setPhase(room, st.phase)) {
+      ctrlNs.to(ctrlRoom(room.code)).emit('phase', { phase: room.phase });
+      broadcastLobby(room);
+    }
+    if (!Array.isArray(st.players)) return;
+    for (const ps of st.players) {
+      const p = room.slots[ps?.slot];
+      if (p?.socketId) ctrlNs.to(p.socketId).volatile.emit('hud', ps.hud);
     }
   });
+  socket.on('host:haptic', (h) => {
+    const p = room?.slots[h?.slot];
+    if (p?.socketId) ctrlNs.to(p.socketId).emit('haptic', { kind: h.kind });
+  });
+  socket.on('host:results', (r) => {
+    if (!room || !Array.isArray(r?.standings)) return;
+    for (const p of rooms.players(room)) if (p.socketId) ctrlNs.to(p.socketId).emit('results', { standings: r.standings, isLeader: rooms.isLeader(room, p) });
+  });
+  socket.on('host:kick', (k) => {
+    if (!room || typeof k?.slot !== 'number') return;
+    const p = rooms.remove(room, k.slot);
+    if (p?.socketId) {
+      ctrlNs.to(p.socketId).emit('kicked');
+      ctrlNs.sockets.get(p.socketId)?.leave(ctrlRoom(room.code));
+    }
+    broadcastLobby(room);
+  });
+  socket.on('host:config', (c) => {
+    if (room && rooms.setConfig(room, c)) broadcastLobby(room);
+  });
   socket.on('disconnect', () => {
-    presence.delete(socket.id);
-    broadcastPresence();
+    if (!room || room.hostSocketId !== socket.id) return;
+    rooms.hostDisconnected(room);
+    ctrlNs.to(ctrlRoom(room.code)).emit('host:status', { online: false });
   });
 });
+
+/* ---- phones ---- */
+ctrlNs.on('connection', (socket) => {
+  let room: Room | null = null;
+  let slot = -1;
+  let windowStart = 0, inWindow = 0;
+  const me = () => (room && slot >= 0 ? room.slots[slot] ?? null : null);
+  const hostSocket = (): string | null => room?.hostSocketId ?? null;
+  const toHost = (): ReturnType<typeof hostNs.to> | null => (room ? hostNs.to(hostRoom(room.code)) : null);
+
+  socket.on('player:join', (req, ack) => {
+    if (!isFn(ack)) return;
+    const already = me();
+    if (already && room) return ack({ ok: true, data: rooms.joinOk(room, already) });
+    const r = rooms.join(req?.room, req?.name, req?.playerToken, socket.id);
+    if (!r.ok) return ack({ ok: false, reason: r.reason });
+    room = rooms.rooms.get(String(req.room).trim().toUpperCase())!;
+    slot = r.player.slot;
+    void socket.join(ctrlRoom(room.code));
+    ack({ ok: true, data: r.data });
+    socket.emit('phase', { phase: room.phase });
+    socket.emit('host:status', { online: hostSocket() !== null });
+    toHost()?.emit('player:device', { slot, device: deviceOf(socket) });
+    broadcastLobby(room);
+  });
+
+  socket.on('player:ready', (p) => {
+    const pl = me();
+    if (!room || !pl) return;
+    rooms.setReady(room, pl, p?.ready);
+    broadcastLobby(room);
+  });
+  socket.on('player:select', (p) => {
+    const pl = me();
+    if (!room || !pl) return;
+    const res = rooms.select(room, pl, p?.characterId);
+    if (res === 'ok') broadcastLobby(room);
+    else socket.emit('select:error', { reason: res });
+  });
+  socket.on('player:settings', (s) => {
+    if (!room || slot < 0 || typeof s !== 'object' || s === null) return;
+    const settings: PlayerSettings = {
+      steering: s.steering === 'slider' ? 'slider' : 'buttons',
+      assist: s.assist === true,
+      sensitivity: typeof s.sensitivity === 'number' && Number.isFinite(s.sensitivity) ? Math.max(0.6, Math.min(1.4, s.sensitivity)) : 1,
+    };
+    toHost()?.emit('player:settings', { slot, settings });
+  });
+  socket.on('leader:config', (c) => {
+    const pl = me();
+    if (!room || !pl || !rooms.isLeader(room, pl)) return;
+    if (rooms.setConfig(room, c)) { toHost()?.emit('leader:config', room.config); broadcastLobby(room); }
+  });
+  socket.on('player:start', () => {
+    const pl = me();
+    if (!room || !pl || !rooms.isLeader(room, pl) || room.phase !== 'lobby') return;
+    toHost()?.emit('player:start', { slot });
+  });
+  socket.on('player:rematch', (p) => {
+    const pl = me();
+    if (!room || !pl || !rooms.isLeader(room, pl) || room.phase !== 'results') return;
+    toHost()?.emit('player:rematch', { slot, toLobby: p?.toLobby === true });
+  });
+  socket.on('player:leave', () => {
+    if (!room || slot < 0) return;
+    rooms.remove(room, slot);
+    void socket.leave(ctrlRoom(room.code));
+    broadcastLobby(room);
+    room = null; slot = -1;
+  });
+  socket.on('player:input', (raw) => {
+    if (!room || slot < 0 || !me()) return;
+    // rate limit (section 5.4): drop anything beyond the cap within a one-second window
+    const t = Date.now();
+    if (t - windowStart >= 1000) { windowStart = t; inWindow = 0; }
+    if (++inWindow > INPUT_CAP_PER_S) return;
+    const inp = sanitizeInput(raw);
+    if (!inp) return;
+    toHost()?.volatile.emit('player:input', { ...inp, slot });
+  });
+  socket.on('ping', (t, ack) => { if (isFn(ack)) ack(typeof t === 'number' ? t : 0); });
+  socket.on('net:rtt', (rtt) => {
+    if (!room || slot < 0 || typeof rtt !== 'number' || !Number.isFinite(rtt)) return;
+    toHost()?.volatile.emit('player:latency', { slot, rttMs: Math.max(0, Math.min(10000, Math.round(rtt))) });
+  });
+  socket.on('disconnect', () => {
+    const hit = rooms.disconnect(socket.id);
+    if (hit) broadcastLobby(hit.room);
+  });
+});
+
+setInterval(() => {
+  const { changed, deleted } = rooms.sweep();
+  for (const r of changed) broadcastLobby(r);
+  for (const code of deleted) ctrlNs.to(ctrlRoom(code)).emit('host:status', { online: false });
+}, 5000).unref();
 
 /* ---------------- HTTP: apps ---------------- */
 

@@ -10,37 +10,27 @@
     <div id="huds"></div>
     <div id="debug" class="debug"></div>
 
-    <div id="title" class="overlay">
-      <h1 class="logo">TURBO<br /><span>KARTS</span></h1>
-      <div class="panel">
-        <div class="pick">
-          <span class="arrow">◀</span><b id="charName">Pip</b><span class="arrow">▶</span>
-          <span class="dot">·</span><span>Difficulty <b id="diffName">Normal</b> (▲▼)</span>
-        </div>
-        <button class="big" id="startBtn">START RACE</button>
-        <p class="sub">
-          Keyboard test drive (phase 4). <b>←→</b> steer · <b>↑</b> gas · <b>↓</b> brake · <b>Space</b> drift · <b>E</b> item (hold
-          ↓ to throw back) · <b>P</b> pause · <b>M</b> mute · <b>F</b> FPS · <b>D</b> debug
-        </p>
-      </div>
-    </div>
+    <div id="lobby" class="overlay lobby"></div>
 
     <div id="pause" class="overlay dim hidden">
       <h2>PAUSED</h2>
       <button class="big" id="resumeBtn">RESUME</button>
-      <button class="alt" id="quitBtn">Back to title</button>
+      <button class="alt" id="quitBtn">Back to lobby</button>
     </div>
 
     <div id="results" class="overlay hidden">
       <div id="resWrap">
-        <div id="resTitle">FINISH!</div>
+        <div id="resTitle">RESULTS</div>
         <ul id="standings"></ul>
         <div id="resBest"></div>
         <div class="row">
-          <button class="big" id="againBtn">RACE AGAIN</button><button class="alt" id="menuBtn">Title</button>
+          <button class="big" id="againBtn">RACE AGAIN</button><button class="alt" id="menuBtn">Back to lobby</button>
         </div>
+        <div class="keys">Enter: race again · Esc: lobby · or the leader's phone</div>
       </div>
     </div>
+
+    <div id="netDown" class="netDown hidden">Connection to the game server lost. Reconnecting…</div>
 
     <script type="module" src="/host/src/main.ts"></script>
   </body>

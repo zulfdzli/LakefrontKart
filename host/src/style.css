@@ -600,3 +600,253 @@ h1.logo span {
   margin-top: 4px;
   border-radius: 6px;
 }
+
+/* ---------------- lobby (section 6.1) ---------------- */
+.lobby {
+  justify-content: space-between;
+  gap: 10px;
+  padding: 18px 24px;
+  background: linear-gradient(rgba(20, 24, 70, 0.55), rgba(20, 24, 70, 0.15) 30%, rgba(20, 24, 70, 0.25) 60%, rgba(16, 18, 50, 0.85));
+}
+.lobby .logo {
+  font-size: clamp(40px, 6vw, 72px);
+}
+.lobbyMain {
+  display: flex;
+  gap: 28px;
+  align-items: stretch;
+  justify-content: center;
+  width: min(1180px, 100%);
+}
+.joinCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 22px;
+  border-radius: 28px;
+  background: rgba(29, 27, 46, 0.82);
+  border: 3px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.25);
+  animation: pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+.joinTitle {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--sun);
+  text-shadow: 0 3px 0 var(--ink);
+}
+.joinCard .qr {
+  width: clamp(170px, 22vh, 250px);
+  aspect-ratio: 1;
+  background: #fff;
+  border-radius: 18px;
+  padding: 10px;
+}
+.joinCard .qr svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.joinCard .code {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.joinCard .code small {
+  font-size: 16px;
+  opacity: 0.8;
+}
+.joinCard .code b {
+  font-size: 46px;
+  letter-spacing: 8px;
+  color: #fff;
+  text-shadow: 0 4px 0 var(--ink);
+}
+.joinCard .url {
+  font-size: 15px;
+  font-weight: 600;
+  color: #b3e5fc;
+  word-break: break-all;
+  text-align: center;
+  max-width: 300px;
+}
+.joinCard .warn {
+  max-width: 300px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #ff7043;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 14px;
+}
+.joinCard select {
+  font: inherit;
+  border-radius: 8px;
+  padding: 2px 6px;
+  max-width: 260px;
+}
+.slots {
+  flex: 1;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+}
+.slot {
+  --c: #fff;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 10px 22px;
+  border-radius: 20px;
+  background: rgba(29, 27, 46, 0.82);
+  border: 3px solid var(--c);
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  transition:
+    opacity 0.3s,
+    transform 0.35s cubic-bezier(0.2, 1.6, 0.4, 1),
+    border-color 0.3s;
+}
+.slot .stripe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  background: var(--c);
+}
+.slot .pn {
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--c);
+  text-shadow: 0 2px 0 var(--ink);
+  min-width: 30px;
+}
+.slot .face {
+  font-size: 34px;
+  width: 48px;
+  text-align: center;
+}
+.slot .who {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.slot .name {
+  font-size: 22px;
+  text-shadow: 0 2px 0 var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.slot .meta {
+  font-size: 13px;
+  opacity: 0.8;
+  font-weight: 600;
+}
+.slot .state {
+  font-weight: 700;
+  font-size: 15px;
+  opacity: 0.7;
+}
+.slot.ready .state {
+  color: #69f0ae;
+  opacity: 1;
+}
+.slot.empty {
+  opacity: 0.55;
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.45);
+}
+.slot.empty .name {
+  font-weight: 600;
+  font-size: 18px;
+}
+.slot:not(.empty) {
+  animation: slotIn 0.4s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+@keyframes slotIn {
+  from {
+    transform: scale(0.92);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+.slot.offline {
+  opacity: 0.7;
+}
+.slot .kick {
+  display: none;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 20px;
+  opacity: 0.5;
+  cursor: pointer;
+}
+.slot:not(.empty):hover .kick {
+  display: block;
+}
+.lobbyFoot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.lobbyFoot .cfg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.lobbyFoot .cfg span {
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(29, 27, 46, 0.7);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+  font-size: 15px;
+}
+.lobbyFoot .status {
+  font-size: 20px;
+  font-weight: 700;
+  text-shadow: 0 3px 0 var(--ink);
+}
+.soundBtn.hidden {
+  display: none;
+}
+#standings li .dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--c);
+  margin-right: 8px;
+  border: 2px solid #fff;
+  vertical-align: -1px;
+}
+#resWrap .keys {
+  font-size: 12px;
+  opacity: 0.7;
+}
+.netDown {
+  position: fixed;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  z-index: 30;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: #ff7043;
+  color: var(--ink);
+  font-weight: 700;
+}
+.netDown.hidden {
+  display: none;
+}

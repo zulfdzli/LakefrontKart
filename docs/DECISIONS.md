@@ -283,6 +283,38 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - Scenery placement and particle effects use seeded generators, so a capture is reproducible.
 - **Why**: Comparable screenshots from phase to phase.
 
+### D31 · Keyboard feel check (2026-11-16, phase 4 gate)
+- **Q**: How did the D19 keyboard feel check go?
+- **A**: You chose to continue without doing it. The feel items keep Claude's measured scores (marked *). Your iPhone check after phase 5 is the first hands-on verdict.
+- **Why**: Your call at the gate.
+
+### D32 · Rooms, relay and controller details (2026-11-16, phase 5, my decision)
+- **Q**: How do rooms, the relay and the controller behave in detail?
+- **A**:
+  - **Lobby slots**: a phone that drops in the lobby keeps its slot for 30 s; during a race it keeps it until the race ends.
+  - **Item presses**: sent as reliable emits, so a press is never lost. Held inputs are volatile and sent on change, plus a 100 ms heartbeat, with at most 60 per second.
+  - **Stale input**: after 500 ms without input from a phone, the host keeps the throttle on with steer 0 (section 5.4).
+  - **Host refresh**: brings the room and players back to the lobby, because the race lives in the host page.
+  - **Characters**: each phone is given a free character on joining and can change it on the waiting screen.
+  - **Tips**: shown only on the waiting screen, at the top, so they never cover controls.
+- **Why**: Reliable multiplayer first (section 16 priority 1).
+
+### D33 · Work pulled forward from later phases (2026-11-16, phase 5, my decision)
+- **Q**: Which later-phase work was built early, and why?
+- **A**: Four small pieces landed in phase 5 because the phase 5 test needs them:
+  - the basic split-screen rectangles (`host/src/layout.ts`; phase 6 adds borders and the minimap and standings panels);
+  - phone HUD data and haptics relay (phase 7);
+  - the phone character picker (phase 12);
+  - phone results and rematch buttons (phase 7).
+
+  Phases 6, 7 and 12 still own the polish and checks for these.
+- **Why**: A real iPhone test is more useful with place, lap, item, haptics and a character to pick.
+
+### D34 · Development keyboard mode (2026-11-16, phase 5, my decision)
+- **Q**: How can the host be tested without a phone?
+- **A**: `/?keyboard=1` lets the host keyboard drive slot 0 without a phone (development only). The normal host needs at least one phone (section 6.1).
+- **Why**: Quick local testing.
+
 ---
 
 ## Gate 0 status

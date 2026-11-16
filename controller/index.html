@@ -8,17 +8,126 @@
     />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#eef1f6" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Turbo Karts" />
+    <meta name="theme-color" content="#e9edf3" />
+    <link rel="manifest" href="/controller/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/controller/icon-180.png" />
     <title>Turbo Karts Controller</title>
   </head>
   <body>
-    <main>
-      <h1>TURBO KARTS</h1>
-      <div id="state" class="state">Connecting…</div>
-      <div id="rtt" class="rtt">– ms</div>
-      <button id="tap" type="button">TAP ME</button>
-      <p class="hint">Phase 2 connectivity check. The real controller arrives in phase 5.</p>
+    <!-- join / waiting / results: the same pearl-white remote body, held upright or sideways -->
+    <main id="card" class="card">
+      <div class="leds top"><i></i><i></i><i></i><i></i><i></i></div>
+      <h1 class="brand">TURBO KARTS</h1>
+
+      <section id="join" class="screen">
+        <label class="field" id="codeField">
+          <span>Room code</span>
+          <input id="code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" />
+        </label>
+        <div class="roomTag" id="roomTag" hidden>Room <b></b></div>
+        <label class="field">
+          <span>Your name</span>
+          <input id="name" maxlength="10" autocomplete="nickname" spellcheck="false" />
+        </label>
+        <button id="joinBtn" class="pbtn primary" type="button">JOIN</button>
+        <p class="err" id="joinErr" hidden></p>
+      </section>
+
+      <section id="wait" class="screen" hidden>
+        <div class="me"><i class="meDot"></i><b id="meName"></b><span class="leaderTag" hidden>👑 Leader</span></div>
+        <div class="chars" id="chars"></div>
+        <button id="readyBtn" class="pbtn" type="button">READY</button>
+        <button id="startBtn" class="pbtn primary" type="button" hidden>START RACE</button>
+        <p class="note" id="waitNote">Waiting for the leader to start…</p>
+        <div class="row small">
+          <button class="pbtn mini" id="waitSettings" type="button">Controls</button>
+          <button class="pbtn mini" id="leaveBtn" type="button">Leave</button>
+        </div>
+      </section>
+
+      <section id="results" class="screen" hidden>
+        <div class="resTitle" id="resTitle">FINISHED</div>
+        <ol class="standings" id="standings"></ol>
+        <div class="row" id="leaderRow" hidden>
+          <button class="pbtn primary" id="againBtn" type="button">RACE AGAIN</button>
+          <button class="pbtn" id="lobbyBtn" type="button">LOBBY</button>
+        </div>
+        <p class="note" id="resNote">Waiting for the leader…</p>
+      </section>
     </main>
+
+    <!-- driving: the remote turned sideways (D14) -->
+    <main id="drive" class="remote" hidden>
+      <div class="trigger top">
+        <span class="sName"><i class="meDot"></i><b id="sName"></b></span>
+        <span class="sPlace" id="sPlace">–</span>
+        <span class="sLap" id="sLap">LAP –</span>
+        <span class="sItem" id="sItem"></span>
+        <span class="sPing" id="sPing">– ms</span>
+      </div>
+
+      <div class="deck">
+        <div class="zone steer" id="steerZone">
+          <div class="dpad" id="dpad">
+            <span class="arm l"><i>◀</i></span><span class="arm r"><i>▶</i></span><span class="arm u"><i>▲</i></span><span class="arm d"><i>▼</i></span><span class="hub"></span>
+          </div>
+          <div class="slider" id="slider" hidden><span class="track"></span><span class="knob" id="knob"></span></div>
+        </div>
+        <div class="zone a">
+          <div class="ring"><button class="rbtn big" id="brakeBtn" type="button" aria-label="Brake"><span class="ic"><svg class="svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l6 6 6-6M6 12l6 6 6-6"/></svg></span><small>BRAKE</small></button></div>
+        </div>
+        <div class="zone mid">
+          <div class="pill v">
+            <button class="rbtn sm" id="minusBtn" type="button" aria-label="Gentler steering"><svg class="svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16c4-1 7-3 9-6s5-4 9-4"/><path d="M17 3l4 3-4 3"/></svg></button>
+            <button class="rbtn sm glow" id="menuBtn" type="button" aria-label="Controller settings"><svg class="svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></button>
+            <button class="rbtn sm" id="plusBtn" type="button" aria-label="Sharper steering"><svg class="svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10c0-4 3-6 7-6h6"/><path d="M14 1l4 3-4 3"/></svg></button>
+          </div>
+          <small class="lbl">SETTINGS</small>
+        </div>
+        <div class="zone grille" id="grille"></div>
+        <div class="zone pair">
+          <div class="pill h">
+            <button class="rbtn item" id="itemBtn" type="button" aria-label="Use item"><span class="ic" id="itemIc"><svg class="svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M10 10a2 2 0 1 1 2.5 1.9c-.5.2-.5.6-.5 1.1M12 16v.2"/></svg></span><small>ITEM</small></button>
+            <button class="rbtn drift" id="driftBtn" type="button" aria-label="Drift"><span class="ic"><svg class="svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17c2-7 8-11 15-11"/><path d="M15 3l4 3-4 3"/><path d="M5 21l1.5-2M9 21l1-2.2"/></svg></span><small>DRIFT</small></button>
+          </div>
+          <small class="lbl">swipe ITEM down to throw back</small>
+        </div>
+        <div class="zone leds side"><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+
+      <div class="trigger bottom"><div class="charge"><i id="chargeFill"></i></div></div>
+      <button class="power" id="powerBtn" type="button" aria-label="Leave the race">✕</button>
+      <div class="edge" id="edge"></div>
+      <div class="toast" id="toast"></div>
+    </main>
+
+    <!-- overlays -->
+    <div id="rotate" class="ov rotate" hidden><div class="phoneIc">📱</div><b>Rotate your phone</b><span>Hold it sideways, like a remote.</span></div>
+    <div id="busy" class="ov" hidden><div class="spinner"></div><b id="busyText">Reconnecting…</b></div>
+    <div id="sheet" class="sheet" hidden>
+      <div class="sheetCard">
+        <h2>Controls</h2>
+        <div class="opt">
+          <span>Steering</span>
+          <div class="seg" id="steerSeg"><button data-v="buttons" type="button">◀ ▶ Buttons</button><button data-v="slider" type="button">Slider</button></div>
+        </div>
+        <div class="opt"><span>Steering assist</span><button class="tog" id="assistTog" type="button"></button></div>
+        <div class="opt"><span>Vibration</span><button class="tog" id="hapticTog" type="button"></button></div>
+        <div class="opt"><span>Sensitivity</span><b id="sensVal">1.0</b></div>
+        <button class="pbtn primary" id="sheetClose" type="button">DONE</button>
+      </div>
+    </div>
+    <div id="confirm" class="sheet" hidden>
+      <div class="sheetCard">
+        <h2>Leave the race?</h2>
+        <p class="note">Your kart is driven by the computer until you rejoin.</p>
+        <div class="row"><button class="pbtn" id="stayBtn" type="button">STAY</button><button class="pbtn danger" id="quitBtn" type="button">LEAVE</button></div>
+      </div>
+    </div>
+    <div id="tip" class="tip" hidden><span id="tipText"></span><button id="tipClose" type="button">OK</button></div>
+
     <script type="module" src="/controller/src/main.ts"></script>
   </body>
 </html>

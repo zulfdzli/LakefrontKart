@@ -9,22 +9,9 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import './tk-hook';
 import { chromium, type Page } from 'playwright-core';
 
-/** The host's automation hook (host/src/main.ts), as seen from page.evaluate. */
-interface TkKart { drifting: boolean; driftLevel: number; boost: number }
-declare global {
-  interface Window {
-    __tk: {
-      ready: boolean;
-      race(o: { seed?: number; ci?: number; laps?: number; autopilot?: boolean }): void;
-      advance(s: number): void;
-      state(): unknown;
-      session(): { players: { kart: TkKart }[]; s: { phase: string } } | null;
-      info(): { calls: number; triangles: number; pixelRatio: number };
-    };
-  }
-}
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const args = process.argv.slice(2);

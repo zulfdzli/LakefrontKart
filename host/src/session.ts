@@ -4,7 +4,7 @@
  * to effects, audio and the right player's HUD.
  */
 import * as THREE from 'three';
-import { STEP, createGame, type Game, type GameEvent, type GameOptions, type GameState, type Kart } from '@tk/shared';
+import { STEP, createGame, type Game, type GameEvent, type GameOptions, type GameState, type HapticKind, type HudUpdate, type Kart, type Phase } from '@tk/shared';
 import { World, type Rect, type ViewToRender } from './renderer';
 import { ChaseCam } from './camera';
 import { PlayerHud, MinimapBase, ord } from './hud';
@@ -42,6 +42,8 @@ export class RaceSession {
   private readonly minimap: MinimapBase;
   private readonly camPositions: THREE.Vector3[] = [];
   onResults: ((order: Kart[]) => void) | null = null;
+  /** Feedback for a player's phone (vibration). */
+  onHaptic: ((slot: number, kind: HapticKind) => void) | null = null;
 
   constructor(opts: GameOptions, private readonly world: World, private readonly audio: Audio, hudLayer: HTMLElement, names: Map<number, string>) {
     this.game = createGame(opts);
@@ -154,8 +156,26 @@ export class RaceSession {
     }
   }
 
+  /** The phase phones should show. */
+  netPhase(): Phase {
+    if (this.stage === 'preview') return 'lobby';
+    if (this.stage === 'podium') return 'results';
+    if (this.paused) return 'paused';
+    return this.s.phase === 'countdown' || this.s.phase === 'grid' ? 'countdown' : 'race';
+  }
+
+  /** Small status for a player's phone (section 5.3 'hud'). */
+  hudFor(p: PlayerView): HudUpdate {
+    const k = p.kart, s = this.s;
+    return {
+      place: k.rank + 1, totalRacers: s.karts.length, lap: Math.max(1, Math.min(s.laps, k.lap)), laps: s.laps,
+      item: k.roll > 0 ? 'roll' : k.item, itemUses: k.itemUses, boosting: k.boost > 0, drifting: k.drifting, driftLevel: k.drifting ? k.driftLevel : 0,
+      finished: k.finished,
+    };
+  }
+
   views(): ViewToRender[] {
-    return this.players.map((p) => ({ camera: p.cam.camera, rect: p.rect, viewerKart: this.stage === 'podium' ? -1 : p.kart.id }));
+    return this.players.map((p) => ({ camera: p.cam.camera, rect: p.rect, viewerKart: this.stage === 'podium' ? -1 : p.kart.id, tags: this.stage === 'racing' }));
   }
 
   focusOf(v: ViewToRender): THREE.Vector3 {
@@ -191,8 +211,8 @@ export class RaceSession {
         case 'cd': a.tone(440, 0.2, 'square', 0.1); break;
         case 'go': a.tone(880, 0.5, 'square', 0.12); break;
         case 'driftstart': if (me) a.tone(220, 0.12, 'sawtooth', 0.05, 330); break;
-        case 'driftlevel': if (me) a.tone(520 + (e.lvl ?? 1) * 200, 0.12, 'triangle', 0.1); break;
-        case 'boost': if (me) { a.tone(200, 0.5, 'sawtooth', 0.09, 760); me.hud.flash('boost'); } break;
+        case 'driftlevel': if (me) { a.tone(520 + (e.lvl ?? 1) * 200, 0.12, 'triangle', 0.1); this.onHaptic?.(me.slot, `drift${Math.min(3, Math.max(1, e.lvl ?? 1))}` as HapticKind); } break;
+        case 'boost': if (me) { a.tone(200, 0.5, 'sawtooth', 0.09, 760); me.hud.flash('boost'); this.onHaptic?.(me.slot, 'boost'); } break;
         case 'perfect': if (me) { me.hud.say('ROCKET START!', 1100, 'small gold'); a.tone(660, 0.12, 'square', 0.1); a.tone(990, 0.3, 'square', 0.1, 0, a.at(0.1)); } break;
         case 'stall': if (me) { me.hud.say('TOO EARLY!', 1000, 'small'); a.tone(120, 0.5, 'sawtooth', 0.12, 50); } break;
         case 'pad': if (me) me.hud.say('BOOST!', 600, 'small blue'); break;
@@ -202,12 +222,12 @@ export class RaceSession {
           if (me) a.tone(660, 0.15, 'triangle', 0.1, 990);
           break;
         }
-        case 'item': if (me) a.tone(880, 0.18, 'square', 0.08); break;
+        case 'item': if (me) { a.tone(880, 0.18, 'square', 0.08); this.onHaptic?.(me.slot, 'item'); } break;
         case 'useturbo': case 'useoil': case 'useorb': case 'usebolt': if (me) a.tone(330, 0.2, 'square', 0.08, 120); break;
         case 'useshield': if (me) a.tone(500, 0.35, 'sine', 0.12, 900); break;
         case 'shieldpop': if (me) { me.hud.say('BLOCKED!', 800, 'small blue'); a.tone(900, 0.25, 'triangle', 0.12, 400); } break;
         case 'hit': case 'orbhit': case 'bolthit':
-          if (me) { me.hud.say('OUCH!', 900, 'small'); a.tone(300, 0.5, 'sawtooth', 0.14, 60); a.noiseHit(0.3, 0.25, 600); me.hud.flash('hit'); me.cam.shake = 0.7; this.hitStop = 0.07; }
+          if (me) { me.hud.say('OUCH!', 900, 'small'); a.tone(300, 0.5, 'sawtooth', 0.14, 60); a.noiseHit(0.3, 0.25, 600); me.hud.flash('hit'); me.cam.shake = 0.7; this.hitStop = 0.07; this.onHaptic?.(me.slot, 'hit'); }
           break;
         case 'bump': {
           const other = e.other !== undefined ? this.playerOf(e.other) : undefined;
@@ -227,7 +247,7 @@ export class RaceSession {
           }
           break;
         case 'finish':
-          if (me && k) { me.hud.say(k.rank === 0 ? '1ST PLACE!' : 'FINISHED ' + (k.rank + 1) + ord(k.rank + 1), 2400, 'gold'); a.tone(520, 0.7, 'triangle', 0.12, 1040); }
+          if (me && k) { me.hud.say(k.rank === 0 ? '1ST PLACE!' : 'FINISHED ' + (k.rank + 1) + ord(k.rank + 1), 2400, 'gold'); a.tone(520, 0.7, 'triangle', 0.12, 1040); this.onHaptic?.(me.slot, 'finish'); }
           break;
         default: break;
       }

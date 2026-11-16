@@ -31,6 +31,8 @@ export interface TrackWorld {
   update(time: number, dt: number): void;
   /** Place the item boxes (spin, bob, hide while cooling down). */
   updateBoxes(s: Readonly<GameState>, hidden: boolean): void;
+  /** Forget pads and boxes so the next race (which may differ in items on/off) recreates them. */
+  resetBoxes(): void;
   dispose(): void;
 }
 
@@ -407,6 +409,7 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
   const boxMat = track(new THREE.MeshBasicMaterial({ map: qTex, transparent: true, opacity: 0.93 }));
   let boxMesh: THREE.InstancedMesh | null = null;
   let padsBuilt = false;
+  const padGroups: THREE.Object3D[] = [];
   const _o = new THREE.Object3D();
 
   const terrain: TerrainInfo = { TC, bounds: { x0: bx0, x1: bx1, z0: bz0, z1: bz1 }, nearTrack, terrainH, pond, zones };
@@ -431,7 +434,7 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
       if (!padsBuilt) {
         padsBuilt = true;
         for (const p of s.pads) {
-          const grp = add(new THREE.Object3D()); grp.position.set(p.x, p.y + 0.11, p.z); grp.rotation.order = 'YXZ'; grp.rotation.y = ANG[p.idx]!; grp.rotation.x = -Math.atan(SL[p.idx]!);
+          const grp = add(new THREE.Object3D()); padGroups.push(grp); grp.position.set(p.x, p.y + 0.11, p.z); grp.rotation.order = 'YXZ'; grp.rotation.y = ANG[p.idx]!; grp.rotation.x = -Math.atan(SL[p.idx]!);
           const m = new THREE.Mesh(padGeo, padMat); m.rotation.y = Math.PI; m.receiveShadow = true; grp.add(m);
         }
       }
@@ -448,6 +451,12 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
         boxMesh!.setMatrixAt(i, _o.matrix);
       });
       boxMesh.instanceMatrix.needsUpdate = true;
+    },
+    resetBoxes() {
+      padsBuilt = false;
+      for (const g of padGroups) group.remove(g);
+      padGroups.length = 0;
+      if (boxMesh) { group.remove(boxMesh); boxMesh.dispose(); boxMesh = null; }
     },
     dispose() {
       for (const d of disposables) d.dispose();

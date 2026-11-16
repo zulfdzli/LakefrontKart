@@ -13,6 +13,8 @@ export class ChaseCam {
   readonly camera = new THREE.PerspectiveCamera(70, 1, 0.5, 3200);
   readonly focus = new THREE.Vector3();
   mode: CamMode = 'orbit';
+  /** Lobby: a wide, high orbit over the grid instead of a close-up of one kart. */
+  wideOrbit = false;
   private baseFov = 66;
   private camH = 0;
   private init = false;
@@ -56,6 +58,14 @@ export class ChaseCam {
     const cam = this.camera, ix = v.ix, iy = v.iy, iz = v.iz;
     if (this.mode === 'orbit') {
       this.spin += dt * 0.3;
+      if (this.wideOrbit) {
+        const a = k.h + 2.2 + this.spin * 0.25, d = 34;
+        cam.position.set(ix + Math.sin(a) * d, iy + 13, iz + Math.cos(a) * d);
+        cam.lookAt(ix + Math.sin(k.h) * 6, iy + 1, iz + Math.cos(k.h) * 6);
+        this.setFov(this.baseFov - 8, dt);
+        this.focus.set(ix, iy, iz);
+        return;
+      }
       const a = k.h + 0.9 + Math.sin(this.spin) * 0.9, d = cam.aspect < 1 ? 10.5 : 8.2;
       cam.position.set(ix + Math.sin(a) * d, iy + 2.8, iz + Math.cos(a) * d);
       cam.lookAt(ix, iy + (cam.aspect < 1 ? -0.8 : 0.2), iz);

@@ -151,3 +151,31 @@ The draw-call increase comes from the shadow pass: each kart casts shadows from 
 | Gameplay | Frame-time stability | 4 | p95 3.4 ms (1080p, vsync off); a steady 60 FPS with vsync |
 
 No score dropped. Your keyboard feel check (D19) is due at this gate.
+
+---
+
+## Phase 5: networking and phone controller (2026-11-16)
+
+### What changed
+- **Server**: rooms and slots, with join, reconnect by token, leader, unique characters, a 30 s lobby grace period and expiry 10 minutes after the host leaves. Phone input is validated, rate-limited to 60 per second, and relayed as volatile emits.
+- **Host**: the QR lobby (section 6.1). Phones drive karts, a stale input (over 500 ms) falls back to throttle-only, and a dropped phone's kart goes to the AI. A host refresh resumes the same room.
+- **Phone**: the controller built from the reference (D3, D14), with join, waiting and results screens, a settings sheet and a leave confirmation. It has haptics (vibrate, or the iOS switch trick), fullscreen and orientation lock on Android, wake lock or a tip, and Add to Home Screen.
+- **Tools**: `npm run e2e` checks the multiplayer path with emulated phones; `npm run bots` adds simulated phones to a room.
+
+### Capture and checks
+- **Multiplayer path**: `npm run e2e -- --phase phase5` passed **14/14** (`docs/screens/phase5/e2e.json`): join, room full, leader start, per-phone input routing, multi-touch steer and drift, AI takeover, reconnect to the same kart, host refresh keeping the room, and the rotate overlay.
+- **Single-player rendering**: `npm run capture -- --phase phase5` gave the same numbers as phase 4 (60 FPS, 121 calls, 168k triangles), so there is no regression.
+- **Controller vs reference**: `docs/screens/controller-vs-reference.png`.
+
+### Fixes this loop (the 3 lowest items this phase can touch)
+1. **UI: tips covering controls.** The "Add to Home Screen" and auto-lock tips covered the driving controls and, on an iPhone SE, the JOIN button. Tips now appear only on the waiting screen, at the top. (The tip had also been knocked off-centre by its rise animation's `transform: none`.)
+2. **UI: icon style.** Colourful emoji on BRAKE, DRIFT, settings and sensitivity clashed with the reference's grey, blue-glow style. They are now grey line icons that glow blue when pressed.
+3. **UI: lobby.** The close-up preview camera put a penguin's head between the logo and the cards, and name tags showed through. The lobby now uses a wide, high orbit over the grid, and tags show only while racing. The slot subtitle had been centred by a style clash.
+
+### Scores (compared with phase 4)
+| Area | Item | Score | Reason |
+|---|---|---|---|
+| Graphics | UI finish | **4** (was 3) | New lobby and phone controller: consistent, animated and readable. The in-race HUD is still the prototype's |
+| Graphics | Readability at 1/5 screen | 3 | 5 viewports render; HUD and tags still need sizing for small views (phase 6) |
+| Gameplay | Input latency | n/a | Emulated phones measure about 1 ms round trip on the same machine. The real iPhone over Wi-Fi is at this gate |
+| (all others) | | unchanged | No regressions; the race renders exactly as in phase 4 |

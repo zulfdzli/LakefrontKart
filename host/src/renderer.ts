@@ -21,6 +21,8 @@ export interface ViewToRender {
   rect: Rect;
   /** Kart id this view follows (its own name tag is hidden), or -1. */
   viewerKart: number;
+  /** Show name tags (only while racing). */
+  tags: boolean;
 }
 
 /** Light intensities are scaled by π: three.js r155+ uses physical units, the prototype (r128) did not. */
@@ -70,20 +72,36 @@ export class World {
     s.add(this.sky);
   }
 
-  /** Build everything for a race on this state's track. Disposes the previous build. */
+  private builtTrack: GameState['track'] | null = null;
+
+  /**
+   * Build the world for a race. The track (terrain, props, scenery) is only rebuilt when the track changes;
+   * kart views are rebuilt every race, because players and characters change.
+   */
   build(s: Readonly<GameState>, names: Map<number, string>): void {
-    this.disposeTrack();
-    const M = (this.M = createMaterials());
-    this.trackWorld = buildTrackWorld(s.track, M, 1234);
-    this.scene.add(this.trackWorld.group);
-    this.scenery = buildScenery(s.track, this.trackWorld.terrain, M, 4321);
-    this.scene.add(this.scenery.group);
-    this.effects = new Effects(M);
-    this.scene.add(this.effects.group);
-    this.assets = new ProceduralKartProvider();
-    this.views = s.karts.map((k) => new KartView(k.id, k.ch, k.slot, names.get(k.id) ?? k.name, this.assets!, M));
+    if (this.builtTrack !== s.track) {
+      this.disposeTrack();
+      const M = (this.M = createMaterials());
+      this.trackWorld = buildTrackWorld(s.track, M, 1234);
+      this.scene.add(this.trackWorld.group);
+      this.scenery = buildScenery(s.track, this.trackWorld.terrain, M, 4321);
+      this.scene.add(this.scenery.group);
+      this.effects = new Effects(M);
+      this.scene.add(this.effects.group);
+      this.assets = new ProceduralKartProvider();
+      this.builtTrack = s.track;
+    }
+    this.disposeKarts();
+    this.views = s.karts.map((k) => new KartView(k.id, k.ch, k.slot, names.get(k.id) ?? k.name, this.assets!, this.M!));
     for (const v of this.views) this.scene.add(v.root);
+    this.trackWorld!.resetBoxes();
+    this.effects!.clearAll(this.views);
     this.syncKarts(s, 1, 0, []);
+  }
+
+  private disposeKarts(): void {
+    for (const v of this.views) { this.scene.remove(v.root); v.dispose(); }
+    this.views = [];
   }
 
   get podium(): TrackWorld['podium'] {
@@ -163,7 +181,6 @@ export class World {
     r.setScissor(0, 0, window.innerWidth, H);
     r.setClearColor(0x14162f, 1);
     r.clear();
-    const racing = true;
     for (const v of list) {
       const { x, y, w, h } = v.rect;
       const by = H - y - h;
@@ -172,7 +189,7 @@ export class World {
       const f = focus(v);
       this.setSunFocus(f.x, f.y, f.z);
       this.sky.position.copy(v.camera.position);
-      for (const kv of this.views) kv.updateTag(v.camera.position.x, v.camera.position.z, kv.kartId === v.viewerKart, racing && kv.root.visible);
+      for (const kv of this.views) kv.updateTag(v.camera.position.x, v.camera.position.z, kv.kartId === v.viewerKart, v.tags && kv.root.visible);
       r.render(this.scene, v.camera);
     }
     r.setScissorTest(false);
@@ -183,8 +200,8 @@ export class World {
   }
 
   private disposeTrack(): void {
-    for (const v of this.views) { this.scene.remove(v.root); v.dispose(); }
-    this.views = [];
+    this.disposeKarts();
+    this.builtTrack = null;
     if (this.trackWorld) { this.scene.remove(this.trackWorld.group); this.trackWorld.dispose(); this.trackWorld = null; }
     if (this.scenery) { this.scene.remove(this.scenery.group); this.scenery.dispose(); this.scenery = null; }
     if (this.effects) { this.scene.remove(this.effects.group); this.effects.dispose(); this.effects = null; }
