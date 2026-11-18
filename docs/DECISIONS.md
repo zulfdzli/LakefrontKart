@@ -457,6 +457,30 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **Reflections**: a small prefiltered environment from the theme's sky (`scene.environment`, intensity 0.45), so wet patches, steel and paint reflect the sky instead of black. Phase 10 tunes it with tone mapping.
 - **Why**: Your request, and section 11.3.
 
+### D44 · The race car from reference/kart/kart.jpg (2026-11-18, your request and answers)
+- **Q**: You gave a four-view sheet of an open-wheel race car (front, back, side and top) and asked to follow it 100%. How?
+- **A**:
+  - **Shape**: followed part by part (`host/src/art/car.ts`):
+    - a long tapered nose with a black tip and a white nose panel;
+    - a three-element front wing with white panels, splayed endplates and pylons;
+    - a narrow survival cell with the halo (hoop and centre pillar);
+    - undercut sidepods with front inlets, and mirrors on stalks;
+    - an engine cover rising to the airbox with a shark fin and large white side panels;
+    - a high rear wing with endplates, DRS flap, swan-neck pylon and beam wing;
+    - the diffuser and crash structure with a red rain light, and a central exhaust;
+    - wishbone suspension, and slick tyres with white sidewall bands and dark rims.
+  - **Size**: about 5.9 m long and 2.6 m wide over the tyres, a little shorter than a real car. The physics hitbox is unchanged.
+  - **Paint**: your choice. The reference's livery pattern (main colour, white panels, black wings, floor, halo and suspension), with the main colour being the player's slot colour; AI cars are orange.
+  - **Logos**: your choice. The real brand marks (team badge, Shell, HP, UniCredit, Santander, Pirelli, CEVA) are replaced in the same places with the game's fictional sponsors (Voltex, Nimbus Oil, Kartronix, Rapido Tyres, Zap Cola, Skyfizz) and a Turbo Karts badge.
+  - **Driver**: your choice. The animal characters sit low under the halo in open-face helmets (the character's accent colour with a stripe in the car colour), so their faces and ears still show. Zed the robot keeps its own head.
+  - **Number**: your choice. Players carry 1 to 5 and AI cars 10 and up, shown on the engine cover, its sides and the nose.
+  - **Deviations from the reference**: the logos (above); the number (above); stylised rather than carbon-textured surfaces (phase 10); and no cartoon outline hulls (D38).
+  - **Tools**:
+    - `npm run car-sheet` renders the four views and puts them next to the reference in `docs/screens/car-vs-reference.png`.
+    - `/dev/car` (dev server only) shows the sheet.
+  - **Effects**: skid marks and drift sparks now come from the new rear wheel positions; boost flames come from the exhaust.
+- **Why**: Your request. Real trademarks are not copied (section 9).
+
 ---
 
 ## Gate 0 status

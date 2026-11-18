@@ -278,7 +278,9 @@ if (PROD) {
     server: { middlewareMode: true, hmr: { server: httpServer } },
     appType: 'custom',
   });
-  for (const [route, file] of Object.entries(PAGES)) {
+  // development only: the race car's four-view sheet (tools/car-sheet.ts, D44)
+  const devPages = { ...PAGES, '/dev/car': 'tools/carview/index.html' };
+  for (const [route, file] of Object.entries(devPages)) {
     app.get(route, async (req, res, next) => {
       try {
         const raw = await fs.readFile(path.join(ROOT, file), 'utf8');

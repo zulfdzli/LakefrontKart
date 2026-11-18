@@ -2,6 +2,7 @@
  * Visual effects (prototype): pooled instanced particles, skid marks, shockwave rings, projectile meshes,
  * per-kart trails and event bursts. Uses a seeded generator so captures are reproducible.
  */
+import { CAR } from './car';
 import * as THREE from 'three';
 import { Rng, type GameEvent, type GameState, type Kart } from '@tk/shared';
 import { P_, merge, jitter, ico, cyl, octa, hash3 } from './geo';
@@ -387,9 +388,9 @@ export class Effects {
     if (k.drifting) {
       for (const s of [-1, 1])
         this.sparks.emit(
-          ix + rx * s * 1.3 - fx * 1.6,
+          ix + rx * s * CAR.rearX + fx * (CAR.rearZ - 0.3),
           iy + 0.25,
-          iz + rz * s * 1.3 - fz * 1.6,
+          iz + rz * s * CAR.rearX + fz * (CAR.rearZ - 0.3),
           this.rnd(-2, 2) - fx * 3,
           this.rnd(2, 5),
           this.rnd(-2, 2) - fz * 3,
@@ -475,8 +476,8 @@ export class Effects {
     const skidding = (k.drifting || slip > 4.5 || (k.input.brake && k.sp > 12)) && !k.offroad && k.rescue <= 0;
     for (let w = 0; w < 2; w++) {
       const s = w ? 1 : -1,
-        wx = ix + rx * s * 1.3 - fx * 1.35,
-        wz = iz + rz * s * 1.3 - fz * 1.35,
+        wx = ix + rx * s * CAR.rearX + fx * CAR.rearZ,
+        wz = iz + rz * s * CAR.rearX + fz * CAR.rearZ,
         wy = iy + 0.1;
       const last = v.skid[w];
       if (skidding) {

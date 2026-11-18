@@ -1,11 +1,14 @@
 /**
- * Karts and characters. A KartAssetProvider builds the meshes (procedural now; a glTF provider can
- * replace it later, section 10.3). KartView owns one kart's scene graph and its procedural animation.
+ * Cars and characters. A KartAssetProvider builds the meshes (procedural now; a glTF provider can
+ * replace it later, section 10.3). KartView owns one car's scene graph and its procedural animation.
+ * D44: the body is the open-wheel race car from reference/kart/kart.jpg (art/car.ts); the animal drivers wear
+ * open-face helmets.
  */
 import * as THREE from 'three';
 import { DEFAULT_HANDLING, RESCUE_T, SPIN_T, clamp, wrapA, type Character, type Kart } from '@tk/shared';
-import { P_, merge, jitter, outlineGeo, canvasTex, box, cyl, ico, cone, octa, nonIdx, hexStr, type Part } from './geo';
-import { INK, DARK, METAL, WHITE, kartPaint } from './palette';
+import { P_, merge, jitter, canvasTex, box, cyl, ico, cone, octa, nonIdx, hexStr, type Part } from './geo';
+import { INK, DARK, WHITE, kartPaint } from './palette';
+import { CAR, buildCar, buildDecals, buildWheels, helmetParts } from './car';
 import type { Materials } from './materials';
 
 const HOP_T = DEFAULT_HANDLING.driftHop;
@@ -30,7 +33,7 @@ export interface KartAssetProvider {
   dispose(): void;
 }
 
-function buildHead(ch: Character): THREE.BufferGeometry {
+function headParts(ch: Character): Part[] {
   const F = ch.fur,
     B = ch.belly,
     BK = INK,
@@ -43,7 +46,7 @@ function buildHead(ch: Character): THREE.BufferGeometry {
   ];
   switch (ch.kind) {
     case 'bear':
-      return merge([
+      return [
         P_(jitter(ico(0.62, 1), 0.05, 1), F, 0, 0.35, 0),
         P_(ico(0.23, 0), F, 0.45, 0.85, -0.05),
         P_(ico(0.23, 0), F, -0.45, 0.85, -0.05),
@@ -52,16 +55,16 @@ function buildHead(ch: Character): THREE.BufferGeometry {
         P_(ico(0.3, 0), B, 0, 0.2, 0.52, 0, 0, 0, 1, 0.8, 0.8),
         P_(ico(0.11, 0), BK, 0, 0.3, 0.78),
         ...eyes(0.5, 0.56),
-      ]);
+      ];
     case 'penguin':
-      return merge([
+      return [
         P_(ico(0.62, 1), F, 0, 0.35, 0),
         P_(ico(0.5, 1), W, 0, 0.3, 0.32, 0, 0, 0, 1, 0.9, 0.75),
         P_(cone(0.15, 0.45, 4), 0xff9800, 0, 0.24, 0.86, Math.PI / 2),
         ...eyes(0.46, 0.68, 0.2),
-      ]);
+      ];
     case 'robot':
-      return merge([
+      return [
         P_(box(1.0, 0.86, 0.92), F, 0, 0.42, 0),
         P_(box(0.84, 0.3, 0.1), 0x18ffff, 0, 0.5, 0.47),
         P_(box(0.42, 0.08, 0.06), BK, 0, 0.2, 0.47),
@@ -69,9 +72,9 @@ function buildHead(ch: Character): THREE.BufferGeometry {
         P_(ico(0.12, 0), 0xff5252, 0, 1.36, 0),
         P_(cyl(0.15, 0.15, 0.16, 6), ch.accent, 0.56, 0.42, 0, 0, 0, Math.PI / 2),
         P_(cyl(0.15, 0.15, 0.16, 6), ch.accent, -0.56, 0.42, 0, 0, 0, Math.PI / 2),
-      ]);
+      ];
     case 'fox':
-      return merge([
+      return [
         P_(ico(0.58, 1), F, 0, 0.35, 0, 0, 0, 0, 1, 0.92, 1),
         P_(cone(0.28, 0.62, 5), B, 0, 0.22, 0.7, Math.PI / 2),
         P_(ico(0.08, 0), BK, 0, 0.22, 1.0),
@@ -82,9 +85,9 @@ function buildHead(ch: Character): THREE.BufferGeometry {
         P_(ico(0.24, 0), B, 0.3, 0.15, 0.36),
         P_(ico(0.24, 0), B, -0.3, 0.15, 0.36),
         ...eyes(0.48, 0.52, 0.2),
-      ]);
+      ];
     case 'frog':
-      return merge([
+      return [
         P_(ico(0.62, 1), F, 0, 0.3, 0, 0, 0, 0, 1.25, 0.72, 1.05),
         P_(ico(0.24, 1), W, 0.38, 0.7, 0.2),
         P_(ico(0.24, 1), W, -0.38, 0.7, 0.2),
@@ -93,9 +96,9 @@ function buildHead(ch: Character): THREE.BufferGeometry {
         P_(box(0.8, 0.06, 0.08), BK, 0, 0.18, 0.64),
         P_(ico(0.12, 0), 0xf48fb1, 0.5, 0.25, 0.48),
         P_(ico(0.12, 0), 0xf48fb1, -0.5, 0.25, 0.48),
-      ]);
+      ];
     default:
-      return merge([
+      return [
         P_(ico(0.62, 1), F, 0, 0.35, 0),
         P_(ico(0.5, 1), B, 0, 0.35, 0.42, 0, 0, 0, 1, 0.9, 0.5),
         P_(cyl(0.22, 0.22, 0.1, 8), 0xfff176, 0.22, 0.46, 0.66, Math.PI / 2),
@@ -105,60 +108,15 @@ function buildHead(ch: Character): THREE.BufferGeometry {
         P_(cone(0.1, 0.3, 4), 0xff9800, 0, 0.26, 0.74, Math.PI / 2 + 0.4),
         P_(cone(0.13, 0.42, 4), F, 0.38, 0.95, 0, 0, 0, -0.35),
         P_(cone(0.13, 0.42, 4), F, -0.38, 0.95, 0, 0, 0, 0.35),
-      ]);
+      ];
   }
-}
-
-function buildChassis(ch: Character, K: number): THREE.BufferGeometry {
-  const A = ch.accent,
-    D = DARK,
-    MT = METAL,
-    F = ch.fur,
-    B = ch.belly;
-  const torsoCol = ch.kind === 'robot' ? 0x90a4ae : F;
-  return merge([
-    P_(box(2.3, 0.32, 3.9), D, 0, 0.5, 0),
-    P_(box(2.0, 0.56, 2.5), K, 0, 0.9, -0.35),
-    P_(box(1.7, 0.5, 1.7), K, 0, 0.82, 1.45, -0.18),
-    P_(box(2.15, 0.32, 0.42), D, 0, 0.55, 2.06),
-    P_(box(0.55, 0.5, 2.0), A, 1.2, 0.78, -0.25),
-    P_(box(0.55, 0.5, 2.0), A, -1.2, 0.78, -0.25),
-    P_(box(0.55, 0.06, 1.55), A, 0, 1.1, 1.4, -0.18),
-    P_(box(1.35, 1.05, 0.35), D, 0, 1.45, -1.15),
-    P_(box(1.5, 0.6, 0.8), MT, 0, 1.05, -1.75),
-    P_(cyl(0.15, 0.2, 0.7, 6), MT, 0.45, 1.2, -2.25, Math.PI / 2),
-    P_(cyl(0.15, 0.2, 0.7, 6), MT, -0.45, 1.2, -2.25, Math.PI / 2),
-    P_(box(0.12, 0.65, 0.12), D, 0.65, 1.55, -1.95),
-    P_(box(0.12, 0.65, 0.12), D, -0.65, 1.55, -1.95),
-    P_(box(2.5, 0.14, 0.72), K, 0, 1.9, -2.0),
-    P_(box(0.1, 0.46, 0.78), A, 1.25, 1.85, -2.0),
-    P_(box(0.1, 0.46, 0.78), A, -1.25, 1.85, -2.0),
-    P_(box(0.38, 0.2, 0.08), 0xfff59d, 0.58, 0.95, 2.31),
-    P_(box(0.38, 0.2, 0.08), 0xfff59d, -0.58, 0.95, 2.31),
-    P_(cyl(0.05, 0.05, 0.75, 5), D, 0, 1.2, 0.5, -0.9),
-    P_(new THREE.TorusGeometry(0.3, 0.07, 4, 8), D, 0, 1.5, 0.2, -0.5),
-    P_(cyl(0.42, 0.56, 0.95, 7), torsoCol, 0, 1.62, -0.55),
-    P_(ico(0.38, 0), B, 0, 1.58, -0.25, 0, 0, 0, 1, 1.1, 0.6),
-    P_(box(0.22, 0.22, 0.8), torsoCol, 0.5, 1.66, -0.12, 0.5),
-    P_(box(0.22, 0.22, 0.8), torsoCol, -0.5, 1.66, -0.12, 0.5),
-    P_(ico(0.15, 0), B, 0.3, 1.5, 0.22),
-    P_(ico(0.15, 0), B, -0.3, 1.5, 0.22),
-  ]);
 }
 
 export class ProceduralKartProvider implements KartAssetProvider {
   readonly kind = 'procedural' as const;
-  readonly wheelRear = merge([
-    P_(cyl(0.68, 0.68, 0.7, 8), 0x26262e, 1.3, 0, 0, 0, 0, Math.PI / 2),
-    P_(cyl(0.34, 0.34, 0.76, 6), METAL, 1.3, 0, 0, 0, 0, Math.PI / 2),
-    P_(cyl(0.68, 0.68, 0.7, 8), 0x26262e, -1.3, 0, 0, 0, 0, Math.PI / 2),
-    P_(cyl(0.34, 0.34, 0.76, 6), METAL, -1.3, 0, 0, 0, 0, Math.PI / 2),
-    P_(cyl(0.12, 0.12, 2.2, 5), DARK, 0, 0, 0, 0, 0, Math.PI / 2),
-  ]);
-  readonly wheelFront = merge([
-    P_(cyl(0.55, 0.55, 0.55, 8), 0x26262e, 0, 0, 0, 0, 0, Math.PI / 2),
-    P_(cyl(0.28, 0.28, 0.6, 6), METAL, 0, 0, 0, 0, 0, Math.PI / 2),
-  ]);
+  private readonly wheels = buildWheels();
+  readonly wheelRear = this.wheels.rear;
+  readonly wheelFront = this.wheels.front;
   readonly drone = merge([
     P_(box(1.4, 0.45, 1.4), 0xffeb3b, 0, 0, 0),
     P_(box(3.2, 0.15, 0.25), DARK, 0, 0.1, 0, 0, Math.PI / 4),
@@ -173,15 +131,11 @@ export class ProceduralKartProvider implements KartAssetProvider {
   private readonly built: THREE.BufferGeometry[] = [];
 
   build(ch: Character, paint: number): KartModel {
-    const chassis = buildChassis(ch, paint),
-      head = buildHead(ch);
-    const m: KartModel = {
-      chassis,
-      head,
-      chassisOutline: outlineGeo(chassis, 0.06),
-      headOutline: outlineGeo(head, 0.05),
-    };
-    this.built.push(chassis, head, m.chassisOutline!, m.headOutline!);
+    // D38/D44: no cartoon outline hulls (they would also swell the thin wings)
+    const chassis = buildCar(paint),
+      head = merge([...headParts(ch), ...(ch.kind === 'robot' ? [] : helmetParts(ch.accent, paint))]);
+    const m: KartModel = { chassis, head, chassisOutline: null, headOutline: null };
+    this.built.push(chassis, head);
     return m;
   }
 
@@ -295,6 +249,8 @@ export class KartView {
   private readonly stars = new THREE.Group();
   private readonly drone: THREE.Mesh;
   private readonly shadow: THREE.Mesh;
+  private readonly decals: THREE.Mesh;
+  private readonly decalMat: THREE.MeshLambertMaterial;
   /** Interpolated position (render frame). */
   ix = 0;
   iy = 0;
@@ -333,19 +289,21 @@ export class KartView {
     chassis.castShadow = true;
     this.body.add(chassis);
     if (model.chassisOutline) this.body.add(new THREE.Mesh(model.chassisOutline, M.line));
-    this.head.position.set(0, 2.05, -0.5);
+    // the driver sits low in the cockpit under the halo; the cartoon head is scaled to helmet size
+    this.head.position.copy(CAR.head).add(new THREE.Vector3(0, -0.2, 0));
+    this.head.scale.setScalar(0.5);
     this.body.add(this.head);
     const hm = new THREE.Mesh(model.head, M.kart);
     hm.castShadow = true;
     this.head.add(hm);
     if (model.headOutline) this.head.add(new THREE.Mesh(model.headOutline, M.line));
     this.rear = new THREE.Mesh(assets.wheelRear, M.kart);
-    this.rear.position.set(0, 0.68, -1.35);
+    this.rear.position.set(0, CAR.rearR, CAR.rearZ);
     this.rear.castShadow = true;
     this.body.add(this.rear);
-    for (const x of [1.25, -1.25]) {
+    for (const x of [CAR.frontX, -CAR.frontX]) {
       const p = new THREE.Group();
-      p.position.set(x, 0.55, 1.4);
+      p.position.set(x, CAR.frontR, CAR.frontZ);
       this.body.add(p);
       const w = new THREE.Mesh(assets.wheelFront, M.kart);
       w.castShadow = true;
@@ -359,9 +317,10 @@ export class KartView {
       opacity: 0.92,
       depthWrite: false,
     });
-    for (const x of [0.45, -0.45]) {
+    for (const ex of CAR.exhaust) {
       const f = new THREE.Mesh(S.flameGeo, this.flameMat);
-      f.position.set(x, 1.2, -3.4);
+      f.position.copy(ex).add(new THREE.Vector3(0, 0, -0.9));
+      f.scale.setScalar(0.7);
       f.visible = false;
       const c = new THREE.Mesh(S.coreGeo, S.coreMat);
       c.position.z = 0.2;
@@ -379,10 +338,11 @@ export class KartView {
         emissive: 0x1565c0,
       }),
     );
-    this.shield.position.y = 1.4;
+    this.shield.position.y = 1.0;
+    this.shield.scale.set(1.0, 0.72, 1.45);
     this.shield.visible = false;
     this.body.add(this.shield);
-    this.stars.position.y = 3.3;
+    this.stars.position.y = 2.4;
     this.stars.visible = false;
     for (let i = 0; i < 3; i++) {
       const s = new THREE.Mesh(S.starGeo, S.starMat);
@@ -393,7 +353,21 @@ export class KartView {
     this.shadow = new THREE.Mesh(S.shadowGeo, S.shadowMat);
     this.shadow.position.y = 0.06;
     this.shadow.renderOrder = 1;
+    this.shadow.scale.set(0.95, 1, 1.35);
     this.root.add(this.shadow);
+    // livery decals: number and fictional sponsors (one atlas per car)
+    const number = slot !== null ? slot + 1 : 10 + kartId;
+    const dec = buildDecals(number, this.paint);
+    this.decalMat = new THREE.MeshLambertMaterial({
+      map: dec.map,
+      transparent: true,
+      alphaTest: 0.3,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    });
+    this.decals = new THREE.Mesh(dec.geo, this.decalMat);
+    this.body.add(this.decals);
     this.drone = new THREE.Mesh(assets.drone, M.kart);
     this.drone.visible = false;
     this.drone.position.y = 5;
@@ -457,8 +431,8 @@ export class KartView {
     this.body.scale.set(1 - this.sus * 0.35, 1 + this.sus * 0.7, 1 - this.sus * 0.35);
     this.body.visible =
       (k.invuln <= 0 || Math.floor(time * 14) % 2 === 0) && !(k.rescue > 0 && Math.abs(k.rescue - RESCUE_T / 2) < 0.08);
-    this.rear.rotation.x += (k.sp * dt) / 0.68;
-    for (const w of this.fronts) w.rotation.x += (k.sp * dt) / 0.55;
+    this.rear.rotation.x += (k.sp * dt) / CAR.rearR;
+    for (const w of this.fronts) w.rotation.x += (k.sp * dt) / CAR.frontR;
     for (const p of this.pivots) p.rotation.y = -k.steerS * 0.45;
     this.head.rotation.y +=
       (-k.steerS * 0.45 - (k.drifting ? k.driftDir * 0.25 : 0) - this.head.rotation.y) * (1 - Math.exp(-8 * dt));
@@ -529,6 +503,9 @@ export class KartView {
 
   dispose(): void {
     this.flameMat.dispose();
+    this.decals.geometry.dispose();
+    this.decalMat.map?.dispose();
+    this.decalMat.dispose();
     (this.shield.material as THREE.Material).dispose();
     const tm = this.tag.material as THREE.SpriteMaterial;
     tm.map?.dispose();

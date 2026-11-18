@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Car sheet</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #2b2f35;
+        font-family: sans-serif;
+      }
+      canvas {
+        display: block;
+      }
+      .lbl {
+        position: absolute;
+        background: #fff;
+        color: #111;
+        font: 700 22px sans-serif;
+        padding: 4px 14px;
+        border-left: 8px solid #e53935;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- development only: the race car in the reference sheet's four views (D44), used by tools/car-sheet.ts -->
+    <canvas id="c"></canvas>
+    <div class="lbl" style="left: 40px; top: 30px">FRONT VIEW</div>
+    <div class="lbl" style="left: 680px; top: 30px">BACK VIEW</div>
+    <div class="lbl" style="left: 40px; top: 460px">SIDE VIEW</div>
+    <div class="lbl" style="left: 680px; top: 460px">TOP VIEW</div>
+    <script type="module" src="/tools/carview/carview.ts"></script>
+  </body>
+</html>

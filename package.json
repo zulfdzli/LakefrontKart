@@ -26,7 +26,8 @@
     "icons": "tsx tools/gen-icons.ts",
     "e2e": "tsx tools/e2e.ts",
     "track-view": "tsx tools/track-view.ts",
-    "textures": "tsx tools/gen-textures.ts"
+    "textures": "tsx tools/gen-textures.ts",
+    "car-sheet": "tsx tools/car-sheet.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
