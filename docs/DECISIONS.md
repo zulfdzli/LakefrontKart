@@ -315,6 +315,16 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 - **A**: `/?keyboard=1` lets the host keyboard drive slot 0 without a phone (development only). The normal host needs at least one phone (section 6.1).
 - **Why**: Quick local testing.
 
+### D35 · Hands-on fixes after the first iPhone test (2026-11-18, phase 5 gate, your feedback)
+- **Q**: Your iPhone test: connected at 54 ms, haptics felt; steering 2, drift 2, camera 2; "steering and slider should be bigger"; "drifting is more like hopping than drifting". What changes?
+- **A**:
+  - **Drift**: the start hop drops from 0.55 m to 0.14 m. The tail now kicks out sideways (3.2 m/s) and the kart keeps sliding (sideways grip in a drift 4.5 → 2.4, drag 0.3 → 0.22). The body swings out to a slide angle that tightens when you steer into the turn and opens when you countersteer.
+  - **Camera**: aims between the nose and the direction of travel (80% travel in a drift), so you see the kart sliding sideways instead of the whole view swinging. Uses the smoothed heading, softer position spring (12 → 8), and less FOV pumping with speed and boost.
+  - **Steering pad**: tap for a small correction, hold to reach full lock over 0.28 s (starts at 50%).
+  - **Controller size**: the steering column is about 65% wider. The cross pad is wide with long LEFT/RIGHT arms (UP/DOWN are decoration). The slider is taller with a bigger knob. BRAKE, the settings pill and the grille shrink to make room. This departs from the reference's proportions on purpose (D3 still holds for the look).
+  - These numbers live in `Handling` (`shared/src/game.ts`); `PROTOTYPE_HANDLING` keeps the parity test exact.
+- **Why**: Driving feel is priority 2, and all three feel scores were under the bar of 4 (D10). Lap times and AI gaps are unchanged (sim-report: 48.2–48.7 s).
+
 ---
 
 ## Gate 0 status

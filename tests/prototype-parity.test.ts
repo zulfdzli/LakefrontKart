@@ -11,7 +11,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { Rng, createGame, PROTOTYPE_GRID, STEP, type Difficulty } from '@tk/shared';
+import { Rng, createGame, PROTOTYPE_GRID, PROTOTYPE_HANDLING, STEP, type Difficulty } from '@tk/shared';
 
 const html = readFileSync(new URL('../prototype/turbokarts-prototype.html', import.meta.url), 'utf8');
 const logic = html.split('//#LOGIC-START')[1]!.split('//#LOGIC-END')[0]!;
@@ -84,6 +84,7 @@ function runParity(c: Case): { steps: number; finishedAll: boolean } {
     difficulty: c.diff,
     itemsOn: c.items,
     grid: PROTOTYPE_GRID,
+    handling: PROTOTYPE_HANDLING,
   });
   g.setHumanAi(0, true);
   g.startCountdown();

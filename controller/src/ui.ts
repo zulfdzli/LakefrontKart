@@ -21,6 +21,9 @@ const ord = (n: number): string =>
 const DRIFT_COL = ['#fff3b0', '#4fc3f7', '#ffa726', '#e040fb'];
 /** Swipe distance (CSS px) on ITEM that fires it backwards. */
 const SWIPE_BACK_PX = 26;
+/** Cross pad: a press starts at this share of full lock and ramps to full over STEER_RAMP_S (D35). */
+const STEER_BASE = 0.5;
+const STEER_RAMP_S = 0.28;
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!;
 
@@ -34,6 +37,7 @@ export class Remote {
   onLeave: (() => void) | null = null;
   onSchemeChange: (() => void) | null = null;
   private steerRaw = 0;
+  private holdStart = 0;
   private readonly emptyItemIcon = $('itemIc').innerHTML;
   private readonly releasers: (() => void)[] = [];
   private toastTimer = 0;
@@ -95,12 +99,24 @@ export class Remote {
     this.onSchemeChange?.();
   }
 
-  /** Map the raw touch value (-1..1) through dead zone, response curve and sensitivity (section 12.1). */
-  private setSteer(raw: number): void {
+  /** Advance the cross-pad ramp; called every frame before the input is sent. */
+  tick(now: number): void {
+    if (this.scheme === 'buttons' && this.steerRaw !== 0) this.setSteer(this.steerRaw, now);
+  }
+
+  /**
+   * Map the raw touch value (-1..1) to steering (section 12.1). Cross pad: tap for a small correction, hold for
+   * full lock. Slider: dead zone, response curve and sensitivity.
+   */
+  private setSteer(raw: number, now = performance.now()): void {
+    if (Math.sign(raw) !== Math.sign(this.steerRaw)) this.holdStart = now;
     this.steerRaw = raw;
     let v: number;
-    if (this.scheme === 'buttons') v = Math.sign(raw) * Math.min(1, 0.6 + 0.4 * this.sensitivity);
-    else {
+    if (this.scheme === 'buttons') {
+      const t = Math.min(1, (now - this.holdStart) / 1000 / STEER_RAMP_S),
+        e = t * t * (3 - 2 * t);
+      v = Math.sign(raw) * Math.min(1, 0.6 + 0.4 * this.sensitivity) * (STEER_BASE + (1 - STEER_BASE) * e);
+    } else {
       const dz = 0.08,
         a = Math.abs(raw);
       v = a <= dz ? 0 : Math.sign(raw) * Math.pow((a - dz) / (1 - dz), 1.5) * this.sensitivity;

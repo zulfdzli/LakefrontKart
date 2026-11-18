@@ -421,6 +421,7 @@ function loop(now: number): void {
     remote.state.throttle = true;
     if (Math.random() < 0.004) net.fireItem(Math.random() < 0.7 ? 'forward' : 'back');
   }
+  if (current === 'drive' && !BOT) remote.tick(now);
   if (current === 'drive') net.pump(remote.state, now);
   remote.setPing(net.rtt);
 }

@@ -3,7 +3,7 @@
  * shake on hits, and FOV kick on boost. Plus the lobby orbit and the podium camera. Frame-rate independent.
  */
 import * as THREE from 'three';
-import { COUNTDOWN_T, smooth01, wrapA, type GameState, type Kart } from '@tk/shared';
+import { COUNTDOWN_T, clamp, smooth01, wrapA, type GameState, type Kart } from '@tk/shared';
 import type { KartView } from './art/kart';
 import type { Podium } from './art/track-builder';
 
@@ -17,6 +17,8 @@ export class ChaseCam {
   wideOrbit = false;
   private baseFov = 66;
   private camH = 0;
+  /** How much the camera follows the travel direction instead of the nose (0..1), smoothed. */
+  private travelW = 0.35;
   private init = false;
   private fovKick = 0;
   shake = 0;
@@ -96,17 +98,23 @@ export class ChaseCam {
       this.focus.set(podium.x, podium.y, podium.z);
       return;
     }
-    this.camH += wrapA(k.h - this.camH) * (1 - Math.exp(-5 * dt));
+    // aim between the nose and the direction of travel: in a drift the camera keeps following the line the kart is
+    // sliding along, so the body is seen angled sideways (D35) instead of the whole view swinging with the nose
+    const vMag = Math.hypot(k.vx, k.vz);
+    this.travelW += ((k.drifting ? 0.8 : 0.35) - this.travelW) * (1 - Math.exp(-3 * dt));
+    const slip = vMag > 4 && k.sp > 0 ? clamp(wrapA(Math.atan2(k.vx, k.vz) - v.ih), -0.7, 0.7) : 0;
+    const aimH = v.ih + slip * this.travelW;
+    this.camH += wrapA(aimH - this.camH) * (1 - Math.exp(-4.5 * dt));
     const intro = s.phase === 'countdown' ? smooth01((COUNTDOWN_T - s.cd) / 2.4) : s.phase === 'grid' ? 0 : 1;
     const a = this.camH + Math.PI * (1 - intro);
     this.fovKick += ((k.boost > 0 ? 1 : 0) - this.fovKick) * (1 - Math.exp(-6 * dt));
-    const dist = 9.4 + Math.max(0, k.sp) * 0.035 + this.fovKick * 1.6 + (1 - intro) * 3;
-    const hgt = 4.2 + (1 - intro) * 2.5;
+    const dist = 9.8 + Math.max(0, k.sp) * 0.03 + this.fovKick * 1.4 + (1 - intro) * 3;
+    const hgt = 4.0 + (1 - intro) * 2.5;
     this.target.set(ix - Math.sin(a) * dist, iy + hgt, iz - Math.cos(a) * dist);
     if (!this.init) {
       cam.position.copy(this.target);
       this.init = true;
-    } else cam.position.lerp(this.target, 1 - Math.exp(-12 * dt));
+    } else cam.position.lerp(this.target, 1 - Math.exp(-8 * dt));
     this.look.set(ix + Math.sin(this.camH) * 8 * intro, iy + 1.6, iz + Math.cos(this.camH) * 8 * intro);
     cam.lookAt(this.look);
     if (this.shake > 0) {
@@ -117,7 +125,7 @@ export class ChaseCam {
       cam.position.y += Math.sin(t * 61 + 1) * sk * 0.6;
       cam.position.z += Math.cos(t * 47) * sk;
     }
-    this.setFov(this.baseFov + Math.max(0, k.sp) * 0.22 + this.fovKick * 9, dt);
+    this.setFov(this.baseFov + Math.max(0, k.sp) * 0.16 + this.fovKick * 7, dt);
     this.focus.set(ix, iy, iz);
   }
 }

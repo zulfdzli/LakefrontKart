@@ -4,7 +4,7 @@
     {
       "check": "host creates a 4-letter room",
       "ok": true,
-      "note": "Z9FB"
+      "note": "L3P4"
     },
     {
       "check": "phone 1 joins and becomes leader",
@@ -51,7 +51,7 @@
     {
       "check": "refreshing the host keeps the room and the players",
       "ok": true,
-      "note": "Z9FB → Z9FB"
+      "note": "L3P4 → L3P4"
     },
     {
       "check": "phones return to the waiting screen after a host refresh",

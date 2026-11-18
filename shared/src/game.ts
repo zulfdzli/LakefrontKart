@@ -235,7 +235,35 @@ export interface GameOptions {
   grid?: number[];
   /** Seconds after the first human finishes before the race is closed. */
   raceEndGrace?: number;
+  /** Handling tune. Default DEFAULT_HANDLING; the parity test uses PROTOTYPE_HANDLING. */
+  handling?: Handling;
 }
+
+/**
+ * Handling numbers that were retuned after hands-on play (D35). PROTOTYPE_HANDLING reproduces the prototype exactly.
+ */
+export interface Handling {
+  /** Sideways grip while drifting (1/s): lower lets the kart slide out. */
+  driftLatGrip: number;
+  /** Speed bleed while drifting (1/s). */
+  driftDrag: number;
+  /** Sideways velocity added outwards when a drift starts (m/s): the tail kicks out instead of a hop. */
+  driftKick: number;
+  /** Hop timer on drift start (s); the host draws it. */
+  driftHop: number;
+}
+export const PROTOTYPE_HANDLING: Readonly<Handling> = {
+  driftLatGrip: 4.5,
+  driftDrag: 0.3,
+  driftKick: 0,
+  driftHop: 0.25,
+};
+export const DEFAULT_HANDLING: Readonly<Handling> = {
+  driftLatGrip: 2.4,
+  driftDrag: 0.22,
+  driftKick: 3.2,
+  driftHop: 0.16,
+};
 
 export interface GameState {
   phase: GamePhase;
@@ -382,6 +410,7 @@ interface SlotInput extends KartInput {
 
 export class Game {
   readonly s: GameState;
+  readonly handling: Readonly<Handling>;
   private readonly slotInputs = new Map<number, SlotInput>();
 
   constructor(opts: GameOptions) {
@@ -412,6 +441,7 @@ export class Game {
       standings: null,
     };
     this.s = s;
+    this.handling = opts.handling ?? DEFAULT_HANDLING;
 
     const total = opts.aiFill ? Math.max(opts.totalKarts ?? NKARTS, opts.humans.length) : opts.humans.length;
     const grid = opts.grid ?? defaultGrid(opts.humans.length, total);
@@ -706,7 +736,8 @@ export class Game {
       k.driftDir = steer > 0 ? 1 : -1;
       k.driftT = 0;
       k.driftLevel = 0;
-      k.hop = 0.25;
+      k.hop = this.handling.driftHop;
+      if (this.handling.driftKick) lat -= k.driftDir * this.handling.driftKick;
       this.emit({ type: 'driftstart', kart: k.id });
     }
     let turn = steer;
@@ -739,8 +770,9 @@ export class Game {
     lat = vx * rx + vz * rz;
     {
       // sideways grip turns the slide back into forward motion instead of bleeding speed away
-      const newLat = lat * Math.exp(-(k.drifting ? 4.5 : off ? 4 : 9) * dt);
-      const v2 = (sp * sp + lat * lat) * Math.exp(-(k.drifting ? 0.3 : 0.1) * dt);
+      const H = this.handling;
+      const newLat = lat * Math.exp(-(k.drifting ? H.driftLatGrip : off ? 4 : 9) * dt);
+      const v2 = (sp * sp + lat * lat) * Math.exp(-(k.drifting ? H.driftDrag : 0.1) * dt);
       sp = (sp >= 0 ? 1 : -1) * Math.sqrt(Math.max(0, v2 - newLat * newLat));
       lat = newLat;
     }

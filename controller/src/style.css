@@ -430,7 +430,7 @@ input {
 }
 .deck {
   display: grid;
-  grid-template-columns: 1.3fr 0.62fr 0.42fr 0.2fr 1.34fr 0.12fr;
+  grid-template-columns: 2.15fr 0.5fr 0.32fr 0.13fr 1.2fr 0.08fr;
   align-items: center;
   justify-items: center;
   gap: 8px;
@@ -460,8 +460,9 @@ input {
 }
 .dpad {
   position: relative;
-  width: min(100%, calc(var(--dh) * 0.95));
-  aspect-ratio: 1;
+  /* wide cross: long LEFT / RIGHT arms for the thumb (D35); UP / DOWN stay as decoration */
+  width: min(100%, calc(var(--dh) * 1.25));
+  aspect-ratio: 1.2;
   pointer-events: none;
 }
 .dpad .arm,
@@ -484,16 +485,16 @@ input {
 }
 .dpad .l,
 .dpad .r {
-  top: 33%;
-  height: 34%;
-  width: 36%;
+  top: 25%;
+  height: 50%;
+  width: 41%;
 }
 .dpad .u,
 .dpad .d {
-  left: 33%;
-  width: 34%;
-  height: 36%;
-  opacity: 0.75;
+  left: 38%;
+  width: 24%;
+  height: 26%;
+  opacity: 0.6;
 }
 .dpad .l {
   left: 0;
@@ -512,10 +513,10 @@ input {
   border-radius: 8% 8% 22% 22%;
 }
 .dpad .hub {
-  left: 31%;
-  top: 31%;
-  width: 38%;
-  height: 38%;
+  left: 36%;
+  top: 23%;
+  width: 28%;
+  height: 54%;
   border-radius: 14%;
   box-shadow: inset 0 2px 6px rgba(120, 130, 150, 0.25);
 }
@@ -531,15 +532,15 @@ input {
 .slider {
   position: relative;
   width: 100%;
-  height: calc(var(--dh) * 0.4);
+  height: calc(var(--dh) * 0.62);
   pointer-events: none;
 }
 .slider .track {
   position: absolute;
-  left: 4%;
-  right: 4%;
+  left: 1%;
+  right: 1%;
   top: 50%;
-  height: 34%;
+  height: 50%;
   transform: translateY(-50%);
   border-radius: 999px;
   background: var(--well);
@@ -550,10 +551,10 @@ input {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: calc(var(--dh) * 0.36);
+  width: calc(var(--dh) * 0.38);
   aspect-ratio: 1;
   border-radius: 50%;
-  transform: translate(calc(-50% + var(--x) * 40cqw), -50%);
+  transform: translate(calc(-50% + var(--x) * 34cqw), -50%);
   background: radial-gradient(circle at 36% 28%, #ffffff, #f1f3f7 45%, #d9dee6);
   box-shadow: 0 6px 10px rgba(60, 70, 90, 0.25);
 }

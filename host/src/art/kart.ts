@@ -3,10 +3,12 @@
  * replace it later, section 10.3). KartView owns one kart's scene graph and its procedural animation.
  */
 import * as THREE from 'three';
-import { RESCUE_T, SPIN_T, clamp, wrapA, type Character, type Kart } from '@tk/shared';
+import { DEFAULT_HANDLING, RESCUE_T, SPIN_T, clamp, wrapA, type Character, type Kart } from '@tk/shared';
 import { P_, merge, jitter, outlineGeo, canvasTex, box, cyl, ico, cone, octa, nonIdx, hexStr, type Part } from './geo';
 import { INK, DARK, METAL, WHITE, kartPaint } from './palette';
 import type { Materials } from './materials';
+
+const HOP_T = DEFAULT_HANDLING.driftHop;
 
 /* ---------------- asset provider ---------------- */
 
@@ -436,13 +438,16 @@ export class KartView {
       this.lastSp = k.sp;
       this.pitchAcc += (clamp(-accel * 0.004, -0.08, 0.08) - this.pitchAcc) * (1 - Math.exp(-6 * dt));
     }
-    const dy = k.drifting ? -k.driftDir * 0.45 : 0;
-    this.yaw += (dy - this.yaw) * kd;
+    // drift: the body swings out to a slide angle that tightens when steering into the turn and opens when
+    // countersteering, and eases in (rate 6) so it reads as the tail stepping out rather than a snap
+    const dy = k.drifting ? -k.driftDir * (0.62 + 0.22 * clamp(k.steerS * k.driftDir, -1, 1)) : 0;
+    this.yaw += (dy - this.yaw) * (1 - Math.exp(-(k.drifting ? 6 : 9) * dt));
     const spinA = k.spin > 0 ? (1 - k.spin / SPIN_T) * 4 * Math.PI : 0;
     this.lean +=
       (k.steerS * Math.min(1, Math.abs(k.sp) / 30) * (k.drifting ? 0.16 : 0.09) - this.lean) * (1 - Math.exp(-8 * dt));
     this.body.rotation.set(this.pitchAcc + (k.boost > 0 ? -0.05 : 0), this.yaw + spinA, this.lean);
-    const hop = k.hop > 0 ? Math.sin(Math.PI * (1 - k.hop / 0.25)) * 0.55 : 0;
+    // a small settle-hop when a drift starts (was 0.55 m, which read as hopping, not drifting)
+    const hop = k.hop > 0 ? Math.sin(Math.PI * clamp(1 - k.hop / HOP_T, 0, 1)) * 0.14 : 0;
     this.hopH = hop;
     this.body.position.y = this.sus + hop;
     this.body.scale.set(1 - this.sus * 0.35, 1 + this.sus * 0.7, 1 - this.sus * 0.35);

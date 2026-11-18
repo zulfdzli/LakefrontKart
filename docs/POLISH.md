@@ -179,3 +179,9 @@ No score dropped. Your keyboard feel check (D19) is due at this gate.
 | Graphics | Readability at 1/5 screen | 3 | 5 viewports render; HUD and tags still need sizing for small views (phase 6) |
 | Gameplay | Input latency | n/a | Emulated phones measure about 1 ms round trip on the same machine. The real iPhone over Wi-Fi is at this gate |
 | (all others) | | unchanged | No regressions; the race renders exactly as in phase 4 |
+
+### Phase 5 gate: your iPhone test (2026-11-18)
+- **Result**: connected at 54 ms; haptics felt. Steering **2**, drift **2**, camera **2**. Controls too small; drift felt like hopping.
+- **Fixes (D35)**: low drift hop plus a sideways slide and slide angle; a camera that follows the direction of travel; tap-to-correct steering ramp; a much larger cross pad and slider.
+- **Checks after the fixes**: 40 tests pass; sim-report lap times unchanged (48.2–48.7 s); e2e 14/14 (`docs/screens/phase5-feel/`); capture 60 FPS, 121 calls. The drift shot `docs/screens/phase5-feel/04-mid-drift.png` shows the kart angled across its line.
+- **Scores**: waiting for your retest.
