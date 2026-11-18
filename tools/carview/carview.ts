@@ -4,6 +4,7 @@
  *   /tools/carview/?slot=0&ci=1
  */
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CHARS } from '@tk/shared';
 import { createMaterials } from '../../host/src/art/materials';
 import { KartView, ProceduralKartProvider } from '../../host/src/art/kart';
@@ -29,6 +30,11 @@ sun.position.set(3, 6, 4);
 scene.add(sun);
 
 const M = createMaterials();
+// studio reflections, so the clear-coat and metal finishes show on the sheet
+const pm = new THREE.PMREMGenerator(renderer);
+M.car.envMap = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+M.car.envMapIntensity = 0.55;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
 const kv = new KartView(0, CHARS[ci]!, slot, 'P1', new ProceduralKartProvider(), M);
 kv.tag.visible = false;
 // no ground shadow disc on the drawing sheet

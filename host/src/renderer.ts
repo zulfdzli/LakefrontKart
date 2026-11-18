@@ -188,6 +188,8 @@ export class World {
       const th = THEMES[def?.theme ?? 'meadows'];
       this.applyTheme(th);
       const M = (this.M = createMaterials());
+      // D47: the car paint reflects the sky at its own strength (scene.environment would override it)
+      if (this.envRT) M.car.envMap = this.envRT.texture;
       this.trackWorld = buildTrackWorld(s.track, M, 1234, th, def);
       this.scene.add(this.trackWorld.group);
       // natural detail first, so the canyon formations claim their ground before the scattered scenery

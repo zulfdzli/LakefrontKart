@@ -563,6 +563,21 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **Debug overlay additions** (input rate, latency, physics vectors): to phase 13.
 - **Why**: Section 12.
 
+### D47 · Shinier, more realistic car finish; Sepang in the Grand Prix (2026-11-19, your requests)
+- **Q**: You asked for the car to look more realistic and shiny, and for Sepang Circuit to be part of the Grand Prix.
+- **A**:
+  - **Finishes**: each part of the car has its own physically based finish, still in one draw call per car. The values live in a per-vertex `aPbr` attribute that the car shader reads.
+    - **Paint**: metallic flake under a glossy clear-coat.
+    - **White panels**: pearl.
+    - **Black parts**: lacquered carbon fibre with a fine twill weave.
+    - **Tyres**: satin rubber, with matte sidewall bands.
+    - **Rims**: machined metal, now with five spokes.
+    - **Rain light**: glowing.
+  - **Reflections**: glossy parts use half-smoothed normals, so sky reflections sweep across the panels. The car reflects the sky through its own environment map at 1.9× strength, stronger than the scenery.
+  - **Decals and driver helmets**: clear-coated too.
+  - **Grand Prix**: runs all four tracks in the order Meadows → Canyon → Frosty → Sepang (phase 12).
+- **Why**: Your requests.
+
 ---
 
 ## Gate 0 status

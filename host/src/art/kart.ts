@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { DEFAULT_HANDLING, RESCUE_T, SPIN_T, clamp, wrapA, type Character, type Kart } from '@tk/shared';
 import { P_, merge, jitter, canvasTex, box, cyl, ico, cone, octa, hexStr, type Part } from './geo';
 import { INK, DARK, WHITE, kartPaint } from './palette';
-import { CAR, CAR_SCALE, buildCar, buildDecals, buildWheels, helmetParts } from './car';
+import { CAR, CAR_SCALE, FIN, buildCar, buildDecals, buildWheels, helmetParts, mergePbr } from './car';
 import { holoShell } from './holo';
 import type { Materials } from './materials';
 
@@ -134,7 +134,10 @@ export class ProceduralKartProvider implements KartAssetProvider {
   build(ch: Character, paint: number): KartModel {
     // D38/D44: no cartoon outline hulls (they would also swell the thin wings)
     const chassis = buildCar(paint),
-      head = merge([...headParts(ch), ...(ch.kind === 'robot' ? [] : helmetParts(ch.accent, paint))]);
+      head = mergePbr([
+        { parts: headParts(ch), fin: ch.kind === 'robot' ? FIN.metal : FIN.fur },
+        { parts: ch.kind === 'robot' ? [] : helmetParts(ch.accent, paint), fin: FIN.paint },
+      ]);
     const m: KartModel = { chassis, head, chassisOutline: null, headOutline: null };
     this.built.push(chassis, head);
     return m;
@@ -272,7 +275,7 @@ export class KartView {
   private readonly drone: THREE.Mesh;
   private readonly shadow: THREE.Mesh;
   private readonly decals: THREE.Mesh;
-  private readonly decalMat: THREE.MeshLambertMaterial;
+  private readonly decalMat: THREE.MeshPhysicalMaterial;
   /** Interpolated position (render frame). */
   ix = 0;
   iy = 0;
@@ -308,7 +311,7 @@ export class KartView {
     this.root.scale.setScalar(CAR_SCALE);
     this.body.rotation.order = 'YXZ';
     this.root.add(this.body);
-    const chassis = new THREE.Mesh(model.chassis, M.kart);
+    const chassis = new THREE.Mesh(model.chassis, M.car);
     chassis.castShadow = true;
     this.body.add(chassis);
     if (model.chassisOutline) this.body.add(new THREE.Mesh(model.chassisOutline, M.line));
@@ -316,11 +319,11 @@ export class KartView {
     this.head.position.copy(CAR.head).add(new THREE.Vector3(0, -0.2, 0));
     this.head.scale.setScalar(0.5);
     this.body.add(this.head);
-    const hm = new THREE.Mesh(model.head, M.kart);
+    const hm = new THREE.Mesh(model.head, M.car);
     hm.castShadow = true;
     this.head.add(hm);
     if (model.headOutline) this.head.add(new THREE.Mesh(model.headOutline, M.line));
-    this.rear = new THREE.Mesh(assets.wheelRear, M.kart);
+    this.rear = new THREE.Mesh(assets.wheelRear, M.car);
     this.rear.position.set(0, CAR.rearR, CAR.rearZ);
     this.rear.castShadow = true;
     this.body.add(this.rear);
@@ -328,7 +331,7 @@ export class KartView {
       const p = new THREE.Group();
       p.position.set(x, CAR.frontR, CAR.frontZ);
       this.body.add(p);
-      const w = new THREE.Mesh(assets.wheelFront, M.kart);
+      const w = new THREE.Mesh(assets.wheelFront, M.car);
       w.castShadow = true;
       p.add(w);
       this.pivots.push(p);
@@ -373,8 +376,11 @@ export class KartView {
     // livery decals: number and fictional sponsors (one atlas per car)
     const number = slot !== null ? slot + 1 : 10 + kartId;
     const dec = buildDecals(number, this.paint);
-    this.decalMat = new THREE.MeshLambertMaterial({
+    this.decalMat = new THREE.MeshPhysicalMaterial({
       map: dec.map,
+      roughness: 0.3,
+      clearcoat: 1,
+      clearcoatRoughness: 0.05,
       transparent: true,
       alphaTest: 0.3,
       polygonOffset: true,

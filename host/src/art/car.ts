@@ -43,6 +43,111 @@ export const CAR_WORLD = {
 const BLACK = 0x1c1d22;
 const CARBON = 0x2a2c33;
 const TYRE = 0x3a3a46;
+const RIM = 0x2e3036;
+const NUT = 0x55565e;
+const LIGHT = 0xff2a2a;
+
+/**
+ * Surface finish per vertex (D47): roughness, metalness, clear-coat, and w = glow (> 0) or carbon weave (-1).
+ * One material and one draw call per car; the shader in materials.ts reads this attribute.
+ */
+export type Finish = readonly [number, number, number, number];
+export const FIN = {
+  /** Metallic-flake paint under a glossy clear-coat. */
+  paint: [0.2, 0.45, 1, 0],
+  /** White panels: pearl, less metal so they stay white. */
+  pearl: [0.16, 0.08, 1, 0],
+  /** Carbon fibre: woven, lacquered. */
+  carbon: [0.32, 0.25, 0.85, -1],
+  /** Rubber: satin, scuffed. */
+  rubber: [0.82, 0, 0, 0],
+  /** Sidewall lettering band. */
+  band: [0.75, 0, 0, 0],
+  /** Machined metal (rims, wheel nuts). */
+  metal: [0.28, 0.95, 0.3, 0],
+  /** Rain light: glows. */
+  light: [0.3, 0, 1, 2.2],
+  /** Fur and faces: soft. */
+  fur: [0.78, 0, 0, 0],
+} as const satisfies Record<string, Finish>;
+
+/** Merge groups of parts, each with its own finish, into one geometry with an `aPbr` attribute. */
+export function mergePbr(groups: { parts: Part[]; fin: Finish }[]): THREE.BufferGeometry {
+  const merged = groups.filter((g) => g.parts.length).map((g) => ({ geo: merge(g.parts), fin: g.fin }));
+  let total = 0;
+  for (const m of merged) total += m.geo.attributes.position!.count;
+  const pos = new Float32Array(total * 3),
+    nrm = new Float32Array(total * 3),
+    col = new Float32Array(total * 3),
+    pbr = new Float32Array(total * 4);
+  let o = 0;
+  for (const { geo, fin } of merged) {
+    const n = geo.attributes.position!.count;
+    pos.set(geo.attributes.position!.array as Float32Array, o * 3);
+    // glossy finishes: half-smoothed normals, so sky reflections sweep across a panel instead of filling it flat
+    const nr = geo.attributes.normal!.array as Float32Array;
+    if (fin[2] >= 0.85) {
+      const P = geo.attributes.position!.array as Float32Array,
+        acc = new Map<string, [number, number, number]>();
+      const key = (i: number): string =>
+        `${Math.round(P[i * 3]! * 200)},${Math.round(P[i * 3 + 1]! * 200)},${Math.round(P[i * 3 + 2]! * 200)}`;
+      for (let i = 0; i < n; i++) {
+        const k = key(i),
+          a = acc.get(k) ?? [0, 0, 0];
+        a[0] += nr[i * 3]!;
+        a[1] += nr[i * 3 + 1]!;
+        a[2] += nr[i * 3 + 2]!;
+        acc.set(k, a);
+      }
+      for (let i = 0; i < n; i++) {
+        const a = acc.get(key(i))!,
+          l = Math.hypot(a[0], a[1], a[2]) || 1;
+        let x = nr[i * 3]! + a[0] / l,
+          y = nr[i * 3 + 1]! + a[1] / l,
+          z = nr[i * 3 + 2]! + a[2] / l;
+        const m = Math.hypot(x, y, z) || 1;
+        x /= m;
+        y /= m;
+        z /= m;
+        nrm.set([x, y, z], (o + i) * 3);
+      }
+    } else nrm.set(nr, o * 3);
+    col.set(geo.attributes.color!.array as Float32Array, o * 3);
+    for (let i = 0; i < n; i++) pbr.set(fin, (o + i) * 4);
+    o += n;
+    geo.dispose();
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  out.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  out.setAttribute('aPbr', new THREE.BufferAttribute(pbr, 4));
+  return out;
+}
+
+/** Split car parts by their colour into finishes. */
+function byFinish(parts: Part[], paint: number): { parts: Part[]; fin: Finish }[] {
+  const g = {
+    paint: [] as Part[],
+    pearl: [] as Part[],
+    carbon: [] as Part[],
+    rubber: [] as Part[],
+    band: [] as Part[],
+    metal: [] as Part[],
+    light: [] as Part[],
+  };
+  for (const p of parts) {
+    const c = p.color;
+    if (c === BLACK || c === CARBON) g.carbon.push(p);
+    else if (c === TYRE) g.rubber.push(p);
+    else if (c === RIM || c === NUT) g.metal.push(p);
+    else if (c === LIGHT) g.light.push(p);
+    else if (c === 0xf5f5f5) g.band.push(p);
+    else if (c === WHITE && c !== paint) g.pearl.push(p);
+    else g.paint.push(p);
+  }
+  return (Object.keys(g) as (keyof typeof g)[]).map((k) => ({ parts: g[k], fin: FIN[k] }));
+}
 
 /**
  * A box whose back end (z0) and front end (z1) have their own width and bottom/top heights: the tapering body
@@ -171,7 +276,7 @@ export function buildCar(paint: number): THREE.BufferGeometry {
   add(P_(box(1.42, 0.05, 0.26), BLACK, 0, 0.62, -2.5, 0.25));
   // crash structure and rain light
   add(P_(taper(-2.78, 0.22, 0.34, 0.54, -2.3, 0.3, 0.32, 0.62), BLACK));
-  add(P_(box(0.18, 0.13, 0.04), 0xff2a2a, 0, 0.44, -2.8));
+  add(P_(box(0.18, 0.13, 0.04), LIGHT, 0, 0.44, -2.8));
 
   // suspension: wishbones from the chassis to the wheel uprights, plus push/pull rods
   for (const s of [1, -1]) {
@@ -192,7 +297,7 @@ export function buildCar(paint: number): THREE.BufferGeometry {
   }
   // seat back and shoulders inside the cockpit
   add(P_(box(0.56, 0.3, 0.3), CARBON, 0, 0.82, -0.45));
-  return merge(parts);
+  return mergePbr(byFinish(parts, paint));
 }
 
 /** A slick tyre with a coloured sidewall band, a dark rim and a centre lock nut, axis along x. */
@@ -202,8 +307,10 @@ function wheel(r: number, w: number, band: number): Part[] {
     P_(cyl(r, r, w, 18), TYRE, 0, 0, 0, 0, 0, R),
     P_(cyl(r * 0.86, r * 0.86, w + 0.012, 18), TYRE, 0, 0, 0, 0, 0, R),
     P_(cyl(r * 0.8, r * 0.8, w + 0.016, 18), band, 0, 0, 0, 0, 0, R),
-    P_(cyl(r * 0.74, r * 0.74, w + 0.02, 18), BLACK, 0, 0, 0, 0, 0, R),
-    P_(cyl(r * 0.2, r * 0.2, w + 0.06, 6), 0x55565e, 0, 0, 0, 0, 0, R),
+    P_(cyl(r * 0.74, r * 0.74, w + 0.02, 18), RIM, 0, 0, 0, 0, 0, R),
+    // five spokes and the centre lock nut, machined metal
+    ...[0, 1, 2, 3, 4].map((k) => P_(box(w + 0.03, r * 0.1, r * 1.3), NUT, 0, 0, 0, (k * Math.PI * 2) / 5, 0, 0)),
+    P_(cyl(r * 0.2, r * 0.2, w + 0.06, 6), NUT, 0, 0, 0, 0, 0, R),
   ];
 }
 
@@ -216,7 +323,10 @@ export function buildWheels(): { rear: THREE.BufferGeometry; front: THREE.Buffer
       p.m.premultiply(new THREE.Matrix4().makeTranslation(s * CAR.rearX, 0, 0));
       rear.push(p);
     }
-  return { rear: merge(rear), front: merge(wheel(CAR.frontR, 0.62, band)) };
+  return {
+    rear: mergePbr(byFinish(rear, -1)),
+    front: mergePbr(byFinish(wheel(CAR.frontR, 0.62, band), -1)),
+  };
 }
 
 /**
