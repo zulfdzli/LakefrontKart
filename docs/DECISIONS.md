@@ -358,6 +358,22 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **D5**: replaced. **D6** (believable surfaces) still applies and now fits the whole world, not only the road.
 - **Why**: Your choice. Doing it after phase 8 avoids redoing the art on the old track.
 
+### D39 · Split-screen details (2026-11-18, phase 6, my decision)
+- **Q**: Where do the shared minimap and standings go, and how do small views stay readable?
+- **A**:
+  - **Shared panel**:
+    - **3 and 5 players**: the minimap fills the left gap and the standings the right gap.
+    - **2 and 4 players**: one compact panel at the screen centre, as section 6.2 asks. Views right of the screen centre mirror their HUD (place and item on the outer edge), so the panel never covers anyone's place.
+    - **1 player**: keeps the corner minimap, with a compact standings list under it. A centre panel would sit on top of the player's own kart.
+  - **Viewports**: a 4 px player-colour frame and a name chip in the outer bottom corner. The HUD scales with the view, but never below 66% (it was 55%). In split-screen the speed text is larger and the "last lap" line is dropped.
+  - **Karts near the camera**: another kart between a view's camera and that view's own kart (closer than 70% of the camera-to-kart distance, at least 4.6 m) is hidden in that view only, so a kart right behind you cannot fill your screen. This was seen at the start grid.
+  - **Finished**: a FINISHED banner with place and time. The view swings out (eased over about a second) into a slow, wide orbit around the player's kart, which the AI drives on.
+  - **Reconnecting**: a badge on that player's view while the phone is away ("the computer is driving").
+  - **FOV**: goes up smoothly as views get narrower (66° at 16:10, up to 82°), instead of jumping at an aspect of 1.
+  - **Draw distance**: with more than 3 views, fog is 240–1050 m (was 300–1500) and the far plane 1500 m; the sky dome shrinks to fit (section 6.3).
+  - **Per-object LOD**: moved to phase 13. Five views at 1080p take a median 3.7 ms per frame (p95 5.8 ms) on the GTX 1650, so there is no need yet. The draw-call budget (535 calls with 5 views) is phase 13 work too.
+- **Why**: Section 6.2 and the readability score.
+
 ---
 
 ## Gate 0 status

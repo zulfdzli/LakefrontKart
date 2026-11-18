@@ -86,7 +86,7 @@ export class DebugOverlay {
 
   private draw(cpuMs: number): void {
     if (this.el.style.display === 'none') return;
-    const info = this.world.renderer.info.render;
+    const info = this.world.frameStats; // summed over all viewports
     this.text.textContent = this.full
       ? `${this.fps.toFixed(0)} fps · ${cpuMs.toFixed(1)} ms cpu · ${info.calls} calls · ${(info.triangles / 1000).toFixed(0)}k tris · pr ${this.world.pixelRatio.toFixed(2)}`
       : `${this.fps.toFixed(0)} fps`;

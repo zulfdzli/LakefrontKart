@@ -167,7 +167,53 @@ async function main(): Promise<void> {
     await frames(page, 2500);
     await shot('08-podium');
 
-    const report = { phase: PHASE, gpu, viewport: `${W}x${H}`, seed: SEED, racePerf: perf, render: info, errors };
+    // split-screen (section 6.2): every player count, with frame stats summed over all viewports
+    const split: Record<string, unknown> = {};
+    if (!args.includes('--no-split'))
+      for (const n of [2, 3, 4, 5]) {
+        await page.evaluate(([seed, humans]) => window.__tk.race({ seed, humans, laps: 2, autopilot: true }), [
+          SEED,
+          n,
+        ] as const);
+        await page.waitForFunction(() => (window.__tk.state() as { raceTime: number }).raceTime > 0.5, null, {
+          timeout: 20000,
+        });
+        await page.evaluate(() => window.__tk.advance(14));
+        await frames(page, 900);
+        const p = await stats(page, 4);
+        const inf = await page.evaluate(() => window.__tk.info());
+        split[n] = { ...p, ...inf };
+        await shot(`split-${n}`);
+        console.log(`  split ${n}:`, p, inf);
+        if (n === 5) {
+          // one phone drops (reconnecting badge), then run on until the first player has finished
+          await page.evaluate(() => {
+            const s = window.__tk.session() as unknown as { setOffline(slot: number, off: boolean): void };
+            s.setOffline(3, true);
+          });
+          await frames(page, 500);
+          await shot('split-5-offline');
+          await page.evaluate(() => {
+            const s = window.__tk.session()!;
+            for (let i = 0; i < 60 * 200 && !s.players.some((pl) => (pl.kart as { finished?: boolean }).finished); i++)
+              window.__tk.advance(1 / 60);
+            window.__tk.advance(1.5);
+          });
+          await frames(page, 1200);
+          await shot('split-5-finished');
+        }
+      }
+
+    const report = {
+      phase: PHASE,
+      gpu,
+      viewport: `${W}x${H}`,
+      seed: SEED,
+      racePerf: perf,
+      render: info,
+      split,
+      errors,
+    };
     writeFileSync(path.join(OUT, 'capture.json'), JSON.stringify(report, null, 2));
     console.log('perf (racing):', perf, 'render:', info);
     console.log('errors:', errors.length ? errors.join('\n') : 'none');

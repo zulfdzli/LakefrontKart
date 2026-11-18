@@ -32,6 +32,14 @@ export interface ViewToRender {
 
 /** Light intensities are scaled by π: three.js r155+ uses physical units, the prototype (r128) did not. */
 const LEGACY_LIGHT_SCALE = Math.PI;
+/**
+ * Another kart between a view's camera and that view's own kart is hidden in that view, so it cannot fill the
+ * screen (phase 6, D39): closer than NEAR_HIDE_SHARE of the camera-to-own-kart distance, or NEAR_HIDE_M.
+ */
+const NEAR_HIDE_M = 4.6;
+const NEAR_HIDE_SHARE = 0.7;
+/** Draw distance and fog per view count (section 6.3: shorter with more than 3 viewports). */
+const VIEW_RANGE = { near: { fog: [300, 1500], far: 3200 }, many: { fog: [240, 1050], far: 1500 } } as const;
 
 export class World {
   readonly renderer: THREE.WebGLRenderer;
@@ -189,10 +197,33 @@ export class World {
     this.renderer.setSize(window.innerWidth, window.innerHeight, false);
   }
 
+  /** Draw calls and triangles summed over every view in the last frame (renderer.info resets per render call). */
+  readonly frameStats = { calls: 0, triangles: 0, views: 0 };
+  private readonly hidden: KartView[] = [];
+  private viewCount = 1;
+
+  /** Shorter draw distance and fog with more than 3 viewports (section 6.3). The sky dome shrinks to fit. */
+  setViewCount(n: number): void {
+    this.viewCount = n;
+    const R = n > 3 ? VIEW_RANGE.many : VIEW_RANGE.near;
+    const fog = this.scene.fog as THREE.Fog;
+    fog.near = R.fog[0];
+    fog.far = R.fog[1];
+    this.sky.scale.setScalar(Math.min(1, (R.far * 0.92) / 2600));
+  }
+
+  /** Camera far plane for the current view count. */
+  get viewFar(): number {
+    return this.viewCount > 3 ? VIEW_RANGE.many.far : VIEW_RANGE.near.far;
+  }
+
   /** Render each view into its rectangle. Three.js viewports use a bottom-left origin, so flip y. */
   render(list: ViewToRender[], focus: (v: ViewToRender) => THREE.Vector3): void {
     const r = this.renderer,
-      H = window.innerHeight;
+      H = window.innerHeight,
+      st = this.frameStats;
+    st.calls = st.triangles = 0;
+    st.views = list.length;
     r.setScissorTest(true);
     r.setViewport(0, 0, window.innerWidth, H);
     r.setScissor(0, 0, window.innerWidth, H);
@@ -206,9 +237,27 @@ export class World {
       const f = focus(v);
       this.setSunFocus(f.x, f.y, f.z);
       this.sky.position.copy(v.camera.position);
-      for (const kv of this.views)
-        kv.updateTag(v.camera.position.x, v.camera.position.z, kv.kartId === v.viewerKart, v.tags && kv.root.visible);
+      if (v.camera.far !== this.viewFar) {
+        v.camera.far = this.viewFar;
+        v.camera.updateProjectionMatrix();
+      }
+      const cx = v.camera.position.x,
+        cz = v.camera.position.z;
+      const own = this.views[v.viewerKart];
+      const hideR = own ? Math.max(NEAR_HIDE_M, NEAR_HIDE_SHARE * Math.hypot(own.ix - cx, own.iz - cz)) : NEAR_HIDE_M;
+      this.hidden.length = 0;
+      for (const kv of this.views) {
+        // another kart right next to this camera would fill the view: hide it for this view only
+        if (v.tags && kv.kartId !== v.viewerKart && kv.root.visible && Math.hypot(kv.ix - cx, kv.iz - cz) < hideR) {
+          kv.root.visible = false;
+          this.hidden.push(kv);
+        }
+        kv.updateTag(cx, cz, kv.kartId === v.viewerKart, v.tags && kv.root.visible);
+      }
       r.render(this.scene, v.camera);
+      for (const kv of this.hidden) kv.root.visible = true;
+      st.calls += r.info.render.calls;
+      st.triangles += r.info.render.triangles;
     }
     r.setScissorTest(false);
   }

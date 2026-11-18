@@ -2,6 +2,8 @@
  * Per-player HUD (section 6.2): absolutely positioned DOM over one viewport, built from a template.
  * Ported from the prototype: place, lap, time, item roulette, minimap, drift bar, speed, centre messages,
  * countdown lights, wrong-way and slipstream tags, boost/hit screen-edge flash.
+ * Split-screen additions (phase 6): player-colour border and name chip, a FINISHED banner, a reconnecting badge,
+ * mirroring for right-hand views, and the shared minimap + standings panel (SharedPanel).
  */
 import { clamp, type GameState, type Kart, type Track } from '@tk/shared';
 import { DRIFT_COL } from './art/palette';
@@ -32,8 +34,11 @@ const TEMPLATE = /* html */ `
       <div class="time pill">0:00.00</div>
       <div class="lastlap"></div>
     </div>
-    <div class="rightCol"><canvas class="mini" width="236" height="236"></canvas></div>
+    <div class="rightCol"><canvas class="mini" width="236" height="236"></canvas><ol class="stand stand1"></ol></div>
   </div>
+  <div class="who"><i></i><span class="whoName"></span></div>
+  <div class="offline"><b>📵 Reconnecting…</b><span>the computer is driving</span></div>
+  <div class="fin"><small>FINISHED</small><b class="finPlace"></b><span class="finTime"></span></div>
   <div class="delta outl"></div>
   <div class="lights"><i></i><i></i><i></i></div>
   <div class="hint">Press DRIFT right as the lights turn green for a rocket start!</div>
@@ -68,7 +73,8 @@ export class MinimapBase {
     const sc = (size - 34) / Math.max(x1 - x0, z1 - z0);
     this.mx = (x) => 17 + (x - x0) * sc + (size - 34 - (x1 - x0) * sc) / 2;
     this.mz = (z) => 17 + (z - z0) * sc + (size - 34 - (z1 - z0) * sc) / 2;
-    const g = c.getContext('2d')!;
+    const g = c.getContext('2d')!,
+      u = size / 236;
     g.lineJoin = 'round';
     g.lineCap = 'round';
     g.beginPath();
@@ -78,36 +84,43 @@ export class MinimapBase {
       else g.moveTo(this.mx(T.CX[j]!), this.mz(T.CZ[j]!));
     }
     g.strokeStyle = '#1d1b2e';
-    g.lineWidth = 14;
+    g.lineWidth = 14 * u;
     g.stroke();
     g.strokeStyle = '#fff';
-    g.lineWidth = 9;
+    g.lineWidth = 9 * u;
     g.stroke();
     g.strokeStyle = '#6c7086';
-    g.lineWidth = 5;
+    g.lineWidth = 5 * u;
     g.stroke();
     g.save();
     g.translate(this.mx(T.CX[0]!), this.mz(T.CZ[0]!));
     g.rotate(Math.atan2(T.TZ[0]!, T.TX[0]!) + Math.PI / 2);
     g.fillStyle = '#fff';
-    g.fillRect(-8, -2.5, 16, 5);
+    g.fillRect(-8 * u, -2.5 * u, 16 * u, 5 * u);
     g.restore();
   }
 
-  /** Draw karts on a target canvas. `me` is drawn as an arrow on top. */
+  /**
+   * Draw karts on a target canvas. `me` is drawn as an arrow on top. Without `me` (the shared map), human karts
+   * are drawn larger with a white ring, on top of the AI.
+   */
   draw(g: CanvasRenderingContext2D, karts: readonly Kart[], colorOf: (k: Kart) => number, me: Kart | null): void {
     g.clearRect(0, 0, g.canvas.width, g.canvas.height);
     g.drawImage(this.canvas, 0, 0);
-    for (const k of karts) {
-      if (k === me) continue;
-      g.fillStyle = hexStr(colorOf(k));
-      g.strokeStyle = '#1d1b2e';
-      g.lineWidth = 2.5;
-      g.beginPath();
-      g.arc(this.mx(k.x), this.mz(k.z), 6.5, 0, Math.PI * 2);
-      g.fill();
-      g.stroke();
-    }
+    const u = this.canvas.width / 236;
+    for (let pass = 0; pass < 2; pass++)
+      for (const k of karts) {
+        if (k === me) continue;
+        const big = !me && k.slot !== null;
+        if (big !== (pass === 1)) continue;
+        g.fillStyle = hexStr(colorOf(k));
+        g.strokeStyle = big ? '#fff' : '#1d1b2e';
+        g.lineWidth = (big ? 3 : 2.5) * u;
+        g.beginPath();
+        g.arc(this.mx(k.x), this.mz(k.z), (big ? 8.5 : 6.5) * u, 0, Math.PI * 2);
+        g.fill();
+        g.stroke();
+      }
     if (me) {
       const a = Math.atan2(Math.cos(me.h), Math.sin(me.h));
       g.save();
@@ -137,6 +150,10 @@ export class PlayerHud {
   readonly fx: HTMLCanvasElement;
   private lastRank = -1;
   private msgTimer = 0;
+  /** More than one viewport: no per-view minimap (the shared panel has it), border and name chip on. */
+  private multi = false;
+  private standT = 0;
+  private standKey = '';
 
   constructor(
     parent: HTMLElement,
@@ -152,7 +169,14 @@ export class PlayerHud {
     this.fx = this.q<HTMLCanvasElement>('fx');
   }
 
-  place(r: Rect): void {
+  /**
+   * Fit the HUD to its viewport. `mirror` puts place and item on the right (outer) edge, for views right of the
+   * screen centre, so the centre panel never covers them.
+   */
+  place(r: Rect, multi = false, mirror = false): void {
+    this.multi = multi;
+    this.root.classList.toggle('multi', multi);
+    this.root.classList.toggle('mirror', mirror);
     const st = this.root.style;
     st.left = r.x + 'px';
     st.top = r.y + 'px';
@@ -160,8 +184,8 @@ export class PlayerHud {
     st.height = r.h + 'px';
     this.fx.width = Math.round(r.w);
     this.fx.height = Math.round(r.h);
-    // scale the HUD down in small viewports so it stays readable without covering the road
-    const scale = clamp(Math.min(r.w / 900, r.h / 560), 0.55, 1);
+    // scale the HUD down in small viewports, but not so far that it stops being readable from the sofa
+    const scale = clamp(Math.min(r.w / 820, r.h / 520), 0.66, 1);
     st.setProperty('--s', String(scale));
   }
 
@@ -206,6 +230,26 @@ export class PlayerHud {
     );
   }
 
+  setName(name: string): void {
+    this.q('whoName').textContent = name;
+  }
+
+  /** The phone dropped: the kart is AI-driven until it reconnects (section 6.2). */
+  setOffline(on: boolean): void {
+    this.cls('offline', 'on', on);
+  }
+
+  /** Persistent banner once this player has finished (the camera switches to an orbit). */
+  setFinished(place: number | null, time = 0): void {
+    if (place === null) {
+      this.root.classList.remove('done');
+      return;
+    }
+    this.q('finPlace').innerHTML = `${place}<sup>${ord(place)}</sup>`;
+    this.q('finTime').textContent = fmtT(time);
+    this.root.classList.add('done');
+  }
+
   setLastLap(t: number | null): void {
     this.q('lastlap').textContent = t === null ? '' : 'Last lap ' + fmtT(t);
   }
@@ -215,6 +259,8 @@ export class PlayerHud {
     this.cache.clear();
     this.clearMsg();
     this.setLastLap(null);
+    this.setFinished(null);
+    this.standKey = '';
   }
 
   update(s: Readonly<GameState>, p: Kart): void {
@@ -264,11 +310,131 @@ export class PlayerHud {
       if (li[i]!.className !== c) li[i]!.className = c;
     }
     this.cls('hint', 'on', s.phase === 'countdown');
-    this.minimap.draw(this.mini, s.karts, this.colorOf, p);
+    if (!this.multi) {
+      this.minimap.draw(this.mini, s.karts, this.colorOf, p);
+      // single player: a compact standings list under the corner minimap, refreshed at 5 Hz
+      if (s.time - this.standT > 0.2 || s.time < this.standT) {
+        this.standT = s.time;
+        this.standKey = renderStandings(this.q('stand1'), s, this.colorOf, this.standKey, p);
+      }
+    }
   }
 
   dispose(): void {
     clearTimeout(this.msgTimer);
+    this.root.remove();
+  }
+}
+
+/** Fill an <ol> with the live order. Returns a key so callers can skip identical updates. */
+export function renderStandings(
+  ol: HTMLElement,
+  s: Readonly<GameState>,
+  colorOf: (k: Kart) => number,
+  prevKey: string,
+  me: Kart | null = null,
+): string {
+  const order = s.karts.slice().sort((a, b) => a.rank - b.rank);
+  const rows = order.map((k) => ({ k, right: k.finished ? '✓' : `L${clamp(k.lap, 1, s.laps)}` }));
+  const key = rows.map((r) => `${r.k.id}:${r.right}`).join('|');
+  if (key === prevKey) return key;
+  ol.innerHTML = rows
+    .map(
+      ({ k, right }) =>
+        `<li class="${k.slot !== null ? 'h' : ''}${k === me ? ' me' : ''}" style="--c:${hexStr(colorOf(k))}">` +
+        `<b>${k.rank + 1}</b><i></i><span>${escapeHtml(k.name)}</span><em>${right}</em></li>`,
+    )
+    .join('');
+  return key;
+}
+
+const HTML_ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const escapeHtml = (t: string): string => t.replace(/[&<>"']/g, (c) => HTML_ESC[c]!);
+
+/**
+ * The shared minimap and live standings for split-screen (section 6.2): in the spare gaps for 3 and 5 players
+ * (map left, standings right), or one compact panel at the screen centre for 2 and 4 players.
+ */
+export class SharedPanel {
+  readonly root = document.createElement('div');
+  private readonly mapBox = document.createElement('div');
+  private readonly standBox = document.createElement('div');
+  private readonly map: MinimapBase;
+  private readonly g: CanvasRenderingContext2D;
+  private readonly ol = document.createElement('ol');
+  private standT = -1;
+  private key = '';
+  private active = false;
+
+  constructor(
+    parent: HTMLElement,
+    T: Track,
+    private readonly colorOf: (k: Kart) => number,
+  ) {
+    this.root.className = 'shared';
+    this.map = new MinimapBase(T, 320);
+    const c = document.createElement('canvas');
+    c.width = c.height = 320;
+    this.g = c.getContext('2d')!;
+    this.mapBox.className = 'sbox smap';
+    this.mapBox.appendChild(c);
+    this.standBox.className = 'sbox sstand';
+    this.standBox.innerHTML = '<h4>STANDINGS</h4>';
+    this.ol.className = 'stand';
+    this.standBox.appendChild(this.ol);
+    this.root.append(this.mapBox, this.standBox);
+    parent.appendChild(this.root);
+  }
+
+  /** 'split': map in rect a, standings in rect b. 'centre': both in one panel at the screen centre. */
+  place(mode: 'none' | 'split' | 'centre', a?: Rect, b?: Rect): void {
+    this.active = mode !== 'none';
+    const on = this.root.classList.contains('on');
+    this.root.className = 'shared ' + mode + (on ? ' on' : '');
+    const put = (el: HTMLElement, r: Rect): void => {
+      const st = el.style;
+      st.left = Math.round(r.x) + 'px';
+      st.top = Math.round(r.y) + 'px';
+      st.width = Math.round(r.w) + 'px';
+      st.height = r.h ? Math.round(r.h) + 'px' : '';
+    };
+    if (mode === 'split' && a && b) {
+      const m = Math.min(a.w - 28, a.h - 28, 340);
+      put(this.mapBox, { x: a.x + (a.w - m) / 2, y: a.y + (a.h - m) / 2, w: m, h: m });
+      const w = Math.min(b.w - 28, 300),
+        h = Math.min(b.h - 28, 330);
+      // the standings box fits its rows and is centred vertically in its gap (CSS translateY(-50%))
+      put(this.standBox, { x: b.x + (b.w - w) / 2, y: b.y + b.h / 2, w, h: 0 });
+      this.root.style.setProperty('--ps', String(clamp(Math.min(w / 300, h / 330), 0.7, 1.15)));
+    } else if (mode === 'centre') {
+      const W = window.innerWidth,
+        H = window.innerHeight;
+      const m = clamp(Math.min(W, H) * 0.2, 130, 210);
+      put(this.mapBox, { x: W / 2 - m - 3, y: H / 2 - m / 2, w: m, h: m });
+      put(this.standBox, { x: W / 2 + 3, y: H / 2, w: m * 1.05, h: 0 });
+      this.root.style.setProperty('--ps', String(clamp(m / 250, 0.6, 0.85)));
+    }
+  }
+
+  setVisible(on: boolean): void {
+    this.root.classList.toggle('on', on && this.active);
+  }
+
+  update(s: Readonly<GameState>): void {
+    if (!this.active) return;
+    this.map.draw(this.g, s.karts, this.colorOf, null);
+    if (s.time - this.standT > 0.2 || s.time < this.standT) {
+      this.standT = s.time;
+      this.key = renderStandings(this.ol, s, this.colorOf, this.key);
+    }
+  }
+
+  reset(): void {
+    this.key = '';
+    this.standT = -1;
+  }
+
+  dispose(): void {
     this.root.remove();
   }
 }

@@ -188,3 +188,43 @@ No score dropped. Your keyboard feel check (D19) is due at this gate.
 - **Second round (D36, D37)**: karts 12% faster, sharper turning, a near-linear slider that reaches full lock at 85%, slider as the default, and PAUSE on the phone. sim-report: laps about 44 s, no rescues, AI gaps 3.3% and 2.9%, character spread 3.67% (still within 4%). e2e **15/15**, including the new pause check (`docs/screens/phase5-feel2/`).
 - **Your third test**: steering **4**; speed "a little bit slower"; pause and resume work from the phone. Speed set to +8% (laps about 45.5 s; AI gaps 3.4% and 2.9%; character spread 3.72%).
 - **Gate result**: steering 4, drift 4, camera 4. **The phase 5 gate is closed** (2026-11-18).
+
+---
+
+## Phase 6: split-screen (2026-11-18)
+
+### What changed
+- **Shared minimap and live standings** (D39): in the side gaps for 3 and 5 players, a compact centre panel for 2 and 4, and the corner for 1 player. Human karts show as large ringed dots.
+- **Per-view HUD**: player-colour frame and name chip; mirrored layout for right-hand views; minimum scale 66%; larger speed text; a reconnecting badge; and a FINISHED banner, after which the view switches to a wide orbit.
+- **Cameras**: FOV goes up smoothly as views get narrower. Another kart right next to a view's camera is hidden in that view.
+- **Range**: shorter fog and draw distance with more than 3 views. Draw calls are now counted over all views (the debug overlay and the capture report used to show one view only).
+- **Tests**: `tests/layout.test.ts` checks every player count at 3 screen sizes: inside the screen, no overlaps, equal-size views, and the section 6.2 table.
+- **Capture**: `npm run capture` now also shoots and measures 2, 3, 4 and 5 views, a dropped phone and a finished player.
+
+### Capture (`npm run capture -- --phase phase6`, GTX 1650)
+| Views | FPS (vsync) | Median frame, 1080p, vsync off | p95 | Draw calls | Triangles |
+|---|---|---|---|---|---|
+| 1 | 60 | 1.8 ms | 3.7 ms | 134 | 169k |
+| 2 | 60 | 2.4 ms | 4.3 ms | 207 | 329k |
+| 3 | 60 | 2.6 ms | 4.4 ms | 308 | 495k |
+| 4 | 60 | 3.0 ms | 5.0 ms | 374 | 650k |
+| 5 | 60 | 3.7 ms | 5.8 ms | 535 | 825k |
+
+Shots: `docs/screens/phase6/split-2.png` to `split-5.png`, `split-5-offline.png`, `split-5-finished.png`.
+
+### Fixes this loop (the 3 lowest items this phase can touch)
+1. **Readability at 1/5 screen: karts behind the camera.** At the start grid, karts sitting between a camera and its player filled half of that view. They are now hidden in that view only.
+2. **Readability at 1/5 screen: HUD.** Every view repeated a minimap, and the speed text was about 15 px. There is now one shared panel, a 66% minimum scale, larger speed text, and a name chip and colour frame per view.
+3. **UI finish: finished players.** A 2.4 s message, then the normal chase view. Now there is a lasting banner and a wide orbit. The first orbit was so close that the kart filled the view under the banner; it was widened and eased in. The centre panel's standings overflowed and sat under the view frames; it now fits its rows and sits above the frames.
+
+### Scores (compared with phase 5)
+| Area | Item | Score | Reason |
+|---|---|---|---|
+| Graphics | Readability at 1/5 screen | **4** (was 3) | One shared map and standings, frames and name chips, a 66% minimum HUD scale, no karts filling a view |
+| Graphics | UI finish | 4 | Finished banner, reconnecting badge and shared panel all fade or animate in |
+| Gameplay | Steering smoothness | **4** (was 3*) | Your iPhone test (D35, D36) |
+| Gameplay | Drift feel | **4** (was 3*) | Your iPhone test (D35) |
+| Gameplay | Camera smoothness | **4** (was 3) | Your iPhone test; the finish orbit eases in. Camera collision is still phase 11 |
+| Gameplay | Input latency | **4** (was n/a) | Your iPhone shows a 54 ms round trip on Wi-Fi, so input arrives in about 27 ms (under the 50 ms target) |
+| Gameplay | Frame-time stability | 4 | 5 views at 1080p: p95 5.8 ms |
+| (all others) | | unchanged | Art items wait for phases 9–10 (D27, D38); mechanics items for phase 11 |

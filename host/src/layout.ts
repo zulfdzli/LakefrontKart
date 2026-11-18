@@ -24,10 +24,14 @@ export function splitLayout(players: number, W: number, H: number): SplitLayout 
     w: Math.round(w),
     h: Math.round(h),
   });
-  const gaps = (rowY: number, rowH: number, left: number, right: number): Rect[] => [
-    cell(0, rowY, left - g, rowH),
-    cell(right + g, rowY, W - right - g, rowH),
-  ];
+  /** The gaps either side of a centred bottom row, from the rounded view rectangles (no 1 px overshoot). */
+  const gaps = (first: Rect, last: Rect): Rect[] => {
+    const rx = last.x + last.w + g;
+    return [
+      { x: 0, y: first.y, w: first.x - g, h: first.h },
+      { x: rx, y: last.y, w: W - rx, h: last.h },
+    ];
+  };
   switch (players) {
     case 0:
     case 1:
@@ -40,11 +44,8 @@ export function splitLayout(players: number, W: number, H: number): SplitLayout 
       const w = W / 2 - half,
         h = H / 2 - half,
         y = H / 2 + half;
-      const bx = (W - w) / 2;
-      return {
-        views: [cell(0, 0, w, h), cell(W / 2 + half, 0, w, h), cell(bx, y, w, h)],
-        spare: gaps(y, h, bx, bx + w),
-      };
+      const bottom = cell((W - w) / 2, y, w, h);
+      return { views: [cell(0, 0, w, h), cell(W / 2 + half, 0, w, h), bottom], spare: gaps(bottom, bottom) };
     }
     case 4: {
       const w = W / 2 - half,
@@ -64,15 +65,11 @@ export function splitLayout(players: number, W: number, H: number): SplitLayout 
         h = H / 2 - half,
         y = H / 2 + half;
       const bx = (W - (2 * w + g)) / 2;
+      const b1 = cell(bx, y, w, h),
+        b2 = cell(bx + w + g, y, w, h);
       return {
-        views: [
-          cell(0, 0, w, h),
-          cell(w + g, 0, w, h),
-          cell(2 * (w + g), 0, w, h),
-          cell(bx, y, w, h),
-          cell(bx + w + g, y, w, h),
-        ],
-        spare: gaps(y, h, bx, bx + 2 * w + g),
+        views: [cell(0, 0, w, h), cell(w + g, 0, w, h), cell(2 * (w + g), 0, w, h), b1, b2],
+        spare: gaps(b1, b2),
       };
     }
   }

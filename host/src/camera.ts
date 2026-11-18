@@ -7,7 +7,7 @@ import { COUNTDOWN_T, clamp, smooth01, wrapA, type GameState, type Kart } from '
 import type { KartView } from './art/kart';
 import type { Podium } from './art/track-builder';
 
-export type CamMode = 'orbit' | 'chase' | 'podium';
+export type CamMode = 'orbit' | 'chase' | 'finish' | 'podium';
 
 export class ChaseCam {
   readonly camera = new THREE.PerspectiveCamera(70, 1, 0.5, 3200);
@@ -29,8 +29,9 @@ export class ChaseCam {
 
   setAspect(aspect: number): void {
     this.camera.aspect = aspect;
-    // narrow viewports get a wider vertical FOV so the road stays in view (prototype baseFov)
-    this.baseFov = aspect < 1 ? 82 : 66;
+    // narrower viewports get a wider vertical FOV so the road and the corners stay in view (prototype baseFov,
+    // made continuous for the split-screen shapes: 66° at 16:10 and wider, up to 82° for tall views)
+    this.baseFov = Math.max(66, Math.min(82, 66 + (1.6 - aspect) * 23));
     this.camera.updateProjectionMatrix();
   }
 
@@ -77,6 +78,19 @@ export class ChaseCam {
       cam.position.set(ix + Math.sin(a) * d, iy + 2.8, iz + Math.cos(a) * d);
       cam.lookAt(ix, iy + (cam.aspect < 1 ? -0.8 : 0.2), iz);
       this.setFov(this.baseFov - 18, dt);
+      this.focus.set(ix, iy, iz);
+      return;
+    }
+    if (this.mode === 'finish') {
+      // after this player finishes (section 6.2): a slow, wide orbit around their kart, eased in from the chase
+      // position so the cut is a swing rather than a jump; the kart sits below the FINISHED banner
+      this.spin += dt * 0.25;
+      const a = v.ih + Math.PI * 0.75 + this.spin,
+        d = cam.aspect < 1 ? 15 : 13;
+      this.target.set(ix + Math.sin(a) * d, iy + 5.2, iz + Math.cos(a) * d);
+      cam.position.lerp(this.target, 1 - Math.exp(-2.5 * dt));
+      cam.lookAt(ix, iy + 2.2, iz);
+      this.setFov(this.baseFov - 6, dt);
       this.focus.set(ix, iy, iz);
       return;
     }

@@ -67,6 +67,7 @@ const net = new HostNet({
       for (const p of session.players) {
         const lp = u.players.find((x) => x.slot === p.slot);
         session.game.setHumanAi(p.slot, autopilot || !lp?.connected);
+        session.setOffline(p.slot, !autopilot && !lp?.connected);
       }
     }
   },
@@ -112,7 +113,7 @@ function names(humans: HumanSpec[]): Map<number, string> {
 
 function layoutViews(): void {
   const L = splitLayout(session.players.length, window.innerWidth, window.innerHeight);
-  session.layout(L.views);
+  session.layout(L.views, L.spare);
 }
 
 /** The lobby's 3D preview: the grid, with the camera orbiting a kart. */
@@ -132,7 +133,7 @@ function preview(): void {
 }
 
 function startRace(
-  opts: { seed?: number; autopilot?: boolean; laps?: number; diff?: Difficulty; ci?: number } = {},
+  opts: { seed?: number; autopilot?: boolean; laps?: number; diff?: Difficulty; ci?: number; humans?: number } = {},
 ): void {
   audio.unlock();
   lobbyUI.setSoundOn(true);
@@ -145,6 +146,9 @@ function startRace(
   if (humans.length === 0) {
     if (!KEYBOARD && !opts.autopilot) return; // section 6.1: at least one player
     humans = [{ slot: 0, ci: opts.ci ?? 1, name: 'You' }];
+    // automation (tools/capture.ts): N autopilot players for split-screen shots
+    for (let i = 1; i < (opts.humans ?? 1); i++)
+      humans.push({ slot: i, ci: (humans[0]!.ci + i) % 6, name: `P${i + 1}` });
   }
   const cfg = lobby?.config;
   autopilot = !!opts.autopilot;
@@ -167,6 +171,7 @@ function startRace(
   for (const p of session.players) {
     const lp = players.find((x) => x.slot === p.slot);
     session.game.setHumanAi(p.slot, autopilot || (!!lp && !lp.connected));
+    session.setOffline(p.slot, !autopilot && !!lp && !lp.connected);
   }
   session.onResults = showResults;
   session.onHaptic = (slot, kind) => net.haptic(slot, kind);
@@ -300,11 +305,18 @@ declare global {
   interface Window {
     __tk: {
       ready: boolean;
-      race(opts: { seed?: number; ci?: number; diff?: Difficulty; laps?: number; autopilot?: boolean }): void;
+      race(opts: {
+        seed?: number;
+        ci?: number;
+        diff?: Difficulty;
+        laps?: number;
+        autopilot?: boolean;
+        humans?: number;
+      }): void;
       advance(seconds: number): void;
       state(): unknown;
       session(): RaceSession | null;
-      info(): { calls: number; triangles: number; pixelRatio: number };
+      info(): { calls: number; triangles: number; views: number; pixelRatio: number };
       lobby(): LobbyUpdate | null;
     };
   }
@@ -322,8 +334,9 @@ window.__tk = {
   },
   session: () => session,
   info: () => ({
-    calls: world.renderer.info.render.calls,
-    triangles: world.renderer.info.render.triangles,
+    calls: world.frameStats.calls,
+    triangles: world.frameStats.triangles,
+    views: world.frameStats.views,
     pixelRatio: world.pixelRatio,
   }),
   lobby: () => lobby,

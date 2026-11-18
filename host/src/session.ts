@@ -18,7 +18,7 @@ import {
 } from '@tk/shared';
 import { World, type Rect, type ViewToRender } from './renderer';
 import { ChaseCam } from './camera';
-import { PlayerHud, MinimapBase, ord } from './hud';
+import { PlayerHud, MinimapBase, SharedPanel } from './hud';
 import { SpeedLines } from './art/effects';
 import { kartPaint } from './art/palette';
 import { hexStr } from './art/geo';
@@ -51,6 +51,7 @@ export class RaceSession {
   private podT = 0;
   private podiumOrder: Kart[] = [];
   private readonly minimap: MinimapBase;
+  private readonly panel: SharedPanel;
   private readonly camPositions: THREE.Vector3[] = [];
   onResults: ((order: Kart[]) => void) | null = null;
   /** Feedback for a player's phone (vibration). */
@@ -68,8 +69,10 @@ export class RaceSession {
     world.build(this.s, names);
     this.minimap = new MinimapBase(this.s.track);
     const colorOf = (k: Kart): number => kartPaint(k.slot);
+    this.panel = new SharedPanel(hudLayer, this.s.track, colorOf);
     for (const k of this.s.humans) {
       const hud = new PlayerHud(hudLayer, this.minimap, colorOf, hexStr(kartPaint(k.slot)));
+      hud.setName(k.name);
       const cam = new ChaseCam();
       cam.reset(k.h);
       this.players.push({
@@ -84,14 +87,28 @@ export class RaceSession {
     this.setStage('preview');
   }
 
-  /** Assign each player's viewport rectangle (CSS px, top-left origin). */
-  layout(rects: Rect[]): void {
+  /**
+   * Assign each player's viewport rectangle (CSS px, top-left origin) and place the shared minimap + standings:
+   * in the spare gaps (3 and 5 players), at the screen centre (2 and 4), or in the corner HUD (1 player).
+   */
+  layout(rects: Rect[], spare: Rect[] = []): void {
+    const n = this.players.length,
+      multi = n > 1,
+      W = window.innerWidth;
     this.players.forEach((p, i) => {
       const r = rects[i] ?? rects[0]!;
       p.rect = r;
       p.cam.setAspect(r.w / r.h);
-      p.hud.place(r);
+      p.hud.place(r, multi, multi && r.x + r.w / 2 > W / 2 + 2);
     });
+    if (spare.length >= 2) this.panel.place('split', spare[0], spare[1]);
+    else this.panel.place(multi ? 'centre' : 'none');
+    this.world.setViewCount(n);
+  }
+
+  /** A phone dropped or came back: show the reconnecting badge on that player's view. */
+  setOffline(slot: number, offline: boolean): void {
+    this.players.find((p) => p.slot === slot)?.hud.setOffline(offline);
   }
 
   setStage(stage: SessionStage): void {
@@ -100,6 +117,7 @@ export class RaceSession {
       p.cam.mode = stage === 'preview' ? 'orbit' : stage === 'podium' ? 'podium' : 'chase';
       p.hud.setVisible(stage === 'racing');
     }
+    this.panel.setVisible(stage === 'racing');
     this.world.setVisibleKarts(stage === 'podium' ? new Set(this.podiumOrder.slice(0, 3).map((k) => k.id)) : null);
     this.audio.mood = stage === 'preview' ? 'menu' : stage === 'podium' ? 'podium' : 'race';
   }
@@ -110,6 +128,7 @@ export class RaceSession {
       p.cam.reset(p.kart.h);
       p.hud.reset();
     }
+    this.panel.reset();
     for (const v of this.world.views) v.resetMotion();
     this.audio.tempo = 1;
     this.setStage('racing');
@@ -168,6 +187,7 @@ export class RaceSession {
     } else this.world.syncKarts(s, alpha, pdt, this.camPositions);
     this.world.updateAmbient(s, pdt, this.stage === 'podium');
 
+    if (this.stage === 'racing') this.panel.update(s);
     for (const p of this.players) {
       p.cam.update(this.paused ? 0.0001 : dt, s, p.kart, this.world.views[p.kart.id]!, this.world.podium);
       if (this.stage === 'racing') {
@@ -369,7 +389,10 @@ export class RaceSession {
           break;
         case 'finish':
           if (me && k) {
-            me.hud.say(k.rank === 0 ? '1ST PLACE!' : 'FINISHED ' + (k.rank + 1) + ord(k.rank + 1), 2400, 'gold');
+            // section 6.2: a FINISHED banner, and this view switches to an orbit around the (now AI-driven) kart
+            me.hud.clearMsg();
+            me.hud.setFinished(k.rank + 1, k.finishTime);
+            me.cam.mode = 'finish';
             a.tone(520, 0.7, 'triangle', 0.12, 1040);
             this.onHaptic?.(me.slot, 'finish');
           }
@@ -382,5 +405,6 @@ export class RaceSession {
 
   dispose(): void {
     for (const p of this.players) p.hud.dispose();
+    this.panel.dispose();
   }
 }
