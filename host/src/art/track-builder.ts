@@ -5,10 +5,12 @@
  * barn, village, mesas). Phase 9 replaces the surfaces with texture sets.
  */
 import * as THREE from 'three';
-import { KERB_W, TWO_PI, clamp, smooth01, Rng, type Track, type GameState, type TrackDef } from '@tk/shared';
-import { P_, inFrame, merge, jitter, canvasTex, noiseDots, box, cyl, ico, cone, octa, hash3, type Part } from './geo';
+import { KERB_W, TWO_PI, clamp, smooth01, wrapA, Rng, type Track, type GameState, type TrackDef } from '@tk/shared';
+import { P_, inFrame, merge, jitter, canvasTex, box, cyl, ico, cone, octa, type Part } from './geo';
 import { MEADOWS, type Theme } from './palette';
 import type { Materials } from './materials';
+import { groundMaterial, kerbMaterial, layerMaterial, roadMaterial, worldUv } from './surfaces';
+import { textures, type SurfaceTex } from './textures';
 
 export interface Zone {
   x: number;
@@ -71,31 +73,13 @@ export function buildTrackWorld(
     disposables.push(d);
     return d;
   };
+  /** Props merged into one static mesh at the end. */
+  const staticParts: Part[] = [];
+  const addStatic = (parts: Part[]): void => {
+    for (const p of parts) staticParts.push(p);
+  };
 
   /* ---------------- track surfaces ---------------- */
-  const roadTex = track(
-    canvasTex(256, 512, (g, w, h) => {
-      g.fillStyle = th.road;
-      g.fillRect(0, 0, w, h);
-      noiseDots(g, w, h, 1600, 0.05, rand);
-      g.fillStyle = 'rgba(0,0,0,.08)';
-      g.fillRect(w * 0.22, 0, w * 0.12, h);
-      g.fillRect(w * 0.66, 0, w * 0.12, h);
-      g.fillStyle = '#f5f5f5';
-      g.fillRect(w * 0.035, 0, w * 0.03, h);
-      g.fillRect(w * 0.935, 0, w * 0.03, h);
-      g.fillStyle = 'rgba(255,255,255,.75)';
-      g.fillRect(w * 0.49, 0, w * 0.02, h * 0.3);
-    }),
-  );
-  const kerbTex = track(
-    canvasTex(16, 64, (g, w, h) => {
-      g.fillStyle = th.kerbRed;
-      g.fillRect(0, 0, w, h / 2);
-      g.fillStyle = th.kerbWhite;
-      g.fillRect(0, h / 2, w, h / 2);
-    }),
-  );
   const wallTex = track(
     canvasTex(64, 64, (g, w, h) => {
       g.fillStyle = th.wallA;
@@ -108,17 +92,30 @@ export function buildTrackWorld(
       g.fillRect(0, 0, w, h * 0.12);
     }),
   );
-  const grassTex = track(
-    canvasTex(64, 128, (g, w, h) => {
-      g.fillStyle = th.grassA;
-      g.fillRect(0, 0, w, h);
-      g.fillStyle = th.grassB;
-      g.fillRect(0, 0, w, h / 2);
-      noiseDots(g, w, h, 160, 0.05, rand);
-    }),
-  );
   type PerSample = number | ((i: number) => number);
   const at = (f: PerSample, i: number): number => (typeof f === 'number' ? f : f(i));
+  /*
+   * Roadside art must not fold over the road (phase 9 fix for "grass on the road"): on the inside of a tight
+   * corner nothing reaches past the corner's centre, and nothing reaches past halfway to another part of the road.
+   */
+  const INNER: number[] = [],
+    RAD: number[] = [];
+  for (let i = 0; i < N; i++) {
+    const a = (i + 4) % N,
+      b = (i - 4 + N) % N;
+    const dTx = TX[a]! - TX[b]!,
+      dTz = TZ[a]! - TZ[b]!;
+    const ang = Math.abs(wrapA(ANG[a]! - ANG[b]!));
+    RAD.push(ang > 1e-6 ? (8 * DS) / ang : 1e9);
+    INNER.push(Math.sign(dTx * RX[i]! + dTz * RZ[i]!));
+  }
+  const fit = (i: number, lat: number): number => {
+    const sg = Math.sign(lat);
+    let a = Math.abs(lat);
+    if (sg !== 0 && sg === INNER[i]) a = Math.min(a, RAD[i]! - 0.8);
+    a = Math.min(a, T.CLEAR[i]! - 0.4);
+    return sg * Math.max(0, a);
+  };
   /**
    * A ribbon along the track between two lateral offsets (per sample), following height and banking.
    * `keep(i)` drops the quad from sample i to i+1; `range` limits it to samples [i0, i1] (wrapping).
@@ -133,18 +130,20 @@ export function buildTrackWorld(
     rs = true,
     keep?: (i: number) => boolean,
     range?: [number, number],
+    extra: { uvWorld?: number; attrs?: Record<string, (i: number, j: number, lat: number) => number> } = {},
   ): THREE.Mesh {
     const pos: number[] = [],
       uv: number[] = [],
       idx: number[] = [];
+    const attrs = Object.entries(extra.attrs ?? {}).map(([name, f]) => ({ name, f, data: [] as number[] }));
     const count = range ? ((range[1] - range[0] + N) % N) + 1 : N + 1;
     const start = range ? range[0] : 0;
     for (let k = 0; k < count; k++) {
       const i = start + k,
         j = i % N,
         v = (i * DS) / vDiv,
-        la = at(latA, j),
-        lb = at(latB, j);
+        la = fit(j, at(latA, j)),
+        lb = fit(j, at(latB, j));
       pos.push(
         CX[j]! + RX[j]! * la,
         H[j]! + at(yA, j) + la * BT[j]!,
@@ -153,7 +152,12 @@ export function buildTrackWorld(
         H[j]! + at(yB, j) + lb * BT[j]!,
         CZ[j]! + RZ[j]! * lb,
       );
-      uv.push(0, v, 1, v);
+      if (extra.uvWorld) {
+        const q = extra.uvWorld,
+          n = pos.length;
+        uv.push(pos[n - 6]! / q, pos[n - 4]! / q, pos[n - 3]! / q, pos[n - 1]! / q);
+      } else uv.push(0, v, 1, v);
+      for (const a of attrs) a.data.push(a.f(i, j, la), a.f(i, j, lb));
     }
     for (let k = 0; k < count - 1; k++) {
       if (keep && !keep((start + k) % N)) continue;
@@ -163,6 +167,7 @@ export function buildTrackWorld(
     const g = track(new THREE.BufferGeometry());
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    for (const a of attrs) g.setAttribute(a.name, new THREE.Float32BufferAttribute(a.data, 1));
     g.setIndex(idx);
     g.computeVertexNormals();
     const m = new THREE.Mesh(g, mat);
@@ -172,11 +177,83 @@ export function buildTrackWorld(
   }
   const lambert = (o: THREE.MeshLambertMaterialParameters): THREE.MeshLambertMaterial =>
     track(new THREE.MeshLambertMaterial(o));
-  const roadMat = lambert({ map: roadTex, side: THREE.DoubleSide });
-  const kerbMat = lambert({ map: kerbTex, side: THREE.DoubleSide });
-  const wallMat = lambert({ map: wallTex, side: THREE.DoubleSide });
-  const grassMat = lambert({ map: grassTex, side: THREE.DoubleSide });
-  const capMat = lambert({ color: 0xffffff, side: THREE.DoubleSide });
+  const TEX = textures();
+  const roadMat = track(roadMaterial(th));
+  const kerbMat = track(kerbMaterial(th));
+  const groundMat = track(groundMaterial(th));
+  const concreteMat = track(layerMaterial(TEX.concrete, { side: THREE.DoubleSide, roughness: 0.88 }));
+  const stripeMat = track(new THREE.MeshStandardMaterial({ map: wallTex, side: THREE.DoubleSide, roughness: 0.6 }));
+  const railMat = track(
+    new THREE.MeshStandardMaterial({ color: 0xc4ccd4, metalness: 0.65, roughness: 0.32, side: THREE.DoubleSide }),
+  );
+  const fenceTex = track(
+    canvasTex(
+      64,
+      64,
+      (g, w, h) => {
+        g.clearRect(0, 0, w, h);
+        g.strokeStyle = 'rgba(190,198,206,0.95)';
+        g.lineWidth = 2;
+        for (let k = -w; k < w * 2; k += 16) {
+          g.beginPath();
+          g.moveTo(k, 0);
+          g.lineTo(k + h, h);
+          g.moveTo(k + h, 0);
+          g.lineTo(k, h);
+          g.stroke();
+        }
+        g.fillStyle = 'rgba(150,158,166,1)';
+        g.fillRect(0, 0, w, 3);
+      },
+      true,
+    ),
+  );
+  fenceTex.wrapS = fenceTex.wrapT = THREE.RepeatWrapping;
+  fenceTex.repeat.set(1, 1);
+  const fenceMat = track(
+    new THREE.MeshStandardMaterial({
+      map: fenceTex,
+      alphaTest: 0.4,
+      transparent: false,
+      side: THREE.DoubleSide,
+      metalness: 0.5,
+      roughness: 0.5,
+    }),
+  );
+  const surfTex = (id: string): SurfaceTex =>
+    id === 'gravel'
+      ? TEX.gravel
+      : id === 'sand'
+        ? TEX.sand
+        : id === 'snow'
+          ? TEX.snow
+          : id === 'grass'
+            ? TEX.grass
+            : TEX.dirt;
+  // fast sections (long, gentle stretches) get Armco and catch fences; slower ones concrete walls with stripes
+  const fast: boolean[] = [];
+  for (let i = 0; i < N; i++) {
+    let mx = 0;
+    for (let o = -25; o <= 25; o += 5) mx = Math.max(mx, Math.abs(CURV[(i + o + N) % N]!));
+    fast.push(mx < 0.12);
+  }
+  // catch fences: on fast sections, only on the outside of the corner that comes next (where a kart runs wide)
+  const fenceSide: number[] = [];
+  for (let i = 0; i < N; i++) {
+    let turn = 0,
+      apex = i,
+      peak = 0;
+    for (let o = 10; o <= 60; o++) {
+      const c = CURV[(i + o) % N]!;
+      turn += c;
+      if (Math.abs(c) > peak) {
+        peak = Math.abs(c);
+        apex = (i + o) % N;
+      }
+    }
+    // CURV is the heading change over 12 samples, so turn / 12 is the corner's angle (rad)
+    fenceSide.push(fast[i] && Math.abs(turn) / 12 > 0.5 ? -INNER[apex]! : 0);
+  }
   const WV = (i: number): number => WALLD[i]! + 1.4;
   /* ---- shortcut corridors: where they cross a wall line, the wall has a gap ---- */
   const corridorD = (x: number, z: number): number => {
@@ -210,6 +287,7 @@ export function buildTrackWorld(
   const wallKeep = (side: number) => gapKeep([(k) => side * WV(k)]);
   const vergeKeep = (side: number) =>
     gapKeep([(k) => side * (HW[k]! + KERB_W + 1), (k) => side * WALLD[k]!, (k) => side * (WALLD[k]! + 5)]);
+  // road: world-space asphalt; the shader paints the lines, rubber, patches, cracks and oil from these attributes
   strip(
     (i) => -HW[i]!,
     0.05,
@@ -217,23 +295,31 @@ export function buildTrackWorld(
     0.05,
     26,
     roadMat,
+    true,
+    undefined,
+    undefined,
+    {
+      uvWorld: 4,
+      attrs: {
+        aLat: (_i, _j, lat) => lat,
+        aLine: (_i, j) => T.RLINE[j]!,
+        aHW: (_i, j) => HW[j]!,
+        aDist: (i) => i * DS,
+      },
+    },
   );
-  strip(
-    (i) => HW[i]!,
-    0.08,
-    (i) => HW[i]! + KERB_W,
-    0.08,
-    6,
-    kerbMat,
-  );
-  strip(
-    (i) => -HW[i]! - KERB_W,
-    0.08,
-    (i) => -HW[i]!,
-    0.08,
-    6,
-    kerbMat,
-  );
+  // kerbs: raised and bevelled (inner ramp, flat top, outer chamfer), ridged and painted in 2.5 m blocks
+  for (const s of [1, -1]) {
+    const k0 = (i: number): number => s * HW[i]!,
+      k1 = (i: number): number => s * (HW[i]! + 0.35),
+      k2 = (i: number): number => s * (HW[i]! + KERB_W - 0.3),
+      k3 = (i: number): number => s * (HW[i]! + KERB_W);
+    strip(k0, 0.05, k1, 0.13, 5, kerbMat);
+    strip(k1, 0.13, k2, 0.15, 5, kerbMat);
+    strip(k2, 0.15, k3, 0.02, 5, kerbMat);
+  }
+  // verges: the ground material, so they meet the terrain without a seam (dirt edge by the kerb)
+  const vergeAttrs = { aRoad: (_i: number, j: number, lat: number) => Math.max(0, Math.abs(lat) - HW[j]! - KERB_W) };
   for (const s of [1, -1]) {
     strip(
       (i) => s * (HW[i]! + KERB_W),
@@ -241,9 +327,14 @@ export function buildTrackWorld(
       (i) => s * (WALLD[i]! + 3),
       0.0,
       14,
-      grassMat,
+      groundMat,
       true,
       vergeKeep(s),
+      undefined,
+      {
+        uvWorld: 5,
+        attrs: vergeAttrs,
+      },
     );
     strip(
       (i) => s * (WALLD[i]! + 3),
@@ -251,30 +342,96 @@ export function buildTrackWorld(
       (i) => s * (WALLD[i]! + 8),
       -0.7,
       14,
-      grassMat,
+      groundMat,
       true,
       vergeKeep(s),
+      undefined,
+      {
+        uvWorld: 5,
+        attrs: vergeAttrs,
+      },
     );
+    // barriers: concrete with the theme's stripe band on slower sections; Armco rails and a catch fence on fast ones
+    const slowKeep = (i: number): boolean => wallKeep(s)(i) && !fast[i];
+    const fastKeep = (i: number): boolean => wallKeep(s)(i) && !!fast[i];
     strip(
       (i) => s * WV(i),
       0.0,
       (i) => s * WV(i),
       1.35,
-      7,
-      wallMat,
+      3,
+      concreteMat,
       true,
-      wallKeep(s),
+      slowKeep,
+    );
+    strip(
+      (i) => s * (WV(i) - 0.03),
+      0.88,
+      (i) => s * (WV(i) - 0.03),
+      1.18,
+      7,
+      stripeMat,
+      true,
+      slowKeep,
     );
     strip(
       (i) => s * WV(i),
       1.35,
       (i) => s * (WV(i) + 0.6),
       1.35,
-      7,
-      capMat,
+      3,
+      concreteMat,
       false,
-      wallKeep(s),
+      slowKeep,
     );
+    strip(
+      (i) => s * WV(i),
+      0.42,
+      (i) => s * WV(i),
+      0.74,
+      4,
+      railMat,
+      true,
+      fastKeep,
+    );
+    strip(
+      (i) => s * WV(i),
+      0.82,
+      (i) => s * WV(i),
+      1.14,
+      4,
+      railMat,
+      true,
+      fastKeep,
+    );
+    strip(
+      (i) => s * (WV(i) + 1.2),
+      0.0,
+      (i) => s * (WV(i) + 1.2),
+      3.4,
+      3,
+      fenceMat,
+      false,
+      (i) => fastKeep(i) && fenceSide[i] === s,
+    );
+  }
+  {
+    // Armco and fence posts
+    const posts: Part[] = [];
+    for (let i = 0; i < N; i += 2)
+      for (const s of [1, -1]) {
+        if (!fast[i] || !wallKeep(s)(i)) continue;
+        const l = fit(i, s * (WV(i) + 0.18)),
+          lf = fit(i, s * (WV(i) + 1.25));
+        posts.push(
+          P_(box(0.14, 1.2, 0.14), 0x8a939b, CX[i]! + RX[i]! * l, H[i]! + l * BT[i]! + 0.6, CZ[i]! + RZ[i]! * l),
+        );
+        if (i % 6 === 0 && fenceSide[i] === s)
+          posts.push(
+            P_(box(0.12, 3.5, 0.12), 0x6f7880, CX[i]! + RX[i]! * lf, H[i]! + lf * BT[i]! + 1.75, CZ[i]! + RZ[i]! * lf),
+          );
+      }
+    if (posts.length) addStatic(posts);
   }
 
   /* ---------------- terrain ---------------- */
@@ -455,68 +612,90 @@ export function buildTrackWorld(
   if (millSpot) zones.push({ x: millSpot.x, z: millSpot.z, r: 14 });
 
   {
-    const TS = 2600,
-      TN = 160,
+    const TS = Math.max(2600, 2 * (RMAX + 700)),
+      TN = Math.min(240, Math.ceil(TS / 12)),
       cell = TS / TN,
       ox = TC.x - TS / 2,
       oz = TC.z - TS / 2,
       V = TN + 1;
     const hh = new Float32Array(V * V);
     for (let r = 0; r < V; r++) for (let c = 0; c < V; c++) hh[r * V + c] = terrainH(ox + c * cell, oz + r * cell);
-    const pos = new Float32Array(TN * TN * 18),
-      col = new Float32Array(TN * TN * 18);
-    const greens = th.grassTerrain,
-      _c = new THREE.Color();
-    let o = 0;
-    const put = (x: number, y: number, z: number): void => {
-      pos[o++] = x;
-      pos[o++] = y;
-      pos[o++] = z;
+    // keep the ground mesh (as it is triangulated below) under the road, kerbs and verges everywhere:
+    // sample the footprint densely and push down any triangle that rises within 0.35 m of the surface
+    const sink = (x: number, z: number, top: number): void => {
+      const fx = (x - ox) / cell,
+        fz = (z - oz) / cell,
+        c = Math.floor(fx),
+        r = Math.floor(fz);
+      if (c < 0 || r < 0 || c >= TN || r >= TN) return;
+      const u = fx - c,
+        w = fz - r;
+      const A = r * V + c,
+        B = A + 1,
+        C = A + V,
+        D = C + 1;
+      const tri = u + w <= 1 ? [A, B, C] : [B, C, D];
+      const h =
+        u + w <= 1
+          ? hh[A]! + (hh[B]! - hh[A]!) * u + (hh[C]! - hh[A]!) * w
+          : hh[D]! + (hh[C]! - hh[D]!) * (1 - u) + (hh[B]! - hh[D]!) * (1 - w);
+      const over = h - (top - 0.35);
+      if (over > 0) for (const v of tri) hh[v] = hh[v]! - over - 0.02;
     };
-    const colTri = (ci: number, x: number, z: number, h: number, k: number): void => {
-      let hex: number;
-      const dp = pond ? Math.hypot(x - pond.x, z - pond.z) : 1e9;
-      if (pond && dp < pond.r + 22 && h < pond.y + 1.4) hex = h < pond.y - 0.4 ? th.sandWet : th.sandDry;
-      else if (h > 64) hex = th.snow;
-      else if (h > 44) hex = th.rock[k % 3]!;
-      else {
-        const v = 0.5 + 0.5 * Math.sin(x * 0.02 + z * 0.013) * Math.cos(z * 0.017 - x * 0.007);
-        hex = greens[clamp(Math.floor(v * 3.6 + hash3(Math.round(x), Math.round(z), 3, 9) * 1.6), 0, 4)]!;
+    for (let pass = 0; pass < 2; pass++)
+      for (let i = 0; i < N; i++)
+        for (const f of [0, 0.5]) {
+          const j = (i + 1) % N;
+          const cx = CX[i]! + (CX[j]! - CX[i]!) * f,
+            cz = CZ[i]! + (CZ[j]! - CZ[i]!) * f;
+          const reach = fit(i, WALLD[i]! + 3);
+          for (let lat = -reach; lat <= reach; lat += 1.5) {
+            const l = fit(i, lat);
+            const y = H[i]! + (H[j]! - H[i]!) * f + l * BT[i]!;
+            sink(cx + RX[i]! * l, cz + RZ[i]! * l, y);
+          }
+        }
+    // a smooth indexed grid with the splat ground material; per vertex: world uv, distance from the road edge
+    // (dirt edges), and a shore mask (sand around the pond)
+    const pos = new Float32Array(V * V * 3),
+      uvs = new Float32Array(V * V * 2),
+      road = new Float32Array(V * V),
+      mask = new Float32Array(V * V * 2);
+    for (let r = 0; r < V; r++)
+      for (let c = 0; c < V; c++) {
+        const v = r * V + c,
+          x = ox + c * cell,
+          z = oz + r * cell,
+          h = hh[v]!;
+        pos[v * 3] = x;
+        pos[v * 3 + 1] = h;
+        pos[v * 3 + 2] = z;
+        uvs[v * 2] = x / 5;
+        uvs[v * 2 + 1] = z / 5;
+        const n = nearTrack(x, z);
+        road[v] = Math.max(0, n.d - HW[n.i]! - KERB_W);
+        if (pond) {
+          const dp = Math.hypot(x - pond.x, z - pond.z);
+          mask[v * 2 + 1] = (1 - smooth01((dp - pond.r - 10) / 14)) * (1 - smooth01((h - pond.y - 0.6) / 1.6));
+        }
       }
-      _c.setHex(hex);
-      for (let w = 0; w < 3; w++) {
-        col[ci++] = _c.r;
-        col[ci++] = _c.g;
-        col[ci++] = _c.b;
-      }
-    };
-    let k = 0;
+    const idx: number[] = [];
     for (let r = 0; r < TN; r++)
       for (let c = 0; c < TN; c++) {
-        const x0 = ox + c * cell,
-          x1 = x0 + cell,
-          z0 = oz + r * cell,
-          z1 = z0 + cell;
-        const ha = hh[r * V + c]!,
-          hb = hh[r * V + c + 1]!,
-          hc = hh[(r + 1) * V + c]!,
-          hd = hh[(r + 1) * V + c + 1]!;
-        let ci = o;
-        put(x0, ha, z0);
-        put(x0, hc, z1);
-        put(x1, hb, z0);
-        colTri(ci, x0 + cell * 0.33, z0 + cell * 0.33, (ha + hb + hc) / 3, k++);
-        ci = o;
-        put(x1, hb, z0);
-        put(x0, hc, z1);
-        put(x1, hd, z1);
-        colTri(ci, x0 + cell * 0.66, z0 + cell * 0.66, (hb + hc + hd) / 3, k++);
+        const A = r * V + c,
+          B = A + 1,
+          C = A + V,
+          D = C + 1;
+        idx.push(A, C, B, B, C, D);
       }
     const g = track(new THREE.BufferGeometry());
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    g.setAttribute('aRoad', new THREE.BufferAttribute(road, 1));
+    g.setAttribute('aMask', new THREE.BufferAttribute(mask, 2));
+    g.setIndex(idx);
     g.computeVertexNormals();
-    const m = new THREE.Mesh(g, M.land);
+    const m = new THREE.Mesh(g, groundMat);
     m.receiveShadow = true;
     m.frustumCulled = false;
     add(m);
@@ -542,10 +721,6 @@ export function buildTrackWorld(
   }
 
   /* ---------------- static props (merged) ---------------- */
-  const staticParts: Part[] = [];
-  const addStatic = (parts: Part[]): void => {
-    for (const p of parts) staticParts.push(p);
-  };
 
   // start / finish gantry with bunting
   {
@@ -819,7 +994,7 @@ export function buildTrackWorld(
       if (!list.length) continue;
       const im = add(new THREE.InstancedMesh(plate, lambert({ map: mkTex(left) }), list.length));
       list.forEach(([i, s], n) => {
-        const lat = s * (WV(i) + 2.2),
+        const lat = fit(i, s * (WV(i) + 2.2)),
           x = CX[i]! + RX[i]! * lat,
           z = CZ[i]! + RZ[i]! * lat;
         m4.compose(v.set(x, H[i]! + 2.6, z), q.setFromEuler(e.set(0, ANG[i]! + Math.PI, 0)), one);
@@ -853,7 +1028,7 @@ export function buildTrackWorld(
     let n = 0;
     for (const [i, s] of tyreSpots)
       for (const off of [0, 1.3]) {
-        const lat = s * (WV(i) + 1.2),
+        const lat = fit(i, s * (WV(i) + 1.2)),
           fwd = off ? 1.3 : 0,
           x = CX[i]! + RX[i]! * lat + TX[i]! * fwd,
           z = CZ[i]! + RZ[i]! * lat + TZ[i]! * fwd;
@@ -987,11 +1162,14 @@ export function buildTrackWorld(
       for (const q of list) {
         const i = q.i,
           j = (i + 1) % N;
-        const p = (k: number, lat: number): number[] => [
-          CX[k]! + RX[k]! * lat,
-          H[k]! + lift + lat * BT[k]! + (Math.abs(lat) > HW[k]! + KERB_W ? 0 : 0.03),
-          CZ[k]! + RZ[k]! * lat,
-        ];
+        const p = (k: number, raw: number): number[] => {
+          const lat = fit(k, raw);
+          return [
+            CX[k]! + RX[k]! * lat,
+            H[k]! + lift + lat * BT[k]! + (Math.abs(lat) > HW[k]! + KERB_W ? 0 : 0.03),
+            CZ[k]! + RZ[k]! * lat,
+          ];
+        };
         const a = p(i, q.latMin),
           b = p(i, q.latMax),
           c = p(j, q.latMin),
@@ -1001,18 +1179,21 @@ export function buildTrackWorld(
       const g = track(new THREE.BufferGeometry());
       g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       g.computeVertexNormals();
-      const col = th.surf[surf as keyof Theme['surf']] ?? 0xcccccc;
-      const m = add(
-        new THREE.Mesh(
-          g,
-          solid(col, {
-            polygonOffset: true,
-            polygonOffsetFactor: -1,
-            polygonOffsetUnits: -1,
-            ...(onRoad ? { transparent: true, opacity: 0.82, emissive: 0x1a3a50 } : {}),
-          }),
-        ),
-      );
+      worldUv(g, surf === 'gravel' ? 2 : 4);
+      const decal = { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 };
+      const mat = onRoad
+        ? // ice: glassy and pale blue, so it reads as slippery
+          new THREE.MeshStandardMaterial({
+            ...decal,
+            color: 0xd8f0ff,
+            roughness: 0.05,
+            metalness: 0,
+            transparent: true,
+            opacity: 0.78,
+            normalMap: TEX.snow.normal,
+          })
+        : layerMaterial(surfTex(surf), decal);
+      const m = add(new THREE.Mesh(g, track(mat)));
       m.receiveShadow = true;
     }
   }
@@ -1061,7 +1242,8 @@ export function buildTrackWorld(
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setIndex(idx);
     g.computeVertexNormals();
-    const m = add(new THREE.Mesh(g, solid(th.surf[sc.surface as keyof Theme['surf']] ?? th.surf.dirt)));
+    worldUv(g, 4);
+    const m = add(new THREE.Mesh(g, track(layerMaterial(surfTex(sc.surface)))));
     m.receiveShadow = true;
     if (fence.length) addStatic(fence);
   }
@@ -1374,6 +1556,248 @@ export function buildTrackWorld(
     } else if (l.kind === 'mesa') {
       addStatic([P_(jitter(cyl(38, 55, 60, 8), 4, i), th.rock[0]!, x, terrainH(x, z) + 24, z)]);
       zones.push({ x, z, r: 60 });
+    }
+  }
+
+  /* ---------------- trackside furniture and decals (phase 9) ---------------- */
+  {
+    const outerOf = (i: number): number => (INNER[i]! > 0 ? -1 : 1);
+    const ground = (x: number, z: number): number => terrainH(x, z) - 0.15;
+    // marshal posts about every 420 m, on the outside of the road
+    const every = Math.max(40, Math.round(420 / DS));
+    for (let i = Math.round(every / 2); i < N; i += every) {
+      const sd = outerOf(i);
+      if (!wallKeep(sd)(i)) continue;
+      const l = fit(i, sd * (WV(i) + 3.6)),
+        x = CX[i]! + RX[i]! * l,
+        z = CZ[i]! + RZ[i]! * l;
+      addStatic(
+        inFrame(
+          [
+            P_(box(2.2, 2.3, 2.0), 0xff7a1a, 0, 1.15, 0),
+            P_(box(2.6, 0.22, 2.4), 0xf5f5f5, 0, 2.4, 0),
+            P_(box(1.5, 0.7, 0.06), 0x90caf9, 0, 1.5, -1.02),
+            P_(cyl(0.05, 0.05, 3.2, 5), 0xcfd8dc, 1.45, 1.6, 0),
+            P_(box(0.05, 0.6, 0.9), 0xffeb3b, 1.45, 2.9, 0.45),
+          ],
+          x,
+          ground(x, z),
+          z,
+          ANG[i]! + (sd > 0 ? Math.PI : 0),
+        ),
+      );
+      zones.push({ x, z, r: 4 });
+    }
+    // light poles along the start straight
+    for (let o = -66; o <= 66; o += 12)
+      for (const sd of [1, -1]) {
+        const i = (o + N) % N;
+        if (!wallKeep(sd)(i)) continue;
+        const l = fit(i, sd * (WV(i) + 2.6)),
+          x = CX[i]! + RX[i]! * l,
+          z = CZ[i]! + RZ[i]! * l;
+        addStatic(
+          inFrame(
+            [
+              P_(cyl(0.14, 0.2, 10, 6), 0x9aa4ad, 0, 5, 0),
+              P_(box(0.12, 0.12, 2.2), 0x9aa4ad, 0, 9.8, 1.0),
+              P_(box(0.7, 0.18, 0.5), 0xfffbe6, 0, 9.65, 2.0),
+            ],
+            x,
+            ground(x, z),
+            z,
+            ANG[i]! + (sd > 0 ? Math.PI / 2 : -Math.PI / 2),
+          ),
+        );
+      }
+
+    // boards: distance markers before big corners and fictional sponsor billboards, from one atlas
+    const names = ['VOLTEX', 'NIMBUS OIL', 'ZAP COLA', 'KARTRONIX', 'SKYFIZZ', 'RAPIDO TYRES'];
+    const bgs = ['#1e88e5', '#212121', '#e53935', '#43a047', '#8e24aa', '#fb8c00'];
+    const cells = 9; // 0-5 sponsors, 6-8 distance boards 150 / 100 / 50
+    const atlas = track(
+      canvasTex(
+        512,
+        64 * cells,
+        (g, w) => {
+          for (let k = 0; k < cells; k++) {
+            const y = k * 64;
+            if (k < 6) {
+              g.fillStyle = bgs[k]!;
+              g.fillRect(0, y, w, 64);
+              g.fillStyle = 'rgba(255,255,255,.15)';
+              g.fillRect(0, y, w, 6);
+              g.font = 'bold 40px Fredoka, sans-serif';
+              g.textAlign = 'center';
+              g.textBaseline = 'middle';
+              g.fillStyle = '#fff';
+              g.fillText(names[k]!, w / 2, y + 34);
+            } else {
+              g.fillStyle = '#fafafa';
+              g.fillRect(0, y, w, 64);
+              g.fillStyle = '#212121';
+              g.fillRect(0, y, w, 5);
+              g.fillRect(0, y + 59, w, 5);
+              g.font = 'bold 50px Fredoka, sans-serif';
+              g.textAlign = 'center';
+              g.textBaseline = 'middle';
+              g.fillText(['150', '100', '50'][k - 6]!, w / 2, y + 34);
+            }
+          }
+        },
+        true,
+      ),
+    );
+    const quads: number[] = [],
+      quv: number[] = [];
+    const board = (i: number, sd: number, lat: number, y0: number, w: number, h: number, cell: number): void => {
+      const l = fit(i, sd * lat),
+        x = CX[i]! + RX[i]! * l,
+        z = CZ[i]! + RZ[i]! * l,
+        y = ground(x, z) + y0;
+      // the face looks across the road
+      const tx = TX[i]! * (w / 2),
+        tz = TZ[i]! * (w / 2);
+      const a = [x - tx, y, z - tz],
+        b = [x + tx, y, z + tz],
+        c = [x - tx, y + h, z - tz],
+        d = [x + tx, y + h, z + tz];
+      const flip = sd > 0;
+      const [p0, p1, p2, p3] = flip ? [b, a, d, c] : [a, b, c, d];
+      quads.push(...p0!, ...p1!, ...p2!, ...p1!, ...p3!, ...p2!);
+      const v0 = 1 - (cell + 1) / cells,
+        v1 = 1 - cell / cells;
+      quv.push(0, v0, 1, v0, 0, v1, 1, v0, 1, v1, 0, v1);
+      const back = 0.12;
+      addStatic([
+        P_(
+          box(0.18, y0 + h, 0.18),
+          0x78838c,
+          x - tx * 0.8 + RX[i]! * sd * back,
+          y - y0 + (y0 + h) / 2,
+          z - tz * 0.8 + RZ[i]! * sd * back,
+        ),
+        P_(
+          box(0.18, y0 + h, 0.18),
+          0x78838c,
+          x + tx * 0.8 + RX[i]! * sd * back,
+          y - y0 + (y0 + h) / 2,
+          z + tz * 0.8 + RZ[i]! * sd * back,
+        ),
+      ]);
+    };
+    // distance boards: 150 / 100 / 50 m before the entry of every big corner, on its outside
+    for (let i = 0; i < N; i++) {
+      const c = Math.abs(CURV[i]!);
+      if (c < 0.5) continue;
+      let peak = true;
+      for (let o = -40; o <= 40 && peak; o++) if (Math.abs(CURV[(i + o + N) % N]!) > c) peak = false;
+      if (!peak) continue;
+      let entry = i;
+      for (let o = 1; o < 60 && Math.abs(CURV[(entry - 1 + N) % N]!) > 0.12; o++) entry = (entry - 1 + N) % N;
+      const sd = -INNER[i]!;
+      [150, 100, 50].forEach((m, k) => {
+        const j = (entry - Math.round(m / DS) + N) % N;
+        if (wallKeep(sd)(j)) board(j, sd, WV(j) + 1.6, 0.6, 1.6, 1.0, 6 + k);
+      });
+    }
+    // sponsor billboards on fast sections, about every 260 m, alternating sides
+    const gap = Math.round(260 / DS);
+    let n = 0;
+    for (let i = 20; i < N; i += gap) {
+      if (!fast[i]) continue;
+      const sd = n % 2 ? 1 : -1;
+      if (!wallKeep(sd)(i)) continue;
+      board(i, sd, WV(i) + 3.2, 1.4, 9, 2.2, n % 6);
+      n++;
+    }
+    if (quads.length) {
+      const g = track(new THREE.BufferGeometry());
+      g.setAttribute('position', new THREE.Float32BufferAttribute(quads, 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(quv, 2));
+      g.computeVertexNormals();
+      const mb = add(
+        new THREE.Mesh(
+          g,
+          track(new THREE.MeshStandardMaterial({ map: atlas, roughness: 0.7, side: THREE.DoubleSide })),
+        ),
+      );
+      mb.castShadow = true;
+      mb.frustumCulled = false;
+    }
+
+    // painted grid slots behind the start line (as the game places the karts)
+    const paint = track(
+      new THREE.MeshStandardMaterial({
+        color: 0xf2f2f0,
+        side: THREE.DoubleSide,
+        roughness: 0.6,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+      }),
+    );
+    const gp: number[] = [];
+    const quad = (i: number, latA: number, latB: number, fwdA: number, fwdB: number): void => {
+      const pt = (lat: number, f: number): number[] => [
+        CX[i]! + RX[i]! * lat + TX[i]! * f,
+        H[i]! + lat * BT[i]! + 0.075,
+        CZ[i]! + RZ[i]! * lat + TZ[i]! * f,
+      ];
+      const a = pt(latA, fwdA),
+        b = pt(latB, fwdA),
+        c = pt(latA, fwdB),
+        d = pt(latB, fwdB);
+      gp.push(...a, ...c, ...b, ...b, ...c, ...d);
+    };
+    for (let gpos = 0; gpos < 6; gpos++) {
+      const row = gpos >> 1,
+        i = (N - 3 - row * 3 + N) % N,
+        lat = gpos & 1 ? 5.5 : -5.5;
+      quad(i, lat - 1.7, lat + 1.7, 1.6, 1.85); // front bar
+      quad(i, lat - 1.7, lat - 1.45, -1.6, 1.85); // sides
+      quad(i, lat + 1.45, lat + 1.7, -1.6, 1.85);
+    }
+    const gg = track(new THREE.BufferGeometry());
+    gg.setAttribute('position', new THREE.Float32BufferAttribute(gp, 3));
+    gg.computeVertexNormals();
+    add(new THREE.Mesh(gg, paint)).receiveShadow = true;
+
+    // loose stones in the gravel traps
+    const stones: [number, number, number, number][] = [];
+    for (let i = 0; i < N && stones.length < 2500; i++)
+      for (const zn of T.zones[i] ?? [])
+        if (zn.surface === 'gravel')
+          for (let k = 0; k < 3; k++) {
+            const lat = fit(i, zn.latMin + rand() * (zn.latMax - zn.latMin)),
+              f = rand() * DS;
+            stones.push([
+              CX[i]! + RX[i]! * lat + TX[i]! * f,
+              H[i]! + lat * BT[i]! + 0.05,
+              CZ[i]! + RZ[i]! * lat + TZ[i]! * f,
+              0.06 + rand() * 0.12,
+            ]);
+          }
+    if (stones.length) {
+      const sg = track(new THREE.DodecahedronGeometry(1, 0));
+      const im = add(
+        new THREE.InstancedMesh(
+          sg,
+          track(new THREE.MeshStandardMaterial({ color: 0xb8b0a2, roughness: 0.9 })),
+          stones.length,
+        ),
+      );
+      const m4 = new THREE.Matrix4(),
+        q = new THREE.Quaternion(),
+        e = new THREE.Euler(),
+        v = new THREE.Vector3(),
+        sc = new THREE.Vector3();
+      stones.forEach(([x, y, z, r], k) => {
+        m4.compose(v.set(x, y, z), q.setFromEuler(e.set(rand() * 3, rand() * 3, 0)), sc.set(r, r * 0.7, r));
+        im.setMatrixAt(k, m4);
+      });
+      im.instanceMatrix.needsUpdate = true;
+      im.receiveShadow = true;
     }
   }
 

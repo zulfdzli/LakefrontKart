@@ -18,6 +18,7 @@ import {
   type Standing,
 } from '@tk/shared';
 import { World } from './renderer';
+import { loadTextures } from './art/textures';
 import { RaceSession } from './session';
 import { Audio } from './audio';
 import { Keyboard } from './input-keyboard';
@@ -46,6 +47,8 @@ function chosenTrack(over?: string): TrackId {
 }
 let previewTrack: TrackId | null = null;
 const world = new World($<HTMLCanvasElement>('c'));
+// surface textures (phase 9) load before anything is built; ?lotex uses the half-size Low-tier set
+await loadTextures(params.has('lotex'), world.renderer.capabilities.getMaxAnisotropy());
 const audio = new Audio();
 const keyboard = new Keyboard();
 const debug = new DebugOverlay(world, $('debug'));

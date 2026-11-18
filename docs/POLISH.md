@@ -300,3 +300,44 @@ Shots: `docs/screens/phase6/split-2.png` to `split-5.png`, `split-5-offline.png`
 | (all others) | | unchanged | |
 
 Open for phase 11: AI drifting, AI shortcuts, the character spread (target 4%) and the Normal→Hard gap (target 3%).
+
+---
+
+## Phase 9: surfaces and materials (2026-11-18)
+
+### What changed (D43)
+- **Speed and lengths**: karts 13% faster; tracks 13% longer, so laps stay about 2 minutes.
+- **Grass on the road**: fixed. Verges and other roadside art fit inside corner radii and the clearance between road sections, and the ground mesh is kept under the road.
+- **Textures and materials**: generated texture sets, a physically based road (wear, rubber line, worn paint, Frosty puddles), raised ridged kerbs, a splat ground material with no seam at the verges, gravel traps with stones, and textured shortcut paths and ice.
+- **Trackside**: concrete walls or Armco plus catch fences, marshal posts, light poles, distance boards, sponsor billboards and grid slots.
+- **Reflections**: a sky reflection for all PBR surfaces.
+
+### Capture (GTX 1650)
+- **1 view, vsync**: 60 FPS on every track, 124 to 145 draw calls, 290k to 310k triangles.
+- **Frosty, the heaviest, at 1920 × 1080 with vsync off**:
+
+  | Views | Median frame | p95 | Draw calls | Triangles |
+  |---|---|---|---|---|
+  | 1 | 3.0 ms | 6.5 ms | 133 | 297k |
+  | 5 | 4.9 ms | 8.6 ms | 481 | 1.43M |
+
+- **Shots**: `docs/screens/p9-meadows/`, `p9-canyon/`, `p9-frosty/`, `p9-sepang/`, `phase9-canyon/`.
+- **Checks**: e2e 18/18; 60 tests.
+
+### Fixes this loop (the 3 lowest items this phase can touch)
+1. **Road, kerb and terrain material** (2): flat canvas colours. Now real asphalt with wear, raised textured kerbs, and splat terrain.
+2. **Texture tiling visibility** (3): textures sampled in world space with macro variation, and no visible repeats in the captures. The first grass texture had a regular grid of dark dots; that noise layer was replaced.
+3. **"Grass on the road"** (your report): roadside strips folded over the road. Fixed as above. On the way, three mistakes from this pass were caught in the captures:
+   - Upside-down ribbons were culled: the left kerbs vanished and the grid slots did not draw.
+   - The same ribbons were read as cliffs and painted with rock.
+   - Puddles rendered black because there was nothing to reflect.
+
+### Scores (compared with phase 8)
+| Area | Item | Score | Reason |
+|---|---|---|---|
+| Graphics | Road, kerb and terrain material | **4** (was 2) | Believable asphalt, kerbs, verges, gravel and terrain up close |
+| Graphics | Texture tiling visibility | **4** (was 3) | World-space sampling with macro variation; no repeats visible in the captures |
+| Graphics | Scenery density and variety | **4** (was 3) | Barriers, fences, posts, boards, billboards and grid slots on every track |
+| Graphics | Lighting and shadow quality | 2 | The sky reflection helps, but tone mapping, soft shadows and AO are phase 10 |
+| Gameplay | Frame-time stability | 4 | 5 views at 1080p: p95 8.6 ms |
+| (all others) | | unchanged | |

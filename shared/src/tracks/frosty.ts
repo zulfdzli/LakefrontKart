@@ -4,7 +4,7 @@
  */
 import type { TrackDef, TrackPoint } from './def';
 
-const S = 1.05;
+const S = 1.18;
 const P = (x: number, z: number, h = 0, bank = 0, w?: number): TrackPoint => ({
   x: x * S,
   z: z * S,

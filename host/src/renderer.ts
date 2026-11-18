@@ -49,7 +49,7 @@ export class World {
   private readonly sun: THREE.DirectionalLight;
   private sky: THREE.Mesh;
   private readonly hemi: THREE.HemisphereLight;
-  private themeId = 'meadows';
+  private themeId = '';
   private M: Materials | null = null;
   private trackWorld: TrackWorld | null = null;
   private scenery: Scenery | null = null;
@@ -101,6 +101,34 @@ export class World {
    * Build the world for a race. The track (terrain, props, scenery) is only rebuilt when the track changes;
    * kart views are rebuilt every race, because players and characters change.
    */
+  private envRT: THREE.WebGLRenderTarget | null = null;
+  /**
+   * Image-based light (phase 9): the theme's sky, prefiltered, so wet patches, steel and paint reflect the real
+   * sky instead of black. Kept soft (environmentIntensity) until the art pass tunes the lighting.
+   */
+  private makeEnvironment(): void {
+    const pm = new THREE.PMREMGenerator(this.renderer);
+    const sc = new THREE.Scene();
+    const sky = this.sky.clone();
+    sky.position.set(0, 0, 0);
+    sky.scale.setScalar(0.04);
+    sc.add(sky);
+    // the ground half of the environment: a dim plane in the hemisphere's ground colour
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: this.hemi.groundColor.clone().multiplyScalar(0.35) }),
+    );
+    floor.position.y = -2;
+    sc.add(floor);
+    this.envRT?.dispose();
+    this.envRT = pm.fromScene(sc, 0.02, 0.1, 200);
+    this.scene.environment = this.envRT.texture;
+    this.scene.environmentIntensity = 0.45;
+    floor.geometry.dispose();
+    (floor.material as THREE.Material).dispose();
+    pm.dispose();
+  }
+
   /** Sky, fog and light for a track's theme (phase 8). */
   private applyTheme(th: Theme): void {
     if (th.id === this.themeId) return;
@@ -121,6 +149,7 @@ export class World {
     this.sky = createSky(th.zenith, th.horizon, this.sunDir, th.sunGlow);
     this.sky.scale.setScalar(scale);
     s.add(this.sky);
+    this.makeEnvironment();
   }
 
   build(s: Readonly<GameState>, names: Map<number, string>): void {

@@ -96,6 +96,8 @@ export interface Track {
   HW: number[];
   /** Wall distance from the centreline per sample (m). */
   WALLD: number[];
+  /** Half the distance to the nearest unrelated part of the road (m): roadside art must stay inside it. */
+  CLEAR: number[];
   /** tan(banking) per sample: the road surface height changes by lat * BT. */
   BT: number[];
   /** Surface beyond the kerbs when no zone says otherwise. */
@@ -122,6 +124,7 @@ export function prototypeExtras(
     id: 'proto',
     HW: new Array<number>(N).fill(ROAD_HALF),
     WALLD: new Array<number>(N).fill(WALL),
+    CLEAR: new Array<number>(N).fill(1e9),
     BT: new Array<number>(N).fill(0),
     offroad: 'grass',
     zones: new Array<LatZone[] | null>(N).fill(null),

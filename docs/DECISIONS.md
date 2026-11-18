@@ -431,6 +431,32 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **Name**: "Sepang Circuit" is a real venue's name. That is fine for your own use; if the game is ever published, check whether the name and layout need permission.
 - **Why**: Your request.
 
+### D43 · Faster karts again, and the phase 9 surfaces (2026-11-18, phase 9, your request and my decisions)
+- **Q**: You asked for karts 13% faster, a cleaner track ("there is still grass on the road") and a more realistic look. What changed?
+- **A**:
+  - **Speed**: `speedMul` goes from 1.08 to 1.22 (×1.13). The tracks grew about 13% to keep 2-minute laps: Meadows 4.61 km, Canyon 4.63 km, Frosty 4.55 km and Sepang 4.34 km (Sepang is scaled, not reshaped). Normal AI laps are 117.5 to 119.7 s.
+  - **Grass on the road**: there were two causes.
+    - In tight corners, the grass verge on the inside was wider than the corner's radius, so it folded over the road.
+    - Where two parts of the road run close together, one verge reached across the other road.
+    - The fix: every roadside strip is now fitted inside the corner radius and inside half the distance to other road (`Track.CLEAR`). The ground mesh is also pushed below the road, kerbs and verges at a dense set of points, so it can never poke through.
+  - **Textures** (section 11.3): `npm run textures` (`tools/gen-textures.ts`) bakes seeded, tileable noise to PNG in `host/public/textures/`, 5.3 MB including half-size `_lo` versions for the Low tier.
+    - Asphalt is 1024 px; grass, dirt, rock, snow, sand, gravel and concrete are 512 px; plus road wear masks and a macro-variation texture.
+    - Normal maps are made in the browser from the height maps, to keep downloads small.
+  - **Road**: a physically based material in world space (4 m tiles) plus 160 m macro variation, so nothing visibly repeats. The shader adds:
+    - patch repairs, fine cracks and oil stains from the wear masks;
+    - a darker rubbered-in racing line with wheel tracks;
+    - painted edge lines and a dashed centre line, worn by traffic;
+    - puddle sheen on Frosty Peaks, reflecting the sky.
+    - The "roughness map" is computed in the shader from the same wear masks rather than shipped as a third texture.
+  - **Kerbs**: raised and bevelled (inner ramp, top, outer chamfer), with rumble-ridge normals and chipped red/white paint.
+  - **Ground**: one splat material for the terrain and the verges, so they meet without a seam. It mixes the theme's ground (grass, sand or snow) with dirt (road edges and patches), rock (by slope) and snow (by height), each with its own normal detail. The terrain is now a smooth indexed grid with 12 m cells.
+  - **Run-off**: gravel traps with the gravel texture and loose stones. Shortcut paths use their surface's texture, and ice is a glassy pale blue.
+  - **Barriers**: concrete walls with the theme's stripe band on slower sections. Fast sections get Armco rails on posts, plus catch fences on the outside of the corner that follows. Tyre stacks stay at corners.
+  - **Furniture**: marshal posts about every 420 m, light poles along the start straight, 150/100/50 boards before every big corner, and billboards for fictional sponsors (Voltex, Nimbus Oil, Zap Cola, Kartronix, Skyfizz, Rapido Tyres).
+  - **Decals**: painted grid slots, the start/finish checkerboard, oil stains and skid marks.
+  - **Reflections**: a small prefiltered environment from the theme's sky (`scene.environment`, intensity 0.45), so wet patches, steel and paint reflect the sky instead of black. Phase 10 tunes it with tone mapping.
+- **Why**: Your request, and section 11.3.
+
 ---
 
 ## Gate 0 status

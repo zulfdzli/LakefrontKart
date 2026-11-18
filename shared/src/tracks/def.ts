@@ -200,6 +200,7 @@ export function buildTrackFromDef(def: TrackDef): Track {
   // walls stand WALL_GAP beyond the road edge, but close in inside tunnels, where another part of the road
   // runs close by (each side's walls stop halfway), and on the inside of very tight corners (no folded walls)
   const WALLD = HW.map((w) => w + WALL_GAP);
+  const CLEAR = new Array<number>(N).fill(1e9);
   for (const l of def.landmarks)
     if (l.kind === 'tunnel' && l.len) for (const i of span(l.at, l.at + l.len)) WALLD[i] = HW[i]! + TUNNEL_GAP;
   {
@@ -215,7 +216,8 @@ export function buildTrackFromDef(def: TrackDef): Track {
       }
       const da = Math.abs(wrapA(ANG[(i + 4) % N]! - ANG[(i - 4 + N) % N]!));
       const radius = da > 1e-6 ? (8 * DS) / da : 1e9;
-      const room = Math.min(Math.sqrt(d2) / 2 - 1.5, radius - 2.5);
+      CLEAR[i] = Math.sqrt(d2) / 2;
+      const room = Math.min(CLEAR[i]! - 1.5, radius - 2.5);
       WALLD[i] = clamp(Math.min(WALLD[i]!, room), HW[i]! + MIN_WALL_GAP, WALLD[i]!);
     }
   }
@@ -254,6 +256,7 @@ export function buildTrackFromDef(def: TrackDef): Track {
     id: def.id,
     HW,
     WALLD,
+    CLEAR,
     BT,
     offroad: def.offroad,
     zones,
