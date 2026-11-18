@@ -148,6 +148,14 @@
       </div>
       <button class="power" id="powerBtn" type="button" aria-label="Leave the race">✕</button>
       <div class="edge" id="edge"></div>
+      <div class="count" id="count"></div>
+      <div class="wrongWay" id="wrongWay">⚠ WRONG WAY</div>
+      <div class="finCard" id="finCard" hidden>
+        <small>FINISHED</small>
+        <b id="finPlace"></b>
+        <span id="finTime"></span>
+        <p>Waiting for the others…</p>
+      </div>
       <div class="toast" id="toast"></div>
     </main>
 
@@ -159,6 +167,8 @@
     <div id="busy" class="ov" hidden>
       <div class="spinner"></div>
       <b id="busyText">Reconnecting…</b>
+      <span id="busyHelp" hidden>Still trying. Check the phone is on the same Wi-Fi as the game.</span>
+      <button class="pbtn" id="busyReload" type="button" hidden>RELOAD</button>
     </div>
     <div id="pauseSheet" class="sheet" hidden>
       <div class="sheetCard">

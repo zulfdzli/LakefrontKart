@@ -16,6 +16,11 @@ const ICON: Record<string, string> = {
   shield: '🛡️',
   roll: '🎲',
 };
+const fmtT = (t: number): string => {
+  const m = Math.floor(t / 60),
+    s = t - m * 60;
+  return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2);
+};
 const ord = (n: number): string =>
   n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
 const DRIFT_COL = ['#fff3b0', '#4fc3f7', '#ffa726', '#e040fb'];
@@ -43,6 +48,8 @@ export class Remote {
   private readonly emptyItemIcon = $('itemIc').innerHTML;
   private readonly releasers: (() => void)[] = [];
   private toastTimer = 0;
+  private countTimer = 0;
+  private lastPlace = 0;
 
   constructor() {
     this.buildGrille();
@@ -292,6 +299,25 @@ export class Remote {
 
   setHud(h: HudUpdate): void {
     $('sPlace').innerHTML = `${h.place}<sup>${ord(h.place)}</sup><small>/${h.totalRacers}</small>`;
+    if (h.place !== this.lastPlace) {
+      // gained or lost a place: a quick pop, green up / red down
+      const el = $('sPlace');
+      el.classList.remove('up', 'down');
+      if (this.lastPlace) {
+        void el.offsetWidth;
+        el.classList.add(h.place < this.lastPlace ? 'up' : 'down');
+      }
+      this.lastPlace = h.place;
+    }
+    $('wrongWay').classList.toggle('on', h.wrongWay);
+    const fin = $('finCard');
+    if (h.finished && fin.hidden) {
+      $('finPlace').innerHTML = `${h.place}<sup>${ord(h.place)}</sup>`;
+      $('finTime').textContent = h.finishTime === null ? '' : fmtT(h.finishTime);
+      fin.hidden = false;
+      $('toast').classList.remove('on');
+      this.releaseAll();
+    } else if (!h.finished && !fin.hidden) fin.hidden = true;
     $('sLap').textContent = h.finished ? 'FINISHED' : `LAP ${h.lap}/${h.laps}`;
     const ic = h.item ? (ICON[h.item] ?? '🎁') : '';
     $('sItem').textContent = ic + (h.item === 'turbo3' && h.itemUses > 1 ? `×${h.itemUses}` : '');
@@ -317,6 +343,24 @@ export class Remote {
     g.classList.remove('pulse');
     void g.offsetWidth;
     g.classList.add('pulse');
+  }
+
+  /** Big countdown number (or GO!) over the remote; it pops in and fades by itself. */
+  count(text: string): void {
+    const c = $('count');
+    c.textContent = text;
+    c.className = 'count';
+    void c.offsetWidth;
+    c.className = 'count on' + (text === 'GO!' ? ' go' : '');
+    clearTimeout(this.countTimer);
+    this.countTimer = window.setTimeout(() => (c.className = 'count'), text === 'GO!' ? 900 : 800);
+  }
+
+  /** New race: clear the finish card and the place memory. */
+  resetRace(): void {
+    $('finCard').hidden = true;
+    $('wrongWay').classList.remove('on');
+    this.lastPlace = 0;
   }
 
   toast(text: string): void {

@@ -338,6 +338,13 @@ input {
   background: #fff;
   box-shadow: 0 0 0 3px var(--me);
 }
+.standings li .rk {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--label);
+  min-width: 1.1em;
+  text-align: right;
+}
 
 /* ---------------- driving remote (landscape) ---------------- */
 .remote {
@@ -805,6 +812,144 @@ input {
   transform: translate(-50%, 0);
 }
 
+/* place change, countdown, wrong way and the finish card (phase 7) */
+.sPlace.up {
+  animation: placeUp 0.6s ease-out;
+}
+.sPlace.down {
+  animation: placeDown 0.6s ease-out;
+}
+@keyframes placeUp {
+  0% {
+    transform: scale(1.5);
+    color: #2e7d32;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes placeDown {
+  0% {
+    transform: scale(1.3);
+    color: #c62828;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.count {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: min(42vh, 160px);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--glow);
+  text-shadow:
+    0 6px 0 rgba(40, 60, 100, 0.25),
+    0 0 30px rgba(77, 168, 255, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 12;
+}
+.count.on {
+  animation: countPop 0.8s ease-out both;
+}
+.count.go {
+  color: #2fbf62;
+  text-shadow:
+    0 6px 0 rgba(20, 80, 40, 0.25),
+    0 0 30px rgba(47, 191, 98, 0.6);
+}
+@keyframes countPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.8);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+}
+.wrongWay {
+  position: fixed;
+  left: 50%;
+  top: 58px;
+  transform: translateX(-50%);
+  padding: 6px 18px;
+  border-radius: 999px;
+  background: #e53935;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 1px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 11;
+}
+.wrongWay.on {
+  opacity: 1;
+  animation: blinkW 0.7s infinite;
+}
+@keyframes blinkW {
+  50% {
+    opacity: 0.55;
+  }
+}
+.finCard {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.97), rgba(232, 237, 245, 0.97));
+  animation: fade 0.3s ease-out both;
+  text-align: center;
+}
+.finCard[hidden] {
+  display: none;
+}
+.finCard small {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: #fff;
+  background: var(--me);
+  padding: 4px 18px;
+  border-radius: 999px;
+}
+.finCard b {
+  font-size: min(36vh, 130px);
+  line-height: 1;
+  color: var(--ink);
+  animation: rise 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+.finCard b sup {
+  font-size: 0.38em;
+}
+.finCard span {
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--label);
+}
+.finCard p {
+  margin: 8px 0 0;
+  font-weight: 600;
+  color: var(--label);
+}
+
 /* ---------------- overlays ---------------- */
 .ov {
   position: fixed;
@@ -981,6 +1126,21 @@ input {
   }
   .brand {
     font-size: 20px;
+  }
+  /* results: two columns (1-3 left, 4-6 right) so RACE AGAIN stays on screen */
+  .resTitle {
+    font-size: 24px;
+  }
+  .standings {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: repeat(3, auto);
+    grid-auto-flow: column;
+    gap: 6px 10px;
+  }
+  .standings li {
+    padding: 5px 12px;
+    font-size: 15px;
   }
   .chars {
     grid-template-columns: repeat(6, 1fr);

@@ -48,10 +48,20 @@ function updateRotate(): void {
 window.addEventListener('resize', updateRotate);
 window.screen.orientation?.addEventListener?.('change', updateRotate);
 
+/** Full-screen wait card. After 10 s it adds a hint and a RELOAD button (the token rejoins the same kart). */
+let busyTimer = 0;
 function busy(text: string | null): void {
+  const wasHidden = $('busy').hidden;
   $('busy').hidden = text === null;
   if (text) $('busyText').textContent = text;
+  if (text === null || wasHidden) {
+    clearTimeout(busyTimer);
+    $('busyHelp').hidden = $('busyReload').hidden = true;
+  }
+  if (text !== null && wasHidden)
+    busyTimer = window.setTimeout(() => ($('busyHelp').hidden = $('busyReload').hidden = false), 10000);
 }
+$('busyReload').addEventListener('click', () => location.reload());
 
 /* ---------------- join ---------------- */
 const roomParam = (params.get('room') ?? '').toUpperCase();
@@ -215,7 +225,7 @@ net.socket.on('phase', (p) => {
   $('pauseSheet').hidden = phase !== 'paused';
   $('pauseBy').textContent = phase === 'paused' && p.pausedBy ? `by ${p.pausedBy}` : '';
   if (phase === 'paused') remote.releaseAll();
-  if (phase === 'countdown') haptic('item');
+  if (phase === 'countdown') remote.resetRace();
   if (phase === 'lobby' && !BOT) ready = false;
   if (phase === 'lobby' && BOT) {
     ready = true;
@@ -232,6 +242,9 @@ net.socket.on('haptic', (h) => {
   haptic(h.kind);
   if (h.kind === 'boost') remote.flash('boost');
   if (h.kind === 'hit') remote.flash('hit');
+  if (h.kind === 'cd' && h.n) remote.count(String(h.n));
+  if (h.kind === 'go') remote.count('GO!');
+  if (h.kind === 'lap') remote.toast('FINAL LAP!');
 });
 net.socket.on('results', (r) => {
   results = r;
@@ -270,8 +283,8 @@ function renderResults(): void {
   $('resTitle').textContent = idx >= 0 ? `You finished ${place}${['st', 'nd', 'rd'][place - 1] ?? 'th'}` : 'RESULTS';
   $('standings').innerHTML = results.standings
     .map(
-      (s) =>
-        `<li class="${s.slot === j.slot ? 'me' : ''}" style="--c:${s.color}"><i></i><span>${CHARS.find((c) => c.id === s.characterId)?.emoji ?? ''} ${s.name.replace(/</g, '&lt;')}</span><b>${s.time === null ? '—' : fmtT(s.time)}</b></li>`,
+      (s, i) =>
+        `<li class="${s.slot === j.slot ? 'me' : ''}" style="--c:${s.color}"><em class="rk">${i + 1}</em><i></i><span>${CHARS.find((c) => c.id === s.characterId)?.emoji ?? ''} ${s.name.replace(/</g, '&lt;')}</span><b>${s.time === null ? '—' : fmtT(s.time)}</b></li>`,
     )
     .join('');
   $('leaderRow').hidden = !results.isLeader;

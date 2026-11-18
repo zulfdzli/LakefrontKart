@@ -228,3 +228,28 @@ Shots: `docs/screens/phase6/split-2.png` to `split-5.png`, `split-5-offline.png`
 | Gameplay | Input latency | **4** (was n/a) | Your iPhone shows a 54 ms round trip on Wi-Fi, so input arrives in about 27 ms (under the 50 ms target) |
 | Gameplay | Frame-time stability | 4 | 5 views at 1080p: p95 5.8 ms |
 | (all others) | | unchanged | Art items wait for phases 9–10 (D27, D38); mechanics items for phase 11 |
+
+---
+
+## Phase 7: phone feedback (2026-11-18)
+
+### What changed (D40)
+- **During the race**: a 3-2-1-GO countdown with vibration on every phone, a FINAL LAP alert, place-change pops and a WRONG WAY chip.
+- **Finishing**: a finish card on the phone the moment you cross the line, then the results. On landscape phones the results use two columns with rank numbers.
+- **Reconnecting**: the "Reconnecting…" card adds a hint and a RELOAD button after 10 s.
+- **Server**: relays only known haptic kinds.
+- **Tests**: `npm run e2e` now has **18 checks** (was 15). The new ones: the finish card shows place and time; results show RACE AGAIN for the leader and "Waiting for the leader" for others; RACE AGAIN restarts and the phones count down to GO.
+
+### Capture
+- `npm run e2e -- --phase phase7`: **18/18**. Shots: `phone-finished.png`, `phone-results-leader.png`, plus the earlier set.
+
+### Fixes this loop (the 3 lowest items this phase can touch)
+1. **UI: results on a landscape phone.** Six rows pushed RACE AGAIN and LOBBY off the bottom of an iPhone held sideways, so the leader could not see them without scrolling. They now use two columns.
+2. **UI: nothing on the phone at the finish.** The phone kept showing the controls and "FINISHED" in small text until the whole race ended. Now a finish card appears straight away.
+3. **Game feel: no start signal on the phone.** Phones got a single tick when the countdown began and nothing on GO, against section 6.4. Now they count 3-2-1-GO, with vibration.
+
+### Scores (compared with phase 6)
+| Area | Item | Score | Reason |
+|---|---|---|---|
+| Graphics | UI finish | 4 | The phone screens now cover the whole race: countdown, alerts, finish card and results |
+| (all others) | | unchanged | |

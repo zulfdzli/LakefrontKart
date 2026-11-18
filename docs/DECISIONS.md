@@ -374,6 +374,20 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **Per-object LOD**: moved to phase 13. Five views at 1080p take a median 3.7 ms per frame (p95 5.8 ms) on the GTX 1650, so there is no need yet. The draw-call budget (535 calls with 5 views) is phase 13 work too.
 - **Why**: Section 6.2 and the readability score.
 
+### D40 · Phone feedback (2026-11-18, phase 7, my decision)
+- **Q**: What does the phone show and feel during a race, beyond the controls?
+- **A**:
+  - **Countdown**: every phone shows 3-2-1-GO with a tick on each number and a strong pattern on GO (section 6.4: all phones vibrate on GO). These ride the reliable `haptic` message as kinds `cd` (with `n`) and `go`, not the 10 Hz volatile HUD, so a dropped packet cannot skip GO.
+  - **Final lap**: a "FINAL LAP!" toast and a triple pulse (`lap`).
+  - **Place changes**: the place number pops, green when you gain a place and red when you lose one.
+  - **Wrong way**: a blinking red WRONG WAY chip under the top strip.
+  - **Finishing**: a full-screen card with your place, time and "Waiting for the others…", the moment you cross the line (section 7.2: "You finished 2nd", then the standings). The controls are released, since the AI drives on.
+  - **Results**: on short landscape phones the standings use two columns (1–3 left, 4–6 right) with rank numbers, so RACE AGAIN and LOBBY are always on screen.
+  - **Reconnecting**: after 10 s the "Reconnecting…" card adds a Wi-Fi hint and a RELOAD button. A reload rejoins the same kart with the saved token.
+  - **Validation**: the server now relays only known haptic kinds, with a whole-number `n`.
+  - **HUD data**: `HudUpdate` gains `finishTime` and `wrongWay`.
+- **Why**: Section 7.2 (results flow), section 6.4 (GO on every phone), and section 12 (feedback) without waiting for the host screen.
+
 ---
 
 ## Gate 0 status

@@ -18,7 +18,21 @@ export type SteeringScheme = 'buttons' | 'slider';
 export type ItemFire = 'forward' | 'back' | null;
 export type GameMode = 'single' | 'gp';
 import type { Difficulty } from './ai';
-export type HapticKind = 'hit' | 'boost' | 'item' | 'finish' | 'drift1' | 'drift2' | 'drift3';
+/** Phone feedback kinds. 'cd' (n = 3, 2, 1) and 'go' drive the phone's countdown; 'lap' (n = lap) the FINAL LAP alert. */
+export const HAPTIC_KINDS = [
+  'hit',
+  'boost',
+  'item',
+  'finish',
+  'drift1',
+  'drift2',
+  'drift3',
+  'cd',
+  'go',
+  'lap',
+] as const;
+export type HapticKind = (typeof HAPTIC_KINDS)[number];
+export const isHapticKind = (v: unknown): v is HapticKind => (HAPTIC_KINDS as readonly unknown[]).includes(v);
 export type JoinErrorReason = 'room-not-found' | 'room-full' | 'race-in-progress' | 'name-taken' | 'bad-request';
 
 /* ---------------- controller → server ---------------- */
@@ -99,6 +113,10 @@ export interface HudUpdate {
   drifting: boolean;
   driftLevel: number;
   finished: boolean;
+  /** Race time when this player finished, or null. */
+  finishTime: number | null;
+  /** Driving the wrong way for over a second. */
+  wrongWay: boolean;
 }
 
 export interface Standing {
@@ -173,7 +191,7 @@ export interface ServerToController {
   'lobby:update': (p: LobbyUpdate) => void;
   phase: (p: { phase: Phase; pausedBy?: string }) => void;
   hud: (p: HudUpdate) => void;
-  haptic: (p: { kind: HapticKind }) => void;
+  haptic: (p: { kind: HapticKind; n?: number }) => void;
   results: (p: { standings: Standing[]; isLeader: boolean }) => void;
   'host:status': (p: { online: boolean }) => void;
   'select:error': (p: { reason: 'taken' | 'unknown' }) => void;
@@ -184,7 +202,7 @@ export interface HostToServer {
   'host:create': (ack: Ack<HostCreateOk>) => void;
   'host:resume': (p: { room: string; hostToken: string }, ack: Ack<{ ok: boolean }>) => void;
   'host:state': (p: HostState) => void;
-  'host:haptic': (p: { slot: number; kind: HapticKind }) => void;
+  'host:haptic': (p: { slot: number; kind: HapticKind; n?: number }) => void;
   'host:results': (p: { standings: Standing[] }) => void;
   'host:kick': (p: { slot: number }) => void;
   'host:config': (p: LeaderConfig) => void;

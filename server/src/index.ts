@@ -11,6 +11,7 @@ import express from 'express';
 import { Server, type Namespace, type Socket } from 'socket.io';
 import {
   cleanName,
+  isHapticKind,
   sanitizeInput,
   type ControllerToServer,
   type ServerToController,
@@ -116,7 +117,9 @@ hostNs.on('connection', (socket) => {
   });
   socket.on('host:haptic', (h) => {
     const p = room?.slots[h?.slot];
-    if (p?.socketId) ctrlNs.to(p.socketId).emit('haptic', { kind: h.kind });
+    if (!p?.socketId || !isHapticKind(h.kind)) return;
+    const n = typeof h.n === 'number' && Number.isFinite(h.n) ? Math.round(h.n) : undefined;
+    ctrlNs.to(p.socketId).emit('haptic', n === undefined ? { kind: h.kind } : { kind: h.kind, n });
   });
   socket.on('host:results', (r) => {
     if (!room || !Array.isArray(r?.standings)) return;

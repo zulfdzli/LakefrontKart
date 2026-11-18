@@ -232,6 +232,50 @@ async function main(): Promise<void> {
     await host.waitForFunction(() => window.__tk.session()!.s.humans[1]!.ai === false, null, { timeout: 15000 });
     check('reopening the page restores control of the same kart', await b2p.isVisible('#drive'));
 
+    // phase 7: everyone races to the line (autopilot); each phone shows its finish card, then the results with
+    // the leader's buttons; RACE AGAIN starts a new race and the phones count down 3-2-1-GO
+    await host.evaluate(() => {
+      const ses = window.__tk.session() as unknown as {
+        game: { setHumanAi(slot: number, on: boolean): void };
+        s: { phase: string; humans: { slot: number; finished: boolean }[] };
+      };
+      for (const k of ses.s.humans) ses.game.setHumanAi(k.slot, true);
+      for (let i = 0; i < 60 * 240 && !ses.s.humans.every((k) => k.finished); i++) window.__tk.advance(1 / 60);
+    });
+    let finText = '';
+    try {
+      await aPortrait.waitForSelector('#finCard:not([hidden])', { timeout: 5000 });
+      finText = ((await aPortrait.textContent('#finCard')) ?? '').replace(/\s+/g, ' ').trim();
+      await aPortrait.waitForTimeout(500);
+      await aPortrait.screenshot({ path: path.join(OUT, 'phone-finished.png') });
+    } catch {
+      /* reported below */
+    }
+    check('a finished player sees their place and time on the phone', /FINISHED \d/.test(finText), finText);
+    await aPortrait.waitForSelector('#results:not([hidden])', { timeout: 15000 });
+    const resTitle = (await aPortrait.textContent('#resTitle')) ?? '';
+    await aPortrait.waitForTimeout(400);
+    await aPortrait.screenshot({ path: path.join(OUT, 'phone-results-leader.png') });
+    await b2p.waitForSelector('#results:not([hidden])', { timeout: 10000 });
+    const others = !(await b2p.isVisible('#leaderRow')) && (await b2p.isVisible('#resNote'));
+    check(
+      'results on every phone: leader gets RACE AGAIN, others wait for the leader',
+      /You finished/.test(resTitle) && (await aPortrait.isVisible('#againBtn')) && others,
+      resTitle,
+    );
+    await aPortrait.click('#againBtn');
+    await aPortrait.waitForSelector('#drive:not([hidden])', { timeout: 10000 });
+    let go = false;
+    try {
+      await aPortrait.waitForFunction(() => document.getElementById('count')?.textContent === 'GO!', null, {
+        timeout: 10000,
+      });
+      go = true;
+    } catch {
+      /* reported below */
+    }
+    check('RACE AGAIN restarts; phones count down to GO', go && !(await aPortrait.isVisible('#finCard')));
+
     // host refresh keeps the room and the players
     await host.reload();
     await host.waitForFunction(() => window.__tk?.state().room && window.__tk.lobby()?.players.length === 5, null, {

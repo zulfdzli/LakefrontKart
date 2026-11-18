@@ -110,8 +110,8 @@ export class HostNet {
     this.socket.emit('host:state', st);
   }
 
-  haptic(slot: number, kind: HapticKind): void {
-    this.socket.emit('host:haptic', { slot, kind });
+  haptic(slot: number, kind: HapticKind, n?: number): void {
+    this.socket.emit('host:haptic', n === undefined ? { slot, kind } : { slot, kind, n });
   }
 
   results(standings: Standing[]): void {

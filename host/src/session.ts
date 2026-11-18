@@ -54,8 +54,8 @@ export class RaceSession {
   private readonly panel: SharedPanel;
   private readonly camPositions: THREE.Vector3[] = [];
   onResults: ((order: Kart[]) => void) | null = null;
-  /** Feedback for a player's phone (vibration). */
-  onHaptic: ((slot: number, kind: HapticKind) => void) | null = null;
+  /** Feedback for a player's phone (vibration, countdown, alerts). */
+  onHaptic: ((slot: number, kind: HapticKind, n?: number) => void) | null = null;
 
   constructor(
     opts: GameOptions,
@@ -232,6 +232,8 @@ export class RaceSession {
       drifting: k.drifting,
       driftLevel: k.drifting ? k.driftLevel : 0,
       finished: k.finished,
+      finishTime: k.finished ? k.finishTime : null,
+      wrongWay: k.wrongT > 1 && !k.finished,
     };
   }
 
@@ -286,9 +288,12 @@ export class RaceSession {
       switch (e.type) {
         case 'cd':
           a.tone(440, 0.2, 'square', 0.1);
+          // every phone shows the number and ticks (section 6.4)
+          for (const p of this.players) this.onHaptic?.(p.slot, 'cd', e.n);
           break;
         case 'go':
           a.tone(880, 0.5, 'square', 0.12);
+          for (const p of this.players) this.onHaptic?.(p.slot, 'go');
           break;
         case 'driftstart':
           if (me) a.tone(220, 0.12, 'sawtooth', 0.05, 330);
@@ -383,7 +388,10 @@ export class RaceSession {
             if (k.lap >= 2 && k.lap <= s.laps) {
               me.hud.say(k.lap === s.laps ? 'FINAL LAP!' : 'LAP ' + k.lap, 1400, 'small gold');
               a.tone(700, 0.3, 'triangle', 0.1, 1000);
-              if (k.lap === s.laps) a.tempo = 1.1;
+              if (k.lap === s.laps) {
+                a.tempo = 1.1;
+                this.onHaptic?.(me.slot, 'lap', k.lap);
+              }
             }
           }
           break;

@@ -174,7 +174,7 @@ function startRace(
     session.setOffline(p.slot, !autopilot && !!lp && !lp.connected);
   }
   session.onResults = showResults;
-  session.onHaptic = (slot, kind) => net.haptic(slot, kind);
+  session.onHaptic = (slot, kind, n) => net.haptic(slot, kind, n);
   layoutViews();
   lastInput.clear();
   inRace = true;
