@@ -6,9 +6,10 @@
  */
 import * as THREE from 'three';
 import { DEFAULT_HANDLING, RESCUE_T, SPIN_T, clamp, wrapA, type Character, type Kart } from '@tk/shared';
-import { P_, merge, jitter, canvasTex, box, cyl, ico, cone, octa, nonIdx, hexStr, type Part } from './geo';
+import { P_, merge, jitter, canvasTex, box, cyl, ico, cone, octa, hexStr, type Part } from './geo';
 import { INK, DARK, WHITE, kartPaint } from './palette';
-import { CAR, buildCar, buildDecals, buildWheels, helmetParts } from './car';
+import { CAR, CAR_SCALE, buildCar, buildDecals, buildWheels, helmetParts } from './car';
+import { holoShell } from './holo';
 import type { Materials } from './materials';
 
 const HOP_T = DEFAULT_HANDLING.driftHop;
@@ -183,7 +184,7 @@ interface SharedKartFx {
 let fx: SharedKartFx | null = null;
 function sharedFx(): SharedKartFx {
   if (fx) return fx;
-  const shieldGeo = nonIdx(ico(2.7, 1));
+  const shieldGeo = new THREE.SphereGeometry(2.7, 32, 20);
   shieldGeo.computeVertexNormals();
   fx = {
     shadowGeo: new THREE.CircleGeometry(2.4, 10).rotateX(-Math.PI / 2),
@@ -203,31 +204,52 @@ function nameTag(name: string, color: number): THREE.Sprite {
     256,
     64,
     (g, w, h) => {
-      g.fillStyle = hexStr(color);
-      g.strokeStyle = '#1d1b2e';
-      g.lineWidth = 6;
-      g.beginPath();
-      g.moveTo(30, 6);
-      g.lineTo(w - 30, 6);
-      g.quadraticCurveTo(w - 6, 6, w - 6, 32);
-      g.quadraticCurveTo(w - 6, h - 6, w - 30, h - 6);
-      g.lineTo(30, h - 6);
-      g.quadraticCurveTo(6, h - 6, 6, 32);
-      g.quadraticCurveTo(6, 6, 30, 6);
-      g.closePath();
+      const pill = (inset: number): void => {
+        const r = (h - inset * 2) / 2;
+        g.beginPath();
+        g.moveTo(inset + r, inset);
+        g.lineTo(w - inset - r, inset);
+        g.arc(w - inset - r, h / 2, r, -Math.PI / 2, Math.PI / 2);
+        g.lineTo(inset + r, h - inset);
+        g.arc(inset + r, h / 2, r, Math.PI / 2, (Math.PI * 3) / 2);
+        g.closePath();
+      };
+      // D45: a dark glass pill with a glowing rim in the kart colour
+      g.shadowColor = hexStr(color);
+      g.shadowBlur = 10;
+      pill(8);
+      g.fillStyle = 'rgba(14,18,38,0.72)';
       g.fill();
+      g.shadowBlur = 0;
+      g.lineWidth = 3;
+      g.strokeStyle = hexStr(color);
       g.stroke();
-      g.font = 'bold 36px Fredoka, sans-serif';
+      const hl = g.createLinearGradient(0, 8, 0, h / 2);
+      hl.addColorStop(0, 'rgba(255,255,255,0.28)');
+      hl.addColorStop(1, 'rgba(255,255,255,0)');
+      pill(11);
+      g.fillStyle = hl;
+      g.fill();
+      g.fillStyle = hexStr(color);
+      g.beginPath();
+      g.arc(34, h / 2, 7, 0, Math.PI * 2);
+      g.fill();
+      g.font = 'bold 32px Fredoka, sans-serif';
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      g.lineWidth = 6;
-      g.strokeText(name, w / 2, h / 2 + 2);
       g.fillStyle = '#fff';
-      g.fillText(name, w / 2, h / 2 + 2);
+      g.fillText(name, w / 2 + 10, h / 2 + 2);
     },
     true,
   );
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false }));
+  const s = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: t,
+      transparent: true,
+      depthWrite: false,
+      color: new THREE.Color(1.1, 1.1, 1.1),
+    }),
+  );
   s.scale.set(4.6, 1.15, 1);
   s.position.y = 4.5;
   return s;
@@ -283,6 +305,7 @@ export class KartView {
     this.paint = kartPaint(slot);
     const model = assets.build(ch, this.paint);
     this.root.rotation.order = 'YXZ';
+    this.root.scale.setScalar(CAR_SCALE);
     this.body.rotation.order = 'YXZ';
     this.root.add(this.body);
     const chassis = new THREE.Mesh(model.chassis, M.kart);
@@ -328,16 +351,8 @@ export class KartView {
       this.body.add(f);
       this.flames.push(f);
     }
-    this.shield = new THREE.Mesh(
-      S.shieldGeo,
-      new THREE.MeshLambertMaterial({
-        color: 0x80d8ff,
-        transparent: true,
-        opacity: 0.3,
-        depthWrite: false,
-        emissive: 0x1565c0,
-      }),
-    );
+    // D45: a smooth holographic bubble instead of the faceted blob
+    this.shield = new THREE.Mesh(S.shieldGeo, holoShell(0x8fd8ff, 1.6, 0.12));
     this.shield.position.y = 1.0;
     this.shield.scale.set(1.0, 0.72, 1.45);
     this.shield.visible = false;
@@ -431,8 +446,8 @@ export class KartView {
     this.body.scale.set(1 - this.sus * 0.35, 1 + this.sus * 0.7, 1 - this.sus * 0.35);
     this.body.visible =
       (k.invuln <= 0 || Math.floor(time * 14) % 2 === 0) && !(k.rescue > 0 && Math.abs(k.rescue - RESCUE_T / 2) < 0.08);
-    this.rear.rotation.x += (k.sp * dt) / CAR.rearR;
-    for (const w of this.fronts) w.rotation.x += (k.sp * dt) / CAR.frontR;
+    this.rear.rotation.x += (k.sp * dt) / (CAR.rearR * CAR_SCALE);
+    for (const w of this.fronts) w.rotation.x += (k.sp * dt) / (CAR.frontR * CAR_SCALE);
     for (const p of this.pivots) p.rotation.y = -k.steerS * 0.45;
     this.head.rotation.y +=
       (-k.steerS * 0.45 - (k.drifting ? k.driftDir * 0.25 : 0) - this.head.rotation.y) * (1 - Math.exp(-8 * dt));
@@ -452,8 +467,8 @@ export class KartView {
     this.shield.visible = k.shield > 0;
     if (k.shield > 0) {
       this.shield.rotation.y += dt * 1.5;
-      (this.shield.material as THREE.MeshLambertMaterial).opacity =
-        0.22 + Math.sin(time * 6) * 0.06 + (k.shield < 2 ? (Math.floor(time * 8) % 2) * 0.15 : 0);
+      (this.shield.material as THREE.MeshStandardMaterial).opacity =
+        0.1 + Math.sin(time * 6) * 0.03 + (k.shield < 2 ? (Math.floor(time * 8) % 2) * 0.12 : 0);
     }
     this.stars.visible = k.spin > 0;
     if (k.spin > 0) this.stars.rotation.y += dt * 9;

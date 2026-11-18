@@ -304,7 +304,7 @@ export const DEFAULT_HANDLING: Readonly<Handling> = {
   driftDrag: 0.22,
   driftKick: 3.2,
   driftHop: 0.16,
-  speedMul: 1.22,
+  speedMul: 1.3,
   turnRate: 2.15,
   turnFalloff: 0.22,
   aiDriftIn: 0.42,

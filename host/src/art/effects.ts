@@ -2,13 +2,14 @@
  * Visual effects (prototype): pooled instanced particles, skid marks, shockwave rings, projectile meshes,
  * per-kart trails and event bursts. Uses a seeded generator so captures are reproducible.
  */
-import { CAR } from './car';
+import { CAR_WORLD as CAR } from './car';
 import * as THREE from 'three';
 import { Rng, type GameEvent, type GameState, type Kart } from '@tk/shared';
 import { P_, merge, jitter, ico, cyl, octa, hash3 } from './geo';
 import { DRIFT_COL, CONFETTI } from './palette';
 import type { Materials } from './materials';
 import type { KartView } from './kart';
+import { SoftPool } from './particles';
 
 const _o = new THREE.Object3D();
 const _c = new THREE.Color();
@@ -147,7 +148,9 @@ export class Effects {
   readonly group = new THREE.Group();
   private readonly rng = new Rng(0x5eed);
   private readonly sparks: Pool;
-  private readonly puffs: Pool;
+  private readonly puffs: SoftPool;
+  /** Track theme: decides spray (wet Frosty), blowing dust (Canyon) and kicked-up snow. */
+  theme = 'meadows';
   private readonly skPos = new Float32Array(SKMAX * 18);
   private readonly skGeo = new THREE.BufferGeometry();
   private skHead = 0;
@@ -191,9 +194,15 @@ export class Effects {
   private readonly live = new Set<object>();
 
   constructor(private readonly M: Materials) {
-    this.sparks = new Pool(octa(0.22), new THREE.MeshBasicMaterial({ color: 0xffffff }), 520, this.rng);
-    this.puffs = new Pool(ico(0.6, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), 180, this.rng);
-    this.group.add(this.sparks.mesh, this.puffs.mesh);
+    // sparks are HDR-bright (colour above 1) so the bloom pass makes them glow
+    this.sparks = new Pool(
+      octa(0.2),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.6, 1.6) }),
+      620,
+      this.rng,
+    );
+    this.puffs = new SoftPool(700);
+    this.group.add(this.sparks.mesh, this.puffs.points);
     // skid marks: ring buffer of quads, parked far below the world until used
     for (let i = 1; i < this.skPos.length; i += 3) this.skPos[i] = -999;
     this.skGeo.setAttribute('position', new THREE.BufferAttribute(this.skPos, 3));
@@ -418,9 +427,9 @@ export class Effects {
     }
     if (k.boost > 0)
       this.sparks.emit(
-        ix - fx * 3.4,
-        iy + 1.2,
-        iz - fz * 3.4,
+        ix + fx * CAR.exhaustZ,
+        iy + CAR.exhaustY,
+        iz + fz * CAR.exhaustZ,
         -fx * 8 + this.rnd(-1, 1),
         this.rnd(0, 2),
         -fz * 8 + this.rnd(-1, 1),
@@ -472,6 +481,61 @@ export class Effects {
         0.7,
         0,
         iy - 5,
+      );
+    // exhaust haze at speed, and what the tyres kick up: wet spray on Frosty, blowing dust in the Canyon
+    const sp = Math.abs(k.sp);
+    if (sp > 6 && this.rng.next() < 0.25)
+      this.puffs.emit(
+        ix - fx * 2.9,
+        iy + 0.75,
+        iz - fz * 2.9,
+        -fx * 2,
+        0.6,
+        -fz * 2,
+        0xd0d0d0,
+        0.55,
+        0.35,
+        -0.4,
+        iy,
+        1,
+        0.25,
+      );
+    if (sp > 18 && !k.offroad && k.rescue <= 0) {
+      const wet = this.theme === 'frosty',
+        dusty = this.theme === 'canyon';
+      if ((wet || dusty) && this.rng.next() < (wet ? 0.8 : 0.45))
+        for (const s of [-1, 1])
+          this.puffs.emit(
+            ix + rx * s * CAR.rearX + fx * (CAR.rearZ - 0.4),
+            iy + 0.3,
+            iz + rz * s * CAR.rearX + fz * (CAR.rearZ - 0.4),
+            -fx * sp * 0.15 + this.rnd(-1, 1),
+            this.rnd(0.6, 1.8),
+            -fz * sp * 0.15 + this.rnd(-1, 1),
+            wet ? 0xe6f0ff : 0xd8b48a,
+            wet ? 0.45 : 0.9,
+            wet ? 0.45 : 0.8,
+            wet ? 2.5 : -0.2,
+            iy,
+            1,
+            wet ? 0.18 : 0.26,
+          );
+    }
+    if (k.offroad && sp > 8 && this.theme === 'frosty' && this.rng.next() < 0.7)
+      this.puffs.emit(
+        ix + this.rnd(-1, 1),
+        iy + 0.4,
+        iz + this.rnd(-1, 1),
+        this.rnd(-2, 2),
+        this.rnd(2, 4),
+        this.rnd(-2, 2),
+        0xffffff,
+        0.8,
+        0.9,
+        3,
+        iy,
+        1,
+        0.6,
       );
     const skidding = (k.drifting || slip > 4.5 || (k.input.brake && k.sp > 12)) && !k.offroad && k.rescue <= 0;
     for (let w = 0; w < 2; w++) {
@@ -650,6 +714,7 @@ export class Effects {
   }
 
   dispose(): void {
+    this.puffs.dispose();
     this.group.traverse((o) => {
       if (o instanceof THREE.Mesh) {
         o.geometry.dispose();

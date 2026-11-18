@@ -54,7 +54,7 @@ describe('track layouts', () => {
         T = getTrack(id),
         st = trackStats(T);
       expect(st.len).toBeGreaterThan(3200);
-      expect(st.len).toBeLessThan(5000); // the lap-time target decides the length (D41, D43)
+      expect(st.len).toBeLessThan(5300); // the lap-time target decides the length (D41, D43)
       // the inside road edge never folds over; invented tracks keep wide corners (traced ones keep the real ones)
       const hwAt = T.HW[Math.round(st.minRadiusAt * T.N) % T.N]!;
       expect(st.minRadius).toBeGreaterThan(def.traced ? hwAt + 2 : 25);

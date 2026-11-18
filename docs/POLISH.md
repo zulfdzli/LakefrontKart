@@ -341,3 +341,30 @@ Open for phase 11: AI drifting, AI shortcuts, the character spread (target 4%) a
 | Graphics | Lighting and shadow quality | 2 | The sky reflection helps, but tone mapping, soft shadows and AO are phase 10 |
 | Gameplay | Frame-time stability | 4 | 5 views at 1080p: p95 8.6 ms |
 | (all others) | | unchanged | |
+
+---
+
+## Phase 10: cinematic art pass (2026-11-18, D45)
+
+### Capture (GTX 1650, 1920 × 1080, vsync)
+| Views | FPS | Draw calls | Triangles |
+|---|---|---|---|
+| 1 | 60 | 134–149 | 0.5M–0.8M |
+| 5 | 60 | 540 | 2.4M |
+
+Shots: `docs/screens/p10-final/` (Meadows, all split counts), `p10-canyon/`, `p10-frosty/`, `p10-sepang/`.
+
+### Fixes this loop
+1. **Split-screen went black** after moving to an HDR render target. The target ignored the renderer's viewport, so every view drew over the last; and a multisampled target is resolved after each render call. Each view now sets the target's own viewport and scissor, the target is not multisampled, and SMAA anti-aliases at the end.
+2. **Five views at 44 FPS** (2.4M triangles, 610 calls, frame spikes). Lighter trees, no tree shadows with 3 or more views, thinner grass, and a 1024 px shadow map with 4 or more: 60 FPS at full resolution.
+3. **Over-bright effects**: a milky item-box shell, name tags blooming, and a bright ring around Frosty puddles. Toned down; puddles now have soft edges.
+
+### Scores (compared with phase 9)
+| Area | Item | Score | Reason |
+|---|---|---|---|
+| Graphics | Lighting and shadow quality | **4** (was 2) | Soft shadows, tone mapping, sky light, fog, flare and bloom, a distinct mood per track |
+| Graphics | Effect quality | **4** (was 3) | Soft smoke, spray and dust, glowing sparks, ambient air, holographic boxes and shield |
+| Graphics | Kart and character detail | 3 | The reference race car in PBR clear-coat; drivers are not yet animated |
+| Graphics | Colour harmony | **4** (was 3) | Graded per track; warm, cool and misty looks that match the references |
+| Graphics | UI finish | 4 | Glass HUD and name tags |
+| Gameplay | Frame-time stability | 4 | 5 views at 60 FPS with vsync at 1080p |

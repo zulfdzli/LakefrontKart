@@ -1,44 +1,39 @@
 /**
- * Shared materials. Phase 4 keeps the prototype's toon look; D5 moves to soft stylized PBR in the art pass.
+ * Shared materials. D45 (art pass): soft physically based materials replace the prototype's toon ramp.
+ * Karts get a clear-coated paint (car paint with a glossy lacquer), props and scenery are matte PBR, and all of
+ * them pick up the sky's image-based light (scene.environment).
  */
 import * as THREE from 'three';
 import { INK } from './palette';
 
-/** 3-step toon ramp. Current three.js samples gradientMap.r, so a single channel is correct here. */
-function toonRamp(): THREE.DataTexture {
-  const t = new THREE.DataTexture(new Uint8Array([95, 175, 255]), 3, 1, THREE.RedFormat);
-  t.minFilter = THREE.NearestFilter;
-  t.magFilter = THREE.NearestFilter;
-  t.generateMipmaps = false;
-  t.needsUpdate = true;
-  return t;
-}
-
 export interface Materials {
-  kart: THREE.MeshToonMaterial;
-  prop: THREE.MeshToonMaterial;
-  inst: THREE.MeshToonMaterial;
-  instL: THREE.MeshLambertMaterial;
-  land: THREE.MeshLambertMaterial;
+  kart: THREE.MeshPhysicalMaterial;
+  prop: THREE.MeshStandardMaterial;
+  inst: THREE.MeshStandardMaterial;
+  instL: THREE.MeshStandardMaterial;
+  land: THREE.MeshStandardMaterial;
   line: THREE.MeshBasicMaterial;
   dispose(): void;
 }
 
 export function createMaterials(): Materials {
-  const grad = toonRamp();
-  const toon = (): THREE.MeshToonMaterial => new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: grad });
   const m = {
-    kart: toon(),
-    prop: toon(),
-    inst: toon(),
-    instL: new THREE.MeshLambertMaterial({ vertexColors: true }),
-    land: new THREE.MeshLambertMaterial({ vertexColors: true }),
+    kart: new THREE.MeshPhysicalMaterial({
+      vertexColors: true,
+      roughness: 0.38,
+      metalness: 0.05,
+      clearcoat: 0.9,
+      clearcoatRoughness: 0.12,
+    }),
+    prop: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.02 }),
+    inst: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0 }),
+    instL: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 }),
+    land: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 }),
     line: new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide }),
   };
   return {
     ...m,
     dispose() {
-      grad.dispose();
       for (const mat of Object.values(m)) mat.dispose();
     },
   };

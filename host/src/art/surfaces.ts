@@ -88,7 +88,7 @@ export function roadMaterial(th: Theme): THREE.MeshStandardMaterial {
         float wear = smoothstep(0.35, 0.8, texture2D(tMacro, wp / 2.7).r * 0.8 + det.r * 0.4 + rubber * 0.3);
         float paint = max(eLine, cLine) * (1.0 - wear * 0.7);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.82, 0.82, 0.8), paint);
-        float pud = smoothstep(0.72, 0.78, mac2) * smoothstep(0.35, 0.6, mac) * uPuddle * (1.0 - paint);
+        float pud = smoothstep(0.66, 0.8, mac2) * smoothstep(0.3, 0.6, mac) * uPuddle * (1.0 - paint);
         diffuseColor.rgb *= 1.0 - pud * 0.3;`,
       )
       .replace(
@@ -101,7 +101,7 @@ export function roadMaterial(th: Theme): THREE.MeshStandardMaterial {
       .replace(
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>
-        normal = normalize(mix(normal, normalize(vNormal), max(paint * 0.6, pud)));`,
+        normal = normalize(mix(normal, normalize(vNormal), max(paint * 0.6, smoothstep(0.0, 0.5, pud))));`,
       );
   };
   m.customProgramCacheKey = () => 'tk-road';

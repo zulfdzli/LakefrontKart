@@ -481,6 +481,50 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **Effects**: skid marks and drift sparks now come from the new rear wheel positions; boost flames come from the exhaust.
 - **Why**: Your request. Real trademarks are not copied (section 9).
 
+### D45 · Cinematic art pass from reference/graphics/graphics.jpeg (2026-11-18, phase 10, your request)
+- **Q**: You asked to turn the game into the look of your four reference shots ("next-gen" stylised cartoon with rich lighting, nature, particles and lens effects), keeping the layout, camera and HUD. You also asked mid-way for the car to be a little bigger and faster. What changed?
+- **A**:
+  - **Post-processing** (`host/src/post.ts`), per split-screen view: the views render into one HDR target, then:
+    - **Atmosphere**: height fog with sun scattering and low-lying mist.
+    - **Lens flare**: only when the sun is actually visible in that view.
+    - **Speed blur**: towards the screen edges, with speed and boost.
+    - **Bloom**: on the bright parts.
+    - **Finish**: colour grading, vignette, chromatic fringe while boosting, and fine film grain.
+    - **Output**: ACES Filmic tone mapping, then SMAA anti-aliasing. The target is not multisampled, because a multisampled target loses the earlier split-screen views; SMAA smooths the edges instead.
+    - `?nopost` turns it all off, and Q cycles the quality tier (auto, High, Medium, Low).
+  - **Lighting per track**:
+    - **Meadows**: golden late afternoon, a low warm sun and long shadows.
+    - **Canyon**: a blazing sun with flare and dusty haze.
+    - **Frosty**: misty sunset twilight.
+    - **Sepang**: fog-kissed rolling hills.
+    - Shadows are soft (PCF soft) over a wider area. Sky reflections light everything.
+  - **Materials**: the toon ramp is gone. Physically based materials throughout, and clear-coated paint on the cars.
+  - **Nature** (`host/src/art/nature.ts`):
+    - a ridged distant mountain range: snow-capped peaks, banded sandstone buttes, or green hills;
+    - soft billboard clouds;
+    - swaying 3D grass on every verge and field (up to 40k tufts);
+    - colossal eroded sandstone formations in the canyon;
+    - snow drifts against the barriers on Frosty;
+    - festive bunting along the start straight.
+  - **Trees**: leafy broadleaf clusters, darker underneath, and layered pines, frosted on Frosty and denser everywhere.
+  - **Start gantry**: rustic steel truss towers with a sagging fabric "TURBO KARTS" banner.
+  - **Particles** (`host/src/art/particles.ts`):
+    - soft camera-facing smoke, dust and spray instead of solid shapes;
+    - exhaust haze, wet tyre spray on Frosty and blowing dust behind the cars in the Canyon, plus kicked-up snow;
+    - glowing sparks;
+    - air in every track: leaves and pollen, desert dust, falling snow, or mist motes.
+  - **Item boxes and shield**: holographic. The boxes are a translucent, iridescent rounded shell around a glowing "?" core, and the shield is a soap-bubble sphere.
+  - **HUD**: glass panels with soft shadows and glowing indicators; a gradient place number; glass name tags with a glowing rim in the car colour. The layout is unchanged.
+  - **Your mid-way request**:
+    - **Bigger**: the car is drawn 15% bigger. Its collision size is unchanged.
+    - **Faster**: speed goes from 1.22 to 1.30 (about +7%). The tracks are 7 to 10% longer to keep 2-minute laps: Meadows 5.02 km, Canyon 5.08 km, Frosty 4.97 km and Sepang 4.73 km, with Normal AI laps of 118 to 120 s.
+  - **Performance** (GTX 1650, 1920 × 1080, vsync): 60 FPS with 1 to 5 views at full resolution. With 3 or more views, tree shadows are off and grass is thinned; with 4 or more, the shadow map is smaller.
+- **What the reference shows that is not built yet**:
+  - **Drivers**: animated driver expressions and fully modelled tyre treads (phase 11's game-feel work).
+  - **Volumetric light**: real volumetric light shafts are approximated by fog in-scattering.
+  - **Asphalt**: the snow slush layer on the asphalt is not modelled.
+- **Why**: Your request.
+
 ---
 
 ## Gate 0 status

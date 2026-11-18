@@ -11,6 +11,8 @@ import { MEADOWS, type Theme } from './palette';
 import type { Materials } from './materials';
 import { groundMaterial, kerbMaterial, layerMaterial, roadMaterial, worldUv } from './surfaces';
 import { textures, type SurfaceTex } from './textures';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { holoShell, holoTime } from './holo';
 
 export interface Zone {
   x: number;
@@ -726,10 +728,36 @@ export function buildTrackWorld(
   {
     const parts: Part[] = [],
       hw = HW[0]! + 3.5;
+    // D45: rustic steel truss towers (weathered paint, rust-brown bracing) on concrete feet
     for (const s of [-1, 1]) {
-      parts.push(P_(cyl(0.6, 0.75, 11, 6), 0xeceff1, s * hw, 5.5, 0));
-      parts.push(P_(box(1.8, 0.6, 1.8), 0x5c6bc0, s * hw, 0.3, 0));
+      const cx = s * hw;
+      parts.push(P_(box(2.4, 0.8, 2.4), 0x9e9e9e, cx, 0.4, 0));
+      for (const ox of [-0.7, 0.7])
+        for (const oz of [-0.7, 0.7]) parts.push(P_(box(0.22, 12.2, 0.22), 0x5d6670, cx + ox, 6.5, oz));
+      for (let y = 1.5; y < 12; y += 1.6)
+        for (const [ax, az, len, rot] of [
+          [0, -0.7, 1.4, 0],
+          [0, 0.7, 1.4, 0],
+          [-0.7, 0, 1.4, Math.PI / 2],
+          [0.7, 0, 1.4, Math.PI / 2],
+        ] as const) {
+          parts.push(P_(box(len, 0.1, 0.1), 0x7b5a45, cx + ax, y, az, 0, rot, 0));
+          parts.push(
+            P_(box(Math.hypot(len, 1.6), 0.08, 0.08), 0x8a6a52, cx + ax, y + 0.8, az, 0, rot, Math.atan2(1.6, len)),
+          );
+        }
     }
+    // top truss beam across the road
+    for (const y of [12.2, 13.6])
+      parts.push(
+        P_(box(hw * 2 + 1.6, 0.2, 0.2), 0x5d6670, 0, y, -0.55),
+        P_(box(hw * 2 + 1.6, 0.2, 0.2), 0x5d6670, 0, y, 0.55),
+      );
+    for (let x = -hw; x <= hw; x += 1.4)
+      parts.push(
+        P_(box(0.1, 1.4, 0.1), 0x7b5a45, x, 12.9, -0.55, 0, 0, 0.6),
+        P_(box(0.1, 1.4, 0.1), 0x7b5a45, x, 12.9, 0.55, 0, 0, -0.6),
+      );
     const cols = [0xff5252, 0xffeb3b, 0x40c4ff, 0x69f0ae, 0xe040fb];
     for (let i = 0; i < 15; i++) {
       const x = -hw + ((i + 0.5) / 15) * hw * 2,
@@ -762,13 +790,23 @@ export function buildTrackWorld(
         512,
         64,
         (g, w, h) => {
-          g.fillStyle = '#3949ab';
+          g.fillStyle = '#26306e';
           g.fillRect(0, 0, w, h);
-          g.fillStyle = '#fff';
-          for (let x = 0; x < 32; x++) {
-            g.fillRect(x * 16, (x % 2) * 7, 8, 7);
-            g.fillRect(x * 16, h - 7 - (x % 2) * 7, 8, 7);
+          // fabric weave
+          for (let y = 0; y < h; y += 2) {
+            g.fillStyle = `rgba(255,255,255,${y % 4 ? 0.03 : 0.06})`;
+            g.fillRect(0, y, w, 1);
           }
+          // checkered end panels
+          for (const x0 of [0, w - 56])
+            for (let cx = 0; cx < 7; cx++)
+              for (let cy = 0; cy < 8; cy++) {
+                g.fillStyle = (cx + cy) % 2 ? '#111' : '#f5f5f5';
+                g.fillRect(x0 + cx * 8, cy * 8, 8, 8);
+              }
+          g.fillStyle = 'rgba(255,255,255,0.85)';
+          g.fillRect(56, 3, w - 112, 3);
+          g.fillRect(56, h - 6, w - 112, 3);
           g.font = 'bold 38px Fredoka, sans-serif';
           g.textAlign = 'center';
           g.textBaseline = 'middle';
@@ -781,10 +819,27 @@ export function buildTrackWorld(
         true,
       ),
     );
-    const banner = add(new THREE.Mesh(track(box(hw * 2 + 1.2, 3.2, 0.8)), lambert({ map: bTex })));
-    banner.position.set(CX[0]!, H[0]! + 10.2, CZ[0]!);
-    banner.rotation.y = ANG[0]!;
-    banner.castShadow = true;
+    // a fabric banner hanging from the truss: gently sagging and rippled, printed on both faces
+    const bw = hw * 2 + 0.6;
+    const bg = track(new THREE.PlaneGeometry(bw, 3.2, 40, 6));
+    {
+      const p = bg.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i),
+          y = p.getY(i),
+          u = x / bw + 0.5;
+        p.setZ(i, Math.sin(u * Math.PI * 7) * 0.12 * (0.5 - y / 6.4) + Math.sin(u * Math.PI) * 0.05);
+        p.setY(i, y - Math.sin(u * Math.PI) * 0.35 * (0.5 - y / 6.4));
+      }
+      bg.computeVertexNormals();
+    }
+    const bMat = track(new THREE.MeshStandardMaterial({ map: bTex, roughness: 0.85 }));
+    for (const turn of [0, Math.PI]) {
+      const banner = add(new THREE.Mesh(bg, bMat));
+      banner.position.set(CX[0]!, H[0]! + 10.4, CZ[0]!);
+      banner.rotation.y = ANG[0]! + turn;
+      banner.castShadow = true;
+    }
   }
 
   // grandstand with a bouncing crowd beside the start straight
@@ -1044,40 +1099,7 @@ export function buildTrackWorld(
     im.receiveShadow = true;
   }
 
-  /* ---------------- mountains, clouds, balloons ---------------- */
-  {
-    const parts: Part[] = [];
-    for (let i = 0; i < 22; i++) {
-      const a = (i / 22) * TWO_PI + rnd(-0.08, 0.08),
-        r = RMAX + rnd(420, 620),
-        hgt = rnd(170, 360),
-        rad = rnd(130, 240),
-        peak = hgt;
-      parts.push(
-        P_(
-          jitter(
-            th.mountains === 'mesa'
-              ? new THREE.CylinderGeometry(rad * 0.62, rad, hgt * 0.55, 7, 3)
-              : new THREE.ConeGeometry(rad, hgt, 7, 3),
-            rad * 0.18,
-            i + 20,
-          ),
-          (x, y) => {
-            const t = (y - 30) / peak; // colour fn sees world y; the base sits at y = 30
-            return t > 0.62 ? th.mountainSnow : t > 0.42 ? th.mountainMid : th.mountain[Math.abs(Math.round(x)) % 3]!;
-          },
-          TC.x + Math.cos(a) * r,
-          (th.mountains === 'mesa' ? hgt * 0.275 : hgt / 2) + 30,
-          TC.z + Math.sin(a) * r,
-          0,
-          rand() * 6,
-          0,
-        ),
-      );
-    }
-    const m = add(new THREE.Mesh(track(merge(parts)), M.land));
-    m.frustumCulled = false;
-  }
+  /* ---------------- clouds and balloons (D45: mountains and soft clouds are in art/nature.ts) ---------------- */
   const cloudGeo = track(
     merge([
       P_(ico(1, 0), 0xffffff, 0, 0, 0, 0, 0, 0, 1.6, 1, 1.2),
@@ -1098,6 +1120,7 @@ export function buildTrackWorld(
       v: rnd(2, 5),
     });
   clouds.frustumCulled = false;
+  clouds.visible = false; // D45: replaced by soft billboard clouds (art/nature.ts)
   const balloons: { m: THREE.Mesh; a: number; r: number; y: number; sp: number; ph: number }[] = [];
   {
     const pal = [
@@ -1860,9 +1883,15 @@ export function buildTrackWorld(
       true,
     ),
   );
-  const boxGeo = track(box(2.3, 2.3, 2.3));
-  const boxMat = track(new THREE.MeshBasicMaterial({ map: qTex, transparent: true, opacity: 0.93 }));
+  // D45: holographic item boxes: a glowing "?" core inside a translucent iridescent rounded shell
+  const boxGeo = track(box(1.5, 1.5, 1.5));
+  const boxMat = track(
+    new THREE.MeshBasicMaterial({ map: qTex, transparent: true, opacity: 0.95, color: new THREE.Color(2.0, 2.0, 2.0) }),
+  );
+  const shellGeo = track(new RoundedBoxGeometry(2.4, 2.4, 2.4, 3, 0.45));
+  const shellMat = track(holoShell(0xd8f4ff, 2.4, 0.26));
   let boxMesh: THREE.InstancedMesh | null = null;
+  let shellMesh: THREE.InstancedMesh | null = null;
   let padsBuilt = false;
   const padGroups: THREE.Object3D[] = [];
   const _o = new THREE.Object3D();
@@ -1874,6 +1903,7 @@ export function buildTrackWorld(
     terrain,
     podium,
     update(time: number, dt: number) {
+      holoTime.value = time;
       for (let i = 0; i < cloudData.length; i++) {
         const c = cloudData[i]!;
         c.x += c.v * dt;
@@ -1918,12 +1948,17 @@ export function buildTrackWorld(
       }
       if (!boxMesh || boxMesh.count !== s.boxes.length) {
         if (boxMesh) {
-          group.remove(boxMesh);
+          group.remove(boxMesh, shellMesh!);
           boxMesh.dispose();
+          shellMesh!.dispose();
         }
         boxMesh = add(new THREE.InstancedMesh(boxGeo, boxMat, Math.max(1, s.boxes.length)));
         boxMesh.count = s.boxes.length;
         boxMesh.frustumCulled = false;
+        shellMesh = add(new THREE.InstancedMesh(shellGeo, shellMat, Math.max(1, s.boxes.length)));
+        shellMesh.count = s.boxes.length;
+        shellMesh.frustumCulled = false;
+        shellMesh.renderOrder = 2;
       }
       const t = s.time;
       s.boxes.forEach((b, i) => {
@@ -1934,22 +1969,26 @@ export function buildTrackWorld(
         _o.scale.setScalar(sc);
         _o.updateMatrix();
         boxMesh!.setMatrixAt(i, _o.matrix);
+        shellMesh!.setMatrixAt(i, _o.matrix);
       });
       boxMesh.instanceMatrix.needsUpdate = true;
+      shellMesh!.instanceMatrix.needsUpdate = true;
     },
     resetBoxes() {
       padsBuilt = false;
       for (const g of padGroups) group.remove(g);
       padGroups.length = 0;
       if (boxMesh) {
-        group.remove(boxMesh);
+        group.remove(boxMesh, shellMesh!);
         boxMesh.dispose();
-        boxMesh = null;
+        shellMesh!.dispose();
+        boxMesh = shellMesh = null;
       }
     },
     dispose() {
       for (const d of disposables) d.dispose();
       if (boxMesh) boxMesh.dispose();
+      if (shellMesh) shellMesh.dispose();
       for (const im of crowd) im.dispose();
       clouds.dispose();
     },

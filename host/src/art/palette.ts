@@ -54,19 +54,43 @@ export interface Theme {
   surf: Readonly<Record<'gravel' | 'dirt' | 'sand' | 'ice' | 'snow' | 'grass', number>>;
   boostPad: string;
   boostPadDark: string;
+  /** D45 cinematic look: post-processing fog, flare and grade (host/src/post.ts). */
+  look: ThemeLook;
+}
+
+/** Plain-number version of PostLook, so palettes stay data. */
+export interface ThemeLook {
+  exposure: number;
+  fogColor: number;
+  fogDensity: number;
+  fogFalloff: number;
+  fogBase: number;
+  mist: number;
+  sunColor: number;
+  scatter: number;
+  flare: number;
+  lift: readonly [number, number, number];
+  gamma: readonly [number, number, number];
+  gain: readonly [number, number, number];
+  saturation: number;
+  contrast: number;
+  vignette: number;
+  grain: number;
+  bloom: number;
 }
 
 export const MEADOWS: Theme = {
   id: 'meadows',
-  horizon: 0xcdeeff,
-  zenith: 0x4ea7ea,
-  sunLight: 0xfff1d6,
-  hemiSky: 0xeaf6ff,
-  hemiGround: 0x7da35c,
-  sunGlow: [1.0, 0.95, 0.78],
-  sun: 0.82,
-  hemi: 0.62,
-  sunDir: [0.42, 0.78, 0.46],
+  // golden late afternoon: a low warm sun, long shadows, a hazy warm horizon
+  horizon: 0xf3e2c4,
+  zenith: 0x3f8edc,
+  sunLight: 0xffd29a,
+  hemiSky: 0xcfe4ff,
+  hemiGround: 0x6f8f4a,
+  sunGlow: [1.0, 0.86, 0.6],
+  sun: 1.15,
+  hemi: 0.5,
+  sunDir: [0.62, 0.36, 0.7],
   road: '#585d6b',
   kerbRed: '#ef3b3b',
   kerbWhite: '#fafafa',
@@ -88,21 +112,41 @@ export const MEADOWS: Theme = {
   surf: { gravel: 0xc9bfae, dirt: 0xa77b52, sand: 0xe6cf98, ice: 0xcfeeff, snow: 0xf3f6ff, grass: 0x7ccb4f },
   boostPad: '#00e5ff',
   boostPadDark: '#00838f',
+  look: {
+    exposure: 1.05,
+    fogColor: 0xe9dcc4,
+    fogDensity: 0.0005,
+    fogFalloff: 0.011,
+    fogBase: 0,
+    mist: 0.002,
+    sunColor: 0xffc27a,
+    scatter: 0.6,
+    flare: 0.55,
+    lift: [0.006, 0.01, 0.022],
+    gamma: [1.0, 1.0, 0.98],
+    gain: [1.06, 1.0, 0.92],
+    saturation: 1.18,
+    contrast: 1.1,
+    vignette: 0.3,
+    grain: 0.028,
+    bloom: 0.42,
+  },
 };
 
 /** Dusty Canyon: warm sand, red rock and flat-topped mesas under a hazy sky. */
 export const CANYON: Theme = {
   ...MEADOWS,
   id: 'canyon',
-  horizon: 0xf7dfbd,
-  zenith: 0x4f95d6,
-  sunLight: 0xffe3bd,
-  hemiSky: 0xfff1de,
-  hemiGround: 0xc8915c,
-  sunGlow: [1.0, 0.9, 0.7],
-  sun: 0.86,
-  hemi: 0.6,
-  sunDir: [0.5, 0.72, 0.3],
+  // blazing high-desert sun with lens flare, dusty orange haze low down
+  horizon: 0xf6dcb4,
+  zenith: 0x3a86d4,
+  sunLight: 0xfff0d8,
+  hemiSky: 0xd9ecff,
+  hemiGround: 0xc0804a,
+  sunGlow: [1.0, 0.95, 0.85],
+  sun: 1.3,
+  hemi: 0.5,
+  sunDir: [0.55, 0.52, -0.66],
   road: '#6a6362',
   wallA: '#f4e6d0',
   wallB: '#c0552f',
@@ -119,21 +163,41 @@ export const CANYON: Theme = {
   mountainSnow: 0xe9b47d,
   mountains: 'mesa',
   surf: { gravel: 0xcdb8a0, dirt: 0xa7703f, sand: 0xe9c48c, ice: 0xcfeeff, snow: 0xf3f6ff, grass: 0xb5b061 },
+  look: {
+    exposure: 1.0,
+    fogColor: 0xe6c49a,
+    fogDensity: 0.0006,
+    fogFalloff: 0.02,
+    fogBase: 0,
+    mist: 0.004,
+    sunColor: 0xfff1d0,
+    scatter: 1.1,
+    flare: 1.0,
+    lift: [0.02, 0.012, 0.004],
+    gamma: [1.0, 1.0, 0.97],
+    gain: [1.08, 1.0, 0.88],
+    saturation: 1.2,
+    contrast: 1.12,
+    vignette: 0.32,
+    grain: 0.03,
+    bloom: 0.45,
+  },
 };
 
 /** Frosty Peaks: twilight snow, blue shadows, a frozen lake and pink sky. */
 export const FROSTY: Theme = {
   ...MEADOWS,
   id: 'frosty',
-  horizon: 0xf3c0b4,
-  zenith: 0x2c3577,
-  sunLight: 0xffc8a0,
-  hemiSky: 0xa8b8ec,
-  hemiGround: 0xc5d2ee,
-  sunGlow: [1.0, 0.72, 0.52],
-  sun: 0.62,
+  // misty sunset twilight: a low pink-orange sun, blue snow shadows, glowing wet asphalt
+  horizon: 0xf6b9a2,
+  zenith: 0x2a3474,
+  sunLight: 0xffb486,
+  hemiSky: 0x9fb2ea,
+  hemiGround: 0xc9d5f0,
+  sunGlow: [1.0, 0.68, 0.45],
+  sun: 0.95,
   hemi: 0.62,
-  sunDir: [-0.55, 0.32, 0.62],
+  sunDir: [-0.55, 0.2, 0.74],
   road: '#5b6070',
   wallA: '#f4f7ff',
   wallB: '#3f6fd8',
@@ -151,21 +215,41 @@ export const FROSTY: Theme = {
   mountainSnow: 0xffffff,
   mountains: 'peak',
   surf: { gravel: 0xb8bfcc, dirt: 0x8a7a70, sand: 0xd8d0c0, ice: 0xbfe6fb, snow: 0xffffff, grass: 0xc9d9c0 },
+  look: {
+    exposure: 1.05,
+    fogColor: 0xd9b8c4,
+    fogDensity: 0.0008,
+    fogFalloff: 0.014,
+    fogBase: 0,
+    mist: 0.006,
+    sunColor: 0xffa678,
+    scatter: 1.25,
+    flare: 0.75,
+    lift: [0.012, 0.014, 0.04],
+    gamma: [1.0, 0.99, 1.0],
+    gain: [1.05, 0.98, 1.0],
+    saturation: 1.1,
+    contrast: 1.08,
+    vignette: 0.34,
+    grain: 0.03,
+    bloom: 0.5,
+  },
 };
 
 /** Sepang Circuit: humid tropical afternoon, lush grass, palm trees, hazy hills. */
 export const TROPICAL: Theme = {
   ...MEADOWS,
   id: 'tropical',
-  horizon: 0xdcecf0,
-  zenith: 0x3f8fd6,
-  sunLight: 0xfff4dc,
-  hemiSky: 0xeef7f2,
-  hemiGround: 0x5f9a48,
-  sunGlow: [1.0, 0.96, 0.82],
-  sun: 0.86,
-  hemi: 0.62,
-  sunDir: [0.3, 0.85, 0.42],
+  // fog-kissed rolling hills: soft humid light, mist pooling in the valleys
+  horizon: 0xe2ece8,
+  zenith: 0x5a9ad6,
+  sunLight: 0xfff0d4,
+  hemiSky: 0xe4f0ee,
+  hemiGround: 0x4f8a3e,
+  sunGlow: [1.0, 0.95, 0.82],
+  sun: 1.0,
+  hemi: 0.58,
+  sunDir: [0.4, 0.62, 0.62],
   road: '#4f535c',
   wallA: '#f5f5f5',
   wallB: '#1e88e5',
@@ -179,6 +263,25 @@ export const TROPICAL: Theme = {
   mountainMid: 0x76a283,
   mountainSnow: 0x8fb89a,
   surf: { gravel: 0xd6c9b0, dirt: 0x9a6b45, sand: 0xe8d6a8, ice: 0xcfeeff, snow: 0xf3f6ff, grass: 0x5fbf44 },
+  look: {
+    exposure: 1.05,
+    fogColor: 0xdfe7e4,
+    fogDensity: 0.0009,
+    fogFalloff: 0.01,
+    fogBase: 0,
+    mist: 0.008,
+    sunColor: 0xfff0cc,
+    scatter: 0.6,
+    flare: 0.35,
+    lift: [0.004, 0.012, 0.012],
+    gamma: [1.0, 1.02, 1.0],
+    gain: [1.0, 1.03, 0.97],
+    saturation: 1.14,
+    contrast: 1.07,
+    vignette: 0.3,
+    grain: 0.026,
+    bloom: 0.4,
+  },
 };
 
 export const THEMES = { meadows: MEADOWS, canyon: CANYON, frosty: FROSTY, tropical: TROPICAL } as const;

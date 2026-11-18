@@ -11,7 +11,58 @@ import { MEADOWS, type Theme } from './palette';
 
 export interface Scenery {
   group: THREE.Group;
+  /** Tree shadows cost a second draw per view; the Medium and Low tiers turn them off. */
+  setCastShadows(on: boolean): void;
   dispose(): void;
+}
+
+const lerpHex = (a: number, b: number, t: number): number =>
+  new THREE.Color(a).lerp(new THREE.Color(b), Math.max(0, Math.min(1, t))).getHex();
+
+/** A broadleaf tree: a forked trunk and 9 lumpy leaf clusters, shaded dark underneath and bright on top. */
+function bushyTree(dark: number, light: number, trunk: number, seed: number, h = 1): THREE.BufferGeometry {
+  const parts = [
+    P_(cyl(0.28, 0.48, 3.4 * h, 7), trunk, 0, 1.7 * h, 0),
+    P_(cyl(0.12, 0.2, 2.2, 5), trunk, 0.6, 3.6 * h, 0.2, 0, 0, -0.6),
+    P_(cyl(0.12, 0.2, 2.0, 5), trunk, -0.55, 3.5 * h, -0.2, 0, 0, 0.65),
+  ];
+  const top = 4.2 * h + 3.6;
+  for (let k = 0; k < 9; k++) {
+    const a = k * 2.399 + seed,
+      r = k === 0 ? 0 : 1.2 + (k % 3) * 0.6,
+      y = 4.2 * h + 1.2 + (k % 4) * 0.75 + (k === 0 ? 1.4 : 0);
+    const rad = k === 0 ? 2.2 : 1.35 + ((k * 7) % 5) * 0.12;
+    parts.push(
+      P_(
+        jitter(ico(rad, 0), rad * 0.3, seed * 13 + k),
+        (_x, yy) => lerpHex(dark, light, (yy - (y - rad)) / (top - 4.2 * h)),
+        Math.cos(a) * r,
+        y,
+        Math.sin(a) * r,
+      ),
+    );
+  }
+  return merge(parts);
+}
+
+/** A conifer: 6 drooping tiers that narrow upwards; `frost` caps each tier with snow. */
+function pineTree(dark: number, light: number, frost: boolean, seed: number): THREE.BufferGeometry {
+  const parts = [P_(cyl(0.22, 0.38, 2.2, 6), 0x5d4037, 0, 1.1, 0)];
+  const tiers = 6;
+  for (let k = 0; k < tiers; k++) {
+    const t = k / (tiers - 1),
+      r = 2.9 - t * 2.2,
+      y = 2.0 + k * 1.25,
+      hh = 2.3 - t * 0.6;
+    const col = lerpHex(dark, light, t * 0.7 + (k % 2) * 0.15);
+    parts.push(P_(jitter(cone(r, hh, 9), 0.18, seed + k), col, 0, y + hh / 2, 0, 0, k * 0.7, 0));
+    if (frost)
+      parts.push(
+        P_(jitter(cone(r * 0.82, hh * 0.42, 9), 0.1, seed + 20 + k), 0xf4f8ff, 0, y + hh * 0.86, 0, 0, k * 0.7, 0),
+      );
+  }
+  if (frost) parts.push(P_(cone(0.5, 0.9, 7), 0xffffff, 0, 2.0 + tiers * 1.25 + 0.6, 0));
+  return merge(parts);
 }
 
 export function buildScenery(T: Track, terrain: TerrainInfo, M: Materials, seed: number, th: Theme = MEADOWS): Scenery {
@@ -55,6 +106,7 @@ export function buildScenery(T: Track, terrain: TerrainInfo, M: Materials, seed:
     geos.push(geo);
     const im = new THREE.InstancedMesh(geo, mat, count);
     im.castShadow = shadow;
+    im.userData.shadow = shadow;
     im.receiveShadow = true;
     group.add(im);
     meshes.push(im);
@@ -146,28 +198,41 @@ export function buildScenery(T: Track, terrain: TerrainInfo, M: Materials, seed:
       P_(ico(0.55, 0), 0x6d4c2f, 1.2, 9.0, 0),
     ]);
     place(palm, M.inst, 260, WALL + 8, 180, true, 0.8, 1.3, 0.85, 1.25, tints, -0.2);
-    const roundTree = merge([
-      P_(cyl(0.35, 0.5, 2.6, 5), 0x7a5a42, 0, 1.3, 0),
-      P_(jitter(ico(2.8, 0), 0.5, 1), 0x3f9e3c, 0, 4.4, 0),
-      P_(jitter(ico(1.9, 0), 0.4, 2), 0x4bab45, 1.1, 5.6, 0.4),
-    ]);
-    place(roundTree, M.inst, 160, WALL + 14, 200, true, 0.9, 1.6, 0.9, 1.2, tints, -0.2);
+    // dense tropical forest: broadleaf clusters and alpine pines on the hills (D45)
+    place(
+      bushyTree(0x1f5a28, 0x63b04a, 0x6a4a35, 3, 1.1),
+      M.inst,
+      260,
+      WALL + 14,
+      220,
+      true,
+      0.9,
+      1.7,
+      0.9,
+      1.25,
+      tints,
+      -0.2,
+    );
+    place(pineTree(0x173f2c, 0x3f8a52, false, 41), M.inst, 220, WALL + 20, 230, true, 1.0, 1.8, 0.9, 1.3, tints, -0.2);
     const bush = merge([
       P_(jitter(ico(1.1, 0), 0.3, 5), 0x3f9a3a, 0, 0.6, 0, 0, 0, 0, 1.3, 0.8, 1.1),
       P_(jitter(ico(0.8, 0), 0.25, 6), 0x52ad48, 0.8, 0.5, 0.3),
     ]);
     place(bush, M.inst, 160, WALL + 5, 70, true, 0.8, 1.5, 1, 1, tints);
   } else if (th.id === 'frosty') {
-    const pine = merge([
-      P_(cyl(0.3, 0.42, 1.8, 5), 0x6d4c41, 0, 0.9, 0),
-      P_(cone(2.6, 3.4, 7), 0x245a47, 0, 3.1, 0),
-      P_(cone(2.0, 1.2, 7), 0xffffff, 0, 4.2, 0),
-      P_(cone(2.1, 3.0, 7), 0x2a6650, 0, 4.9, 0),
-      P_(cone(1.5, 1.0, 7), 0xffffff, 0, 5.9, 0),
-      P_(cone(1.4, 2.6, 7), 0x307258, 0, 6.5, 0),
-      P_(cone(0.8, 0.9, 7), 0xffffff, 0, 7.5, 0),
-    ]);
-    place(pine, M.inst, 340, WALL + 9, 200, true, 0.8, 1.6, 0.9, 1.25, [0xffffff, 0xeef4ff, 0xe4ecff]);
+    place(
+      pineTree(0x173d34, 0x2f6a58, true, 7),
+      M.inst,
+      420,
+      WALL + 9,
+      220,
+      true,
+      0.8,
+      1.8,
+      0.9,
+      1.35,
+      [0xffffff, 0xeef4ff, 0xe4ecff],
+    );
     const drift = merge([P_(jitter(ico(1.4, 1), 0.3, 5), 0xffffff, 0, 0.1, 0, 0, 0, 0, 1.6, 0.45, 1.2)]);
     place(drift, M.inst, 160, WALL + 4, 80, false, 0.8, 1.8, 1, 1, [0xffffff, 0xf3f7ff]);
     const rock = merge([
@@ -176,25 +241,13 @@ export function buildScenery(T: Track, terrain: TerrainInfo, M: Materials, seed:
     ]);
     place(rock, M.inst, 90, WALL + 6, 170, true, 0.6, 2.4, 0.6, 1, [0xffffff, 0xe8eeff]);
   } else {
-    const treeRound = merge([
-      P_(cyl(0.35, 0.5, 2.8, 5), 0x8d6e63, 0, 1.4, 0),
-      P_(jitter(ico(2.5, 0), 0.5, 1), 0x5cb85c, 0, 4.4, 0),
-      P_(jitter(ico(1.6, 0), 0.4, 2), 0x6cc76a, 1.0, 5.6, 0.4),
-    ]);
-    const treePine = merge([
-      P_(cyl(0.3, 0.42, 1.8, 5), 0x795548, 0, 0.9, 0),
-      P_(cone(2.5, 3.4, 6), 0x2f8f5b, 0, 3.1, 0),
-      P_(cone(2.0, 3.0, 6), 0x379e64, 0, 4.8, 0),
-      P_(cone(1.35, 2.6, 6), 0x3fae6e, 0, 6.3, 0),
-    ]);
-    const treeTall = merge([
-      P_(cyl(0.3, 0.42, 3, 5), 0x8d6e63, 0, 1.5, 0),
-      P_(jitter(ico(1.6, 0), 0.3, 3), 0x8bc34a, 0, 5.4, 0, 0, 0, 0, 1, 2.3, 1),
-    ]);
+    const treeRound = bushyTree(0x2c6b2a, 0x8ccf5a, 0x7a5a42, 1);
+    const treePine = pineTree(0x1d5634, 0x4c9a55, false, 17);
+    const treeTall = bushyTree(0x4a7d2a, 0xb5d65a, 0x8d6e63, 5, 1.4);
     for (const [geo, cnt] of [
-      [treeRound, 170],
-      [treePine, 130],
-      [treeTall, 70],
+      [treeRound, 240],
+      [treePine, 200],
+      [treeTall, 90],
     ] as const) {
       const im = instanced(geo, M.inst, cnt, true);
       finishInst(
@@ -236,6 +289,9 @@ export function buildScenery(T: Track, terrain: TerrainInfo, M: Materials, seed:
 
   return {
     group,
+    setCastShadows(on) {
+      for (const m of meshes) if (m.userData.shadow) m.castShadow = on;
+    },
     dispose() {
       for (const g of geos) g.dispose();
       for (const m of meshes) m.dispose();

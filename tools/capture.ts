@@ -103,7 +103,7 @@ async function main(): Promise<void> {
       if (m.type() === 'error') errors.push(m.text());
     });
     page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto(`http://localhost:${PORT}/?noadapt=1&track=${TRACK}`);
+    await page.goto(`http://localhost:${PORT}/?${args.includes('--adapt') ? '' : 'noadapt=1&'}track=${TRACK}`);
     await page.waitForFunction(() => window.__tk?.ready, null, { timeout: 30000 });
     await frames(page, 1500);
     const gpu = await page.evaluate(() => {

@@ -12,6 +12,9 @@ import { Effects } from './art/effects';
 import { KartView, ProceduralKartProvider, type KartAssetProvider } from './art/kart';
 import { setMaxAnisotropy } from './art/geo';
 import { MEADOWS, THEMES, type Theme } from './art/palette';
+import { Post, type PostLook, type Tier } from './post';
+import { Ambient, type AmbientKind } from './art/particles';
+import { buildNature, type Nature } from './art/nature';
 import { TRACKS, isTrackId } from '@tk/shared';
 
 /** A viewport in CSS pixels, top-left origin (layout space). */
@@ -29,6 +32,9 @@ export interface ViewToRender {
   viewerKart: number;
   /** Show name tags (only while racing). */
   tags: boolean;
+  /** 0..1 speed (radial speed blur) and boost (chromatic fringe) for the post-processing. */
+  blur?: number;
+  boost?: number;
 }
 
 /** Light intensities are scaled by π: three.js r155+ uses physical units, the prototype (r128) did not. */
@@ -53,11 +59,16 @@ export class World {
   private M: Materials | null = null;
   private trackWorld: TrackWorld | null = null;
   private scenery: Scenery | null = null;
+  private ambient: Ambient | null = null;
+  private nature: Nature | null = null;
   effects: Effects | null = null;
   private assets: KartAssetProvider | null = null;
   views: KartView[] = [];
   /** Device pixel ratio actually used (adaptive). */
   pixelRatio: number;
+  /** D45 cinematic post-processing; ?nopost renders straight to the screen as before. */
+  readonly post: Post | null;
+  private lastFrame = performance.now();
   private readonly maxPixelRatio: number;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -66,10 +77,11 @@ export class World {
     this.pixelRatio = this.maxPixelRatio;
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    // Phase 4 matches the prototype; ACES Filmic tone mapping arrives with the art pass (section 10.2)
-    this.renderer.toneMapping = THREE.NoToneMapping;
+    // D45: ACES Filmic tone mapping (applied by the post chain's output pass), soft shadows
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.post = new URLSearchParams(location.search).has('nopost') ? null : new Post(this.renderer);
     this.renderer.autoClear = false;
     setMaxAnisotropy(this.renderer.capabilities.getMaxAnisotropy());
 
@@ -82,14 +94,16 @@ export class World {
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     const sc = this.sun.shadow.camera;
-    sc.left = -60;
-    sc.right = 60;
-    sc.top = 60;
-    sc.bottom = -60;
+    // low golden-hour suns cast long shadows: a wider box around the view's focus
+    sc.left = -75;
+    sc.right = 75;
+    sc.top = 75;
+    sc.bottom = -75;
     sc.near = 10;
-    sc.far = 420;
+    sc.far = 520;
     sc.updateProjectionMatrix();
-    this.sun.shadow.bias = -0.0006;
+    this.sun.shadow.bias = -0.0004;
+    this.sun.shadow.normalBias = 0.04;
     s.add(this.sun, this.sun.target);
     this.sky = createSky(MEADOWS.zenith, MEADOWS.horizon, this.sunDir, MEADOWS.sunGlow);
     s.add(this.sky);
@@ -150,6 +164,21 @@ export class World {
     this.sky.scale.setScalar(scale);
     s.add(this.sky);
     this.makeEnvironment();
+    if (this.post) {
+      // the post chain's height fog replaces the scene's distance fog
+      s.fog = null;
+      const L = th.look,
+        c = (h: number): THREE.Color => new THREE.Color(h);
+      const look: PostLook = {
+        ...L,
+        fogColor: c(L.fogColor),
+        sunColor: c(L.sunColor).multiplyScalar(1.3),
+        lift: new THREE.Vector3(...L.lift),
+        gamma: new THREE.Vector3(...L.gamma),
+        gain: new THREE.Vector3(...L.gain),
+      };
+      this.post.setLook(look, this.sunDir);
+    }
   }
 
   build(s: Readonly<GameState>, names: Map<number, string>): void {
@@ -161,10 +190,22 @@ export class World {
       const M = (this.M = createMaterials());
       this.trackWorld = buildTrackWorld(s.track, M, 1234, th, def);
       this.scene.add(this.trackWorld.group);
+      // natural detail first, so the canyon formations claim their ground before the scattered scenery
+      this.nature = buildNature(s.track, this.trackWorld.terrain, th, false);
+      this.scene.add(this.nature.group);
       this.scenery = buildScenery(s.track, this.trackWorld.terrain, M, 4321, th);
       this.scene.add(this.scenery.group);
       this.effects = new Effects(M);
+      this.effects.theme = th.id;
       this.scene.add(this.effects.group);
+      // D45 air: leaves and pollen, desert dust, falling snow, or mist motes
+      const kind: AmbientKind =
+        th.id === 'frosty' ? 'snow' : th.id === 'canyon' ? 'dust' : th.id === 'tropical' ? 'mist' : 'leaves';
+      const light = new THREE.Color(th.hemiSky)
+        .multiplyScalar(0.55)
+        .add(new THREE.Color(th.sunLight).multiplyScalar(0.6));
+      this.ambient = new Ambient(s.track, kind, kind === 'snow' ? 9000 : kind === 'dust' ? 2600 : 3200, light);
+      this.scene.add(this.ambient.points);
       this.assets = new ProceduralKartProvider();
       this.builtTrack = s.track;
     }
@@ -227,6 +268,8 @@ export class World {
     this.trackWorld?.updateBoxes(s, hideBoxes);
     this.effects?.syncProjectiles(s, dt);
     this.effects?.update(dt);
+    this.ambient?.update(s.time);
+    this.nature?.update(s.time);
   }
 
   /** Point the shadow camera at what a view is looking at. */
@@ -253,6 +296,15 @@ export class World {
 
   resize(): void {
     this.renderer.setSize(window.innerWidth, window.innerHeight, false);
+    this.post?.setSize(window.innerWidth, window.innerHeight, this.pixelRatio);
+  }
+
+  /** Q: cycle the quality tier override (auto, High, Medium, Low). */
+  cycleTier(): Tier | null {
+    if (!this.post) return null;
+    const t = this.post.cycleOverride();
+    this.post.setSize(window.innerWidth, window.innerHeight, this.pixelRatio);
+    return t;
   }
 
   /** Draw calls and triangles summed over every view in the last frame (renderer.info resets per render call). */
@@ -264,9 +316,22 @@ export class World {
   setViewCount(n: number): void {
     this.viewCount = n;
     const R = n > 3 ? VIEW_RANGE.many : VIEW_RANGE.near;
-    const fog = this.scene.fog as THREE.Fog;
-    fog.near = R.fog[0];
-    fog.far = R.fog[1];
+    const fog = this.scene.fog as THREE.Fog | null;
+    if (fog) {
+      fog.near = R.fog[0];
+      fog.far = R.fog[1];
+    }
+    this.post?.setViewCount(n);
+    // budgets per tier: fewer grass tufts, no tree shadows and a smaller shadow map when many views draw it all
+    this.nature?.setDetail(n <= 2 ? 1 : n <= 4 ? 0.4 : 0.22);
+    this.scenery?.setCastShadows(n <= 2);
+    const ms = n <= 3 ? 2048 : 1024;
+    if (this.sun.shadow.mapSize.x !== ms) {
+      this.sun.shadow.mapSize.set(ms, ms);
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+    }
+    if (this.post) this.post.setSize(window.innerWidth, window.innerHeight, this.pixelRatio);
     this.sky.scale.setScalar(Math.min(1, (R.far * 0.92) / 2600));
   }
 
@@ -282,6 +347,14 @@ export class World {
       st = this.frameStats;
     st.calls = st.triangles = 0;
     st.views = list.length;
+    // an off-screen target ignores the renderer's viewport: it has its own viewport and scissor, in device pixels
+    const tgt = this.post ? this.post.target : null,
+      pr = this.pixelRatio;
+    if (tgt) {
+      tgt.scissorTest = false;
+      tgt.viewport.set(0, 0, tgt.width, tgt.height);
+    }
+    r.setRenderTarget(tgt);
     r.setScissorTest(true);
     r.setViewport(0, 0, window.innerWidth, H);
     r.setScissor(0, 0, window.innerWidth, H);
@@ -290,6 +363,16 @@ export class World {
     for (const v of list) {
       const { x, y, w, h } = v.rect;
       const by = H - y - h;
+      if (tgt) {
+        const px = Math.round(x * pr),
+          py = Math.round(by * pr),
+          pw = Math.round(w * pr),
+          ph = Math.round(h * pr);
+        tgt.viewport.set(px, py, pw, ph);
+        tgt.scissor.set(px, py, pw, ph);
+        tgt.scissorTest = true;
+        r.setRenderTarget(tgt);
+      }
       r.setViewport(x, by, w, h);
       r.setScissor(x, by, w, h);
       const f = focus(v);
@@ -318,6 +401,21 @@ export class World {
       st.triangles += r.info.render.triangles;
     }
     r.setScissorTest(false);
+    if (this.post) {
+      const now = performance.now(),
+        dt = Math.min(0.1, (now - this.lastFrame) / 1000);
+      this.lastFrame = now;
+      r.setRenderTarget(null);
+      // the composite covers the whole screen: undo the last view's viewport and scissor
+      r.setViewport(0, 0, window.innerWidth, H);
+      r.setScissor(0, 0, window.innerWidth, H);
+      this.post.render(
+        list.map((v) => ({ rect: v.rect, camera: v.camera, blur: v.blur ?? 0, boost: v.boost ?? 0 })),
+        window.innerWidth,
+        H,
+        dt,
+      );
+    }
   }
 
   hideTags(): void {
@@ -336,6 +434,16 @@ export class World {
       this.scene.remove(this.scenery.group);
       this.scenery.dispose();
       this.scenery = null;
+    }
+    if (this.nature) {
+      this.scene.remove(this.nature.group);
+      this.nature.dispose();
+      this.nature = null;
+    }
+    if (this.ambient) {
+      this.scene.remove(this.ambient.points);
+      this.ambient.dispose();
+      this.ambient = null;
     }
     if (this.effects) {
       this.scene.remove(this.effects.group);

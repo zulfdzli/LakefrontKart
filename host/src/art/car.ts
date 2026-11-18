@@ -15,6 +15,9 @@ import * as THREE from 'three';
 import { P_, merge, cyl, box, ico, type Part } from './geo';
 import { DARK, WHITE } from './palette';
 
+/** The whole car (and its driver) is drawn this much bigger than the model's metres (your request, D45). */
+export const CAR_SCALE = 1.15;
+
 /** Wheel placement, shared with the effects (skid marks, sparks, smoke). */
 export const CAR = {
   rearX: 1.08,
@@ -27,6 +30,14 @@ export const CAR = {
   head: new THREE.Vector3(0, 0.98, -0.22),
   /** Exhaust exits for the boost flames. */
   exhaust: [new THREE.Vector3(0.16, 0.74, -2.62), new THREE.Vector3(-0.16, 0.74, -2.62)],
+} as const;
+
+/** Rear-wheel and exhaust positions in world metres (after CAR_SCALE), for the effects. */
+export const CAR_WORLD = {
+  rearX: CAR.rearX * CAR_SCALE,
+  rearZ: CAR.rearZ * CAR_SCALE,
+  exhaustZ: -2.62 * CAR_SCALE,
+  exhaustY: 0.74 * CAR_SCALE,
 } as const;
 
 const BLACK = 0x1c1d22;

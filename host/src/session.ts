@@ -247,6 +247,12 @@ export class RaceSession {
       rect: p.rect,
       viewerKart: this.stage === 'podium' ? -1 : p.kart.id,
       tags: this.stage === 'racing',
+      // D45 speed blur: starts above about 100 km/h, strongest while boosting
+      blur:
+        this.stage === 'racing' && !this.paused
+          ? Math.min(1, Math.max(0, (p.kart.sp - 30) / 40) * 0.55 + (p.kart.boost > 0 ? 0.45 : 0))
+          : 0,
+      boost: this.stage === 'racing' && p.kart.boost > 0 ? 1 : 0,
     }));
   }
 

@@ -9,7 +9,7 @@
 import type { TrackDef, TrackPoint } from './def';
 
 /** Metres per map pixel: chosen so the Normal AI laps in about 2 minutes (section 11.1). */
-const S = 0.9;
+const S = 0.98;
 const OX = 945,
   OY = 576;
 /** Road half-width (m): a little narrower than the other tracks, so the tight Turns 1, 2 and 9 keep their shape. */

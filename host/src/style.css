@@ -1186,3 +1186,124 @@ h1.logo span {
 .netDown.hidden {
   display: none;
 }
+
+/* ---------------- D45 modern HUD: glass panels, soft shadows, glowing indicators ---------------- */
+.phud {
+  --glass: rgba(14, 18, 38, 0.48);
+  --glassEdge: rgba(255, 255, 255, 0.32);
+  --glow: rgba(120, 200, 255, 0.55);
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.55),
+    0 0 1px rgba(0, 0, 0, 0.6);
+}
+.phud .pill,
+.phud .split,
+.phud .lastlap {
+  background: var(--glass);
+  border: 1px solid var(--glassEdge);
+  border-radius: 14px;
+  padding: 2px 16px;
+  backdrop-filter: blur(6px) saturate(1.3);
+  -webkit-backdrop-filter: blur(6px) saturate(1.3);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  letter-spacing: 0.5px;
+}
+.phud .lap.pill {
+  font-size: 22px;
+  background: linear-gradient(180deg, rgba(40, 52, 110, 0.62), rgba(14, 18, 38, 0.55));
+}
+.phud .time.pill {
+  color: #e8f4ff;
+}
+.phud .place {
+  -webkit-text-stroke: 0;
+  background: linear-gradient(180deg, #fff6a8 0%, #ffd23a 45%, #ff9f1c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 3px 0 rgba(20, 16, 40, 0.85)) drop-shadow(0 0 10px rgba(255, 190, 60, 0.55));
+  text-shadow: none;
+}
+.phud .place small,
+.phud .place sup {
+  -webkit-text-stroke: 0;
+}
+.phud .itembox {
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.04) 70%), var(--glass);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.4),
+    0 0 18px var(--glow),
+    inset 0 0 14px rgba(255, 255, 255, 0.18);
+}
+.phud .itembox.spin {
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.4),
+    0 0 26px rgba(255, 220, 90, 0.85),
+    inset 0 0 18px rgba(255, 255, 255, 0.3);
+}
+.phud .mini,
+.phud .stand1 {
+  background: var(--glass);
+  border: 1px solid var(--glassEdge);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.phud .speed {
+  font-size: 30px;
+  font-style: italic;
+  letter-spacing: 1px;
+  padding: 0 18px;
+  border-radius: 14px;
+  background: linear-gradient(90deg, transparent, rgba(14, 18, 38, 0.5) 25%, rgba(14, 18, 38, 0.5) 75%, transparent);
+}
+.phud .speed .spd {
+  color: #fff;
+  text-shadow:
+    0 0 10px rgba(120, 200, 255, 0.8),
+    0 2px 4px rgba(0, 0, 0, 0.6);
+}
+.phud .speed small {
+  color: #9fd4ff;
+  font-style: normal;
+}
+.phud .driftbar {
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: var(--glass);
+  height: 10px;
+  box-shadow: 0 0 12px var(--glow);
+}
+.phud .driftbar i {
+  box-shadow: 0 0 12px currentColor;
+}
+.phud .lights {
+  background: linear-gradient(180deg, rgba(40, 44, 70, 0.85), rgba(14, 16, 30, 0.85));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.phud .hint {
+  background: var(--glass);
+  border: 1px solid var(--glassEdge);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.sbox {
+  background: rgba(14, 18, 38, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}

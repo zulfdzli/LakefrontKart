@@ -275,7 +275,10 @@ window.addEventListener('keydown', (e) => {
   } else if (e.key === 'p' || e.key === 'P') setPaused(!session.paused);
   else if (e.key === 'm' || e.key === 'M') audio.setMuted(!audio.muted);
   else if (e.key === 't' || e.key === 'T') nextTrack();
-  else if (e.key === 'f' || e.key === 'F') debug.toggleFps();
+  else if (e.key === 'q' || e.key === 'Q') {
+    const t = world.cycleTier();
+    if (t) console.info(`Quality tier: ${world.post!.override ?? 'auto'} (${t})`);
+  } else if (e.key === 'f' || e.key === 'F') debug.toggleFps();
   else if (e.key === 'd' || e.key === 'D') debug.toggleFull();
 });
 $('againBtn').addEventListener('click', () => startRace());
