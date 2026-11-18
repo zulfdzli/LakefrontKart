@@ -9,6 +9,7 @@ const TRACK_NAMES: Record<string, string> = {
   meadows: 'Sunny Meadows',
   canyon: 'Dusty Canyon',
   frosty: 'Frosty Peaks',
+  sepang: 'Sepang Circuit',
 };
 const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 

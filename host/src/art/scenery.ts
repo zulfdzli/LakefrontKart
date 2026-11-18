@@ -4,7 +4,7 @@
  */
 import * as THREE from 'three';
 import { Rng, type Track } from '@tk/shared';
-import { P_, merge, jitter, ico, cyl, cone, octa } from './geo';
+import { P_, merge, jitter, ico, cyl, cone, octa, box } from './geo';
 import type { Materials } from './materials';
 import type { TerrainInfo } from './track-builder';
 import { MEADOWS, type Theme } from './palette';
@@ -128,6 +128,35 @@ export function buildScenery(T: Track, terrain: TerrainInfo, M: Materials, seed:
     place(scrub, M.inst, 160, WALL + 5, 90, true, 0.8, 1.5, 1, 1, tints);
     const rock = merge([P_(jitter(new THREE.DodecahedronGeometry(1.2, 0), 0.5, 8), th.rock[1]!, 0, 0.5, 0)]);
     place(rock, M.inst, 120, WALL + 5, 180, true, 0.6, 2.6, 0.6, 1, [0xffffff, 0xf0d0c0]);
+  } else if (th.id === 'tropical') {
+    const palm = merge([
+      P_(cyl(0.32, 0.45, 9, 6), 0x8d6e4f, 0.6, 4.5, 0, 0, 0, -0.12),
+      ...[0, 1, 2, 3, 4, 5, 6].map((k) =>
+        P_(
+          box(0.9, 0.18, 4.6),
+          k % 2 ? 0x3e9b3a : 0x48ad43,
+          1.2 + Math.sin((k * Math.PI * 2) / 7) * 1.9,
+          8.7,
+          Math.cos((k * Math.PI * 2) / 7) * 1.9,
+          -0.35,
+          (k * Math.PI * 2) / 7,
+          0,
+        ),
+      ),
+      P_(ico(0.55, 0), 0x6d4c2f, 1.2, 9.0, 0),
+    ]);
+    place(palm, M.inst, 260, WALL + 8, 180, true, 0.8, 1.3, 0.85, 1.25, tints, -0.2);
+    const roundTree = merge([
+      P_(cyl(0.35, 0.5, 2.6, 5), 0x7a5a42, 0, 1.3, 0),
+      P_(jitter(ico(2.8, 0), 0.5, 1), 0x3f9e3c, 0, 4.4, 0),
+      P_(jitter(ico(1.9, 0), 0.4, 2), 0x4bab45, 1.1, 5.6, 0.4),
+    ]);
+    place(roundTree, M.inst, 160, WALL + 14, 200, true, 0.9, 1.6, 0.9, 1.2, tints, -0.2);
+    const bush = merge([
+      P_(jitter(ico(1.1, 0), 0.3, 5), 0x3f9a3a, 0, 0.6, 0, 0, 0, 0, 1.3, 0.8, 1.1),
+      P_(jitter(ico(0.8, 0), 0.25, 6), 0x52ad48, 0.8, 0.5, 0.3),
+    ]);
+    place(bush, M.inst, 160, WALL + 5, 70, true, 0.8, 1.5, 1, 1, tints);
   } else if (th.id === 'frosty') {
     const pine = merge([
       P_(cyl(0.3, 0.42, 1.8, 5), 0x6d4c41, 0, 0.9, 0),

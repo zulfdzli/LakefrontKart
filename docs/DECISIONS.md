@@ -417,6 +417,20 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - The character spread is 5.6 to 6.0% (target 4%).
   - Normal to Hard is 2.8 to 2.9% (target 3%, D9).
 
+### D42 · Sepang Circuit, a fourth track traced from a real layout (2026-11-18, your request)
+- **Q**: You asked to add the Sepang circuit's layout, followed 100%, named "Sepang Circuit". How?
+- **A**:
+  - **Layout**: traced turn by turn from your map: 15 turns, clockwise, starting west down the main straight. Centreline points are in the map's pixels, scaled to metres (`shared/src/tracks/sepang.ts`). Scaling changes the size, never the shape.
+  - **Size**: 0.8 m per map pixel gives 3.86 km, and the Normal AI laps in 122.1 s (target 115 to 125 s). The road is 24 m wide (half-width 12, and 13.5 on the start straight), a little narrower than the other tracks, so the tight Turns 1, 2 and 9 keep their real shape.
+  - **What a traced layout leaves out**: no shortcut and no jump. The real circuit has neither, and you asked for the layout exactly, so the "every track has a shortcut" rule (section 11.2) applies only to the invented tracks (`traced: true`). The pit lane is not built, because the game has no pit stops.
+  - **Walls**: where two parts of the road run close together (Turn 2 passes about 35 m from the main straight), the walls now automatically stop halfway between them, and they also close in on the inside of very tight corners. This applies to every track; the original three are unchanged because they have more room.
+  - **Look**: a new tropical theme: a humid blue sky, lush grass, palm trees and green hills. There are grandstands on the main straight and the back straight.
+  - **Sectors**: Turns 1-3, Turns 4-6, Turns 7-11, and Turns 12-15 with the back straight. Boost pads are on the main straight, the back straight and the run to Turn 9.
+  - **Choosing it**: click the lobby track chip or press T (it cycles Meadows → Canyon → Frosty → Sepang). Grand Prix (phase 12) keeps the three original tracks unless you want Sepang added.
+  - **Results**: character spread 3.7%, Normal→Hard 2.8% (phase 11). 150 seeded races: every kart finishes.
+  - **Name**: "Sepang Circuit" is a real venue's name. That is fine for your own use; if the game is ever published, check whether the name and layout need permission.
+- **Why**: Your request.
+
 ---
 
 ## Gate 0 status

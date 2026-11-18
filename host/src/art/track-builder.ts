@@ -1353,6 +1353,24 @@ export function buildTrackWorld(
     } else if (l.kind === 'lodge') {
       house(x, terrainH(x, z) - 0.2, z, ry, 18, 12, 8, 0x8d6e63, 0x37474f);
       zones.push({ x, z, r: 18 });
+    } else if (l.kind === 'grandstand') {
+      // a long covered stand facing the road, with a curved leaf-like roof
+      const gl = l.side * (WALLD[i]! + 10),
+        gx = CX[i]! + RX[i]! * gl,
+        gz = CZ[i]! + RZ[i]! * gl,
+        gry = l.side > 0 ? ANG[i]! + Math.PI : ANG[i]!;
+      const parts: Part[] = [P_(box(14, 1.2, 70), 0xb0bec5, 6, -0.2, 0)];
+      for (let k = 0; k < 6; k++) {
+        const hgt = 1 + k * 1.2;
+        parts.push(P_(box(2.2, hgt, 66), k % 2 ? 0x1e88e5 : 0x42a5f5, 1.1 + k * 2.2, hgt / 2, 0));
+      }
+      for (const zz of [-33, -11, 11, 33]) parts.push(P_(box(0.6, 13, 0.6), 0xeceff1, 13, 6.5, zz));
+      for (let k = 0; k < 7; k++)
+        parts.push(
+          P_(box(3.2, 0.4, 72), 0xf5f5f5, 1 + k * 2.4, 11.5 + Math.sin((k / 6) * Math.PI) * 2.2, 0, 0, 0, -0.18),
+        );
+      addStatic(inFrame(parts, gx, terrainH(gx, gz) - 0.3, gz, gry));
+      zones.push({ x: gx, z: gz, r: 40 });
     } else if (l.kind === 'mesa') {
       addStatic([P_(jitter(cyl(38, 55, 60, 8), 4, i), th.rock[0]!, x, terrainH(x, z) + 24, z)]);
       zones.push({ x, z, r: 60 });

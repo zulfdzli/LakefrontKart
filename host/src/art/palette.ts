@@ -19,7 +19,7 @@ export const WHITE = 0xffffff;
 
 /** Per-track look (phase 8): sky, light, ground and props. Meadows keeps the prototype's colours exactly. */
 export interface Theme {
-  id: 'meadows' | 'canyon' | 'frosty';
+  id: 'meadows' | 'canyon' | 'frosty' | 'tropical';
   horizon: number;
   zenith: number;
   sunLight: number;
@@ -153,7 +153,35 @@ export const FROSTY: Theme = {
   surf: { gravel: 0xb8bfcc, dirt: 0x8a7a70, sand: 0xd8d0c0, ice: 0xbfe6fb, snow: 0xffffff, grass: 0xc9d9c0 },
 };
 
-export const THEMES = { meadows: MEADOWS, canyon: CANYON, frosty: FROSTY } as const;
+/** Sepang Circuit: humid tropical afternoon, lush grass, palm trees, hazy hills. */
+export const TROPICAL: Theme = {
+  ...MEADOWS,
+  id: 'tropical',
+  horizon: 0xdcecf0,
+  zenith: 0x3f8fd6,
+  sunLight: 0xfff4dc,
+  hemiSky: 0xeef7f2,
+  hemiGround: 0x5f9a48,
+  sunGlow: [1.0, 0.96, 0.82],
+  sun: 0.86,
+  hemi: 0.62,
+  sunDir: [0.3, 0.85, 0.42],
+  road: '#4f535c',
+  wallA: '#f5f5f5',
+  wallB: '#1e88e5',
+  grassA: '#5fbf44',
+  grassB: '#55b33c',
+  grassTerrain: [0x5cba42, 0x52af3a, 0x66c44b, 0x4aa634, 0x43992f],
+  // no snow in the tropics: the highest ground stays green, rock is a mossy grey
+  snow: 0x4f9a52,
+  rock: [0x6f8a66, 0x657f5d, 0x7a9670],
+  mountain: [0x5d8a6a, 0x557f62, 0x679574],
+  mountainMid: 0x76a283,
+  mountainSnow: 0x8fb89a,
+  surf: { gravel: 0xd6c9b0, dirt: 0x9a6b45, sand: 0xe8d6a8, ice: 0xcfeeff, snow: 0xf3f6ff, grass: 0x5fbf44 },
+};
+
+export const THEMES = { meadows: MEADOWS, canyon: CANYON, frosty: FROSTY, tropical: TROPICAL } as const;
 
 /** Drift spark colours per tier (0 = not charged yet). */
 export const DRIFT_COL = [0xfff3b0, 0x4fc3f7, 0xffa726, 0xe040fb] as const;

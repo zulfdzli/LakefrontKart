@@ -9,6 +9,7 @@ import {
   ROOM_CODE_ALPHABET,
   ROOM_CODE_LENGTH,
   SLOT_COLORS,
+  TRACK_IDS,
   cleanName,
   isRoomCode,
   type JoinErrorReason,
@@ -221,7 +222,7 @@ export class RoomManager {
   setConfig(room: Room, raw: unknown): boolean {
     if (typeof raw !== 'object' || raw === null || room.phase !== 'lobby') return false;
     const o = raw as Partial<LeaderConfig>;
-    const tracks = ['meadows', 'canyon', 'frosty'];
+    const tracks: readonly string[] = TRACK_IDS;
     const c = room.config;
     if (o.mode === 'single' || o.mode === 'gp') c.mode = o.mode;
     if (typeof o.trackId === 'string' && tracks.includes(o.trackId)) c.trackId = o.trackId;

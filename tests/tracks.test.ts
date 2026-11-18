@@ -55,11 +55,16 @@ describe('track layouts', () => {
         st = trackStats(T);
       expect(st.len).toBeGreaterThan(3200);
       expect(st.len).toBeLessThan(4500);
-      expect(st.minRadius).toBeGreaterThan(25); // inner walls never fold over
-      expect(st.minSep).toBeGreaterThan(55); // unrelated road sections keep their walls apart
+      // the inside road edge never folds over; invented tracks keep wide corners (traced ones keep the real ones)
+      const hwAt = T.HW[Math.round(st.minRadiusAt * T.N) % T.N]!;
+      expect(st.minRadius).toBeGreaterThan(def.traced ? hwAt + 2 : 25);
+      // unrelated road sections keep their walls apart (walls close in where the road runs close by)
+      expect(st.minSep).toBeGreaterThan(def.traced ? 30 : 55);
+      for (let i = 0; i < T.N; i++) expect(T.WALLD[i]!).toBeGreaterThan(T.HW[i]! + 3);
       expect(def.sectors.length).toBeGreaterThanOrEqual(3);
       expect(def.sectors.length).toBeLessThanOrEqual(4);
-      expect(T.shortcuts.length).toBeGreaterThanOrEqual(1);
+      // section 11.2: a risk/reward shortcut on every invented track (a traced circuit has none)
+      if (!def.traced) expect(T.shortcuts.length).toBeGreaterThanOrEqual(1);
       expect(T.pads.length).toBeGreaterThanOrEqual(1);
       // a hairpin: somewhere the road turns through at least 160° within 200 m
       let hair = 0;

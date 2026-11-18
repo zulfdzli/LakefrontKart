@@ -8,8 +8,8 @@
 import { clamp, wrapA } from '../constants';
 import type { LatZone, Ramp, Shortcut, SurfaceId, Track } from '../track';
 
-export type TrackId = 'meadows' | 'canyon' | 'frosty';
-export type ThemeId = 'meadows' | 'canyon' | 'frosty';
+export type TrackId = 'meadows' | 'canyon' | 'frosty' | 'sepang';
+export type ThemeId = 'meadows' | 'canyon' | 'frosty' | 'tropical';
 
 export interface TrackPoint {
   x: number;
@@ -64,11 +64,15 @@ export interface TrackDef {
   shortcuts: { from: number; to: number; via: [number, number][]; half?: number; surface: SurfaceId }[];
   landmarks: LandmarkDef[];
   music: string;
+  /** Traced from a real circuit's layout (D42): no invented shortcut, and its tight corners are kept. */
+  traced?: boolean;
 }
 
 const DEFAULT_HW = 13;
 /** Walls stand this far beyond the road edge. */
 const WALL_GAP = 12;
+/** Walls never come closer than this to the road edge (kerb plus a little run-off). */
+const MIN_WALL_GAP = 3.8;
 /** Inside tunnels the walls are this far beyond the road edge. */
 const TUNNEL_GAP = 3.5;
 /** Target spacing between samples (m), section 11.1. */
@@ -193,10 +197,28 @@ export function buildTrackFromDef(def: TrackDef): Track {
     return { pts, half: s.half ?? 7, surface: s.surface, i0, i1 };
   });
 
-  // walls stand WALL_GAP beyond the road edge, but close in inside tunnels
+  // walls stand WALL_GAP beyond the road edge, but close in inside tunnels, where another part of the road
+  // runs close by (each side's walls stop halfway), and on the inside of very tight corners (no folded walls)
   const WALLD = HW.map((w) => w + WALL_GAP);
   for (const l of def.landmarks)
     if (l.kind === 'tunnel' && l.len) for (const i of span(l.at, l.at + l.len)) WALLD[i] = HW[i]! + TUNNEL_GAP;
+  {
+    const skip = Math.ceil(120 / DS);
+    for (let i = 0; i < N; i++) {
+      let d2 = 1e18;
+      for (let j = 0; j < N; j++) {
+        const di = Math.min(Math.abs(i - j), N - Math.abs(i - j));
+        if (di < skip) continue;
+        const dx = CX[i]! - CX[j]!,
+          dz = CZ[i]! - CZ[j]!;
+        d2 = Math.min(d2, dx * dx + dz * dz);
+      }
+      const da = Math.abs(wrapA(ANG[(i + 4) % N]! - ANG[(i - 4 + N) % N]!));
+      const radius = da > 1e-6 ? (8 * DS) / da : 1e9;
+      const room = Math.min(Math.sqrt(d2) / 2 - 1.5, radius - 2.5);
+      WALLD[i] = clamp(Math.min(WALLD[i]!, room), HW[i]! + MIN_WALL_GAP, WALLD[i]!);
+    }
+  }
 
   const sectors = def.sectors.map((s) => idxOf(s.at));
   sectors[0] = 0;
