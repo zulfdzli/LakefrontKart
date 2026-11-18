@@ -245,6 +245,7 @@ net.socket.on('haptic', (h) => {
   if (h.kind === 'cd' && h.n) remote.count(String(h.n));
   if (h.kind === 'go') remote.count('GO!');
   if (h.kind === 'lap') remote.toast('FINAL LAP!');
+  if (h.kind === 'warn') remote.flash('hit');
 });
 net.socket.on('results', (r) => {
   results = r;

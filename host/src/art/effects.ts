@@ -161,6 +161,8 @@ export class Effects {
   private readonly orbGeo = ico(0.95, 1);
   private readonly orbShell = ico(1.55, 0);
   private readonly orbMat = new THREE.MeshBasicMaterial({ color: 0x40c4ff });
+  /** HDR-bright so the bloom pass makes the comet blaze. */
+  private readonly cometMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 2.2, 0.9) });
   private readonly orbShellMat = new THREE.MeshLambertMaterial({
     color: 0xb3e5fc,
     transparent: true,
@@ -659,6 +661,29 @@ export class Effects {
       live.add(sl);
       this.projView(sl, 'slick', sl);
     }
+    // Seeker Comet: a blazing core with a long glowing trail, plus a pulsing target ring on the leader
+    for (const c of s.comets) {
+      live.add(c);
+      const v = this.projView(c, 'comet');
+      v.position.set(c.x, c.y, c.z);
+      v.rotation.y += dt * 6;
+      if (dt > 0)
+        for (let n = 0; n < 3; n++)
+          this.sparks.emit(
+            c.x + this.rnd(-0.8, 0.8),
+            c.y + this.rnd(-0.8, 0.8),
+            c.z + this.rnd(-0.8, 0.8),
+            this.rnd(-2, 2),
+            this.rnd(-1, 2),
+            this.rnd(-2, 2),
+            n ? 0xffb74d : 0xfff3c4,
+            0.7,
+            1.6,
+            -1,
+            -999,
+          );
+      if (dt > 0 && this.rng.next() < 0.4) this.ring(c.target.x, c.target.y, c.target.z, 0xff5252);
+    }
     for (const [o, v] of this.projViews)
       if (!live.has(o)) {
         this.group.remove(v);
@@ -668,12 +693,18 @@ export class Effects {
 
   private projView(
     o: object,
-    kind: 'orb' | 'bolt' | 'slick',
+    kind: 'orb' | 'bolt' | 'slick' | 'comet',
     at?: { x: number; y: number; z: number },
   ): THREE.Object3D {
     let v = this.projViews.get(o);
     if (!v) {
-      if (kind === 'orb') {
+      if (kind === 'comet') {
+        v = new THREE.Group();
+        v.add(new THREE.Mesh(this.orbGeo, this.cometMat));
+        const halo = new THREE.Mesh(this.orbShell, this.orbShellMat);
+        halo.scale.setScalar(1.6);
+        v.add(halo);
+      } else if (kind === 'orb') {
         v = new THREE.Group();
         v.add(new THREE.Mesh(this.orbGeo, this.orbMat));
         v.add(new THREE.Mesh(this.orbShell, this.orbShellMat));

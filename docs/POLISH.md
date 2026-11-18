@@ -368,3 +368,34 @@ Shots: `docs/screens/p10-final/` (Meadows, all split counts), `p10-canyon/`, `p1
 | Graphics | Colour harmony | **4** (was 3) | Graded per track; warm, cool and misty looks that match the references |
 | Graphics | UI finish | 4 | Glass HUD and name tags |
 | Gameplay | Frame-time stability | 4 | 5 views at 60 FPS with vsync at 1080p |
+
+---
+
+## Phase 11: mechanics (2026-11-19, D46)
+
+### Headless metrics (sim-report, 10 races per row, 2 laps, items off)
+| Track | Normal AI lap | Easy→Normal | Normal→Hard | Character spread | Rescues / race | Unfinished |
+|---|---|---|---|---|---|---|
+| Sunny Meadows | 118.5 s | 5.1% | 5.2% | 1.8% | 0 to 0.1 | 0 |
+| Dusty Canyon | 119.6 s | 5.9% | 4.4% | 1.2% | 0 to 0.5 | 0 |
+| Frosty Peaks | 120.0 s | 4.7% | 3.3% | 1.6% | 0 to 0.3 | 0 |
+| Sepang Circuit | 119.1 s | 5.2% | 4.9% | 3.1% | 0 to 0.6 | 0 |
+
+- **Robustness**: 150 seeded races per track with items: every car finishes, and none is pinned for 5 s.
+- **Simulation cost**: 0.009 ms per step on average, p99 0.043 ms (budget 2 ms).
+- **Checks**: e2e 18/18; 67 tests, including the new `tests/mechanics.test.ts`.
+
+### Fixes this loop
+1. **AI cars rescued on the Meadows shortcut** (6 per race on Hard): they arrived too fast at a sharp turn-in, hit the road wall beside the 12 m corridor, and the "lost" check fired. Fixed with braking for the turn-in, a 15 m corridor, a shorter steering look-ahead, and no "lost" check on a shortcut. Down to 1 in 48 car-laps (the drone recovers it).
+2. **Normal→Hard under 3%** on three tracks: v2 corner caution and pace per level. Now 3.3 to 5.2%.
+3. **Character spread** of 5.7 to 6.6%: the speed stat is damped and handling counts in corners. Now 1.2 to 3.1%. (The first try overcorrected and made Mochi fastest; the handling factor was softened.)
+4. **Rare missed checkpoints**: collision pushes across a checkpoint line were not counted. Fixed.
+
+### Scores (compared with phase 10)
+| Area | Item | Score | Reason |
+|---|---|---|---|
+| Gameplay | Collision feel | **4** (was 3*) | Car-shaped collisions; nose-to-tail bumps connect |
+| Gameplay | Item fairness | **4** (was 3*) | All 8 items; place-only rolls; warnings for orbs and the comet; the comet can be dodged |
+| Gameplay | AI believability | **4** (was 3*) | Racing line, drifts, occasional mistakes per level, takes shortcuts with a boost; clear 3%+ gaps |
+| Gameplay | Drift feel | 4 | Unchanged feel, plus the perfect-release bonus |
+| Gameplay | Steering smoothness | 4 | Linear grip unchanged; slides recover predictably |

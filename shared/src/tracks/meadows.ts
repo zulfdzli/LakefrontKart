@@ -68,7 +68,7 @@ export const MEADOWS_DEF: TrackDef = {
     { from: 0.08, to: 0.13, latMin: -25, latMax: -15.2, surface: 'gravel' },
     { from: 0.38, to: 0.42, latMin: -25, latMax: -15.2, surface: 'gravel' },
   ],
-  shortcuts: [{ from: 0.737, to: 0.814, via: [], half: 6, surface: 'dirt' }],
+  shortcuts: [{ from: 0.737, to: 0.814, via: [], half: 7.5, surface: 'dirt' }],
   landmarks: [
     { kind: 'windmill', at: 0.1, side: -1, dist: 70 },
     { kind: 'river', at: 0.6, side: 0, dist: 0 },

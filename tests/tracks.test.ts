@@ -141,13 +141,25 @@ function manual(id: TrackId) {
 
 /** Teleport a kart onto the centreline at sample i, facing along the track (dir 1) or backwards (-1). */
 function place(
-  k: { x: number; z: number; h: number; vx: number; vz: number; px: number; pz: number; idx: number; lastIdx: number },
+  k: {
+    x: number;
+    z: number;
+    h: number;
+    vx: number;
+    vz: number;
+    px: number;
+    pz: number;
+    gpx: number;
+    gpz: number;
+    idx: number;
+    lastIdx: number;
+  },
   T: ReturnType<typeof getTrack>,
   i: number,
   dir = 1,
 ): void {
-  k.x = k.px = T.CX[i]!;
-  k.z = k.pz = T.CZ[i]!;
+  k.x = k.px = k.gpx = T.CX[i]!;
+  k.z = k.pz = k.gpz = T.CZ[i]!;
   k.idx = k.lastIdx = i;
   k.h = dir > 0 ? T.ANG[i]! : T.ANG[i]! + Math.PI;
   k.vx = Math.sin(k.h) * 20;

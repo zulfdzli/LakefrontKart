@@ -174,6 +174,25 @@ export function buildTrackFromDef(def: TrackDef): Track {
     }
     line = nl;
   }
+  // D46: precomputed racing line. Relax the path towards the straightest line through the corridor (each point
+  // moves towards the midpoint of its neighbours, kept 4.5 m inside the road edges): outside-inside-outside
+  // through the corners, with the least curvature the road allows.
+  {
+    const m = Math.max(3, Math.round(14 / DS));
+    for (let it = 0; it < 260; it++) {
+      const nl = line.slice();
+      for (let i = 0; i < N; i++) {
+        const a = (i - m + N) % N,
+          b = (i + m) % N;
+        const mx = (CX[a]! + RX[a]! * line[a]! + CX[b]! + RX[b]! * line[b]!) / 2,
+          mz = (CZ[a]! + RZ[a]! * line[a]! + CZ[b]! + RZ[b]! * line[b]!) / 2;
+        const target = (mx - CX[i]!) * RX[i]! + (mz - CZ[i]!) * RZ[i]!;
+        const lim = HW[i]! - 4.5;
+        nl[i] = clamp(line[i]! * 0.5 + target * 0.5, -lim, lim);
+      }
+      line = nl;
+    }
+  }
 
   const zones: (LatZone[] | null)[] = new Array<LatZone[] | null>(N).fill(null);
   const span = (from: number, to: number): number[] => {

@@ -525,6 +525,44 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **Asphalt**: the snow slush layer on the asphalt is not modelled.
 - **Why**: Your request.
 
+### D46 · Mechanics pass (2026-11-19, phase 11, my decisions)
+- **Q**: How does phase 11 tighten handling, items and AI without losing the feel you scored 4?
+- **A**: Every change sits behind `Handling.v2`; `PROTOTYPE_HANDLING` keeps the parity test bit-exact.
+  - **Tyre model**:
+    - Sideways grip follows the slip angle. It rises to a peak at about 7° and then falls off softly to 72%, capped at 34 m/s² (scaled by surface).
+    - Normal cornering stays in the linear part, so it feels exactly as before.
+    - Big slides saturate and recover in about a second instead of snapping straight.
+    - Drifts keep their own grip.
+  - **Drift bonus**: releasing within 0.2 tier-units of reaching a tier adds 0.35 s of boost, with "PERFECT DRIFT!", a chime and a phone pulse.
+  - **Collisions**: each car collides as two circles (front and rear, 3.5 m apart), matching the long race car. Nose-to-tail bumps now connect.
+  - **Character balance**:
+    - The speed stat moves top speed 45% as much as before.
+    - The AI's corner speed scales with each character's handling.
+    - Median laps per character are within 1.2 to 3.1% on every track (target 4%).
+  - **Items: all 8**:
+    - **Rocket Booster**: only for the last two places. A 3 s tier-3 boost that also ploughs through hazards.
+    - **Seeker Comet**: rare, 4th place and below, never on lap 1, one at a time. It arcs over the field to the leader with a 2.4 s warning, then strikes. A boost dodges it and a shield blocks it.
+    - **Fairness**:
+      - The roll depends only on place and lap, so the AI never gets better items than a human in the same place.
+      - Homing orbs warn their target ("⚠ INCOMING!" on screen and phone, with a vibration).
+      - Protection after hits is unchanged.
+  - **Racing line**: precomputed per track by relaxing the path towards the straightest line through the corridor (4.5 m inside the edges).
+  - **AI**:
+    - **Mistakes**: late turn-in and running wide, about every 13 s on Easy, 28 s on Normal and 70 s on Hard.
+    - **Drifting**: it drifts in many more corners (8 to 35 drifts per race instead of 1 to 3).
+    - **Items**: it fires turbos inside shortcuts and uses the new items.
+    - **Shortcuts**: it takes them only while holding a boost to fire inside. Measured on Meadows, braking for the turn-in otherwise costs about 2.7 s per lap.
+    - **Lost-car rescue**: AI cars on a shortcut are no longer rescued as "lost".
+  - **Difficulty**: v2 pace and corner caution per level. Measured (10 races): Easy→Normal 4.7 to 5.9%, Normal→Hard 3.3 to 5.2% on every track (D9: at least 3%). Normal laps are 118.5 to 120 s.
+  - **Checkpoints**: crossings are measured from the last checked position, so a collision push across a checkpoint line still counts. This was the rare "missed checkpoint" on Sepang.
+  - **Photo finish**: two cars over the line within 0.2 s, with a player involved, play out at 30% speed for 1.6 s with "PHOTO FINISH!".
+  - **Camera**: kept above the ground (section 12.1 camera collision).
+  - **Meadows shortcut**: widened from 12 m to 15 m.
+- **Deferred**:
+  - **Race intro flyover**: to phase 12, with the race flow.
+  - **Debug overlay additions** (input rate, latency, physics vectors): to phase 13.
+- **Why**: Section 12.
+
 ---
 
 ## Gate 0 status

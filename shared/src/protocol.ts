@@ -30,6 +30,7 @@ export const HAPTIC_KINDS = [
   'cd',
   'go',
   'lap',
+  'warn',
 ] as const;
 export type HapticKind = (typeof HAPTIC_KINDS)[number];
 export const isHapticKind = (v: unknown): v is HapticKind => (HAPTIC_KINDS as readonly unknown[]).includes(v);
@@ -117,6 +118,8 @@ export interface HudUpdate {
   finishTime: number | null;
   /** Driving the wrong way for over a second. */
   wrongWay: boolean;
+  /** A projectile is closing in (homing orb, Seeker Comet). */
+  threat: boolean;
 }
 
 export interface Standing {

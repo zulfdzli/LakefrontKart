@@ -49,6 +49,9 @@ export class RaceSession {
   paused = false;
   private acc = 0;
   private hitStop = 0;
+  /** Real seconds of photo-finish slow motion left (the simulation runs at 30%). */
+  private slowMo = 0;
+  private lastFinish: { t: number; human: boolean } | null = null;
   private doneT = 0;
   private podT = 0;
   private podiumOrder: Kart[] = [];
@@ -135,6 +138,8 @@ export class RaceSession {
     this.panel.reset();
     for (const v of this.world.views) v.resetMotion();
     this.audio.tempo = 1;
+    this.slowMo = 0;
+    this.lastFinish = null;
     this.setStage('racing');
     this.game.startCountdown();
   }
@@ -160,7 +165,8 @@ export class RaceSession {
     if (live && this.stage === 'racing') {
       if (this.hitStop > 0) this.hitStop -= dt;
       else {
-        this.acc += dt;
+        if (this.slowMo > 0) this.slowMo -= dt;
+        this.acc += this.slowMo > 0 ? dt * 0.3 : dt;
         let steps = 0;
         while (this.acc >= STEP && steps < MAX_SUBSTEPS) {
           this.game.step(STEP);
@@ -194,6 +200,10 @@ export class RaceSession {
     if (this.stage === 'racing') this.panel.update(s);
     for (const p of this.players) {
       p.cam.update(this.paused ? 0.0001 : dt, s, p.kart, this.world.views[p.kart.id]!, this.world.podium);
+      // section 12.1 camera collision: never inside the ground (hills beside the road, ramps, banking)
+      const c = p.cam.camera.position,
+        g = this.world.terrain.terrainH(c.x, c.z) + 1.2;
+      if (c.y < g) c.y += (g - c.y) * Math.min(1, dt * 12 + 0.25);
       if (this.stage === 'racing') {
         p.hud.update(s, p.kart);
         const k = p.kart,
@@ -238,6 +248,7 @@ export class RaceSession {
       finished: k.finished,
       finishTime: k.finished ? k.finishTime : null,
       wrongWay: k.wrongT > 1 && !k.finished,
+      threat: k.threat > 0 && !k.finished,
     };
   }
 
@@ -425,7 +436,55 @@ export class RaceSession {
             }
           }
           break;
+        case 'driftperfect':
+          if (me) {
+            me.hud.say('PERFECT DRIFT!', 900, 'small gold');
+            a.tone(880, 0.12, 'triangle', 0.1);
+            a.tone(1320, 0.2, 'triangle', 0.1, 0, a.at(0.08));
+            this.onHaptic?.(me.slot, 'drift3');
+          }
+          break;
+        case 'userocket':
+          if (me) {
+            me.hud.say('ROCKET!', 900, 'small gold');
+            a.tone(140, 1.2, 'sawtooth', 0.12, 900);
+            me.cam.shake = Math.max(me.cam.shake, 0.4);
+          }
+          break;
+        case 'usecomet':
+          a.tone(300, 1.4, 'sine', 0.07, 1400);
+          for (const p of this.players)
+            if (p.kart.id !== e.other && !p.kart.finished) p.hud.say('☄️ COMET LAUNCHED', 1200, 'small blue');
+          break;
+        case 'warn':
+          if (me) {
+            a.tone(980, 0.08, 'square', 0.07);
+            a.tone(980, 0.08, 'square', 0.07, 0, a.at(0.14));
+            this.onHaptic?.(me.slot, 'warn');
+          }
+          break;
+        case 'comethit':
+          if (me) {
+            me.cam.shake = 1;
+            this.hitStop = 0.09;
+          }
+          a.noiseHit(0.6, 0.5, 300);
+          break;
+        case 'cometmiss':
+          if (me) me.hud.say('DODGED!', 1000, 'small blue');
+          break;
         case 'finish':
+          // photo finish: two cars over the line within 0.2 s, at least one a player, play out in slow motion
+          if (
+            k &&
+            this.lastFinish !== null &&
+            k.finishTime - this.lastFinish.t < 0.2 &&
+            (me || this.lastFinish.human)
+          ) {
+            this.slowMo = 1.6;
+            for (const p of this.players) p.hud.say('PHOTO FINISH!', 1600, 'small gold');
+          }
+          if (k) this.lastFinish = { t: k.finishTime, human: !!me };
           if (me && k) {
             // section 6.2: a FINISHED banner, and this view switches to an orbit around the (now AI-driven) kart
             me.hud.clearMsg();

@@ -14,6 +14,8 @@ const ICON: Record<string, string> = {
   orb: '🎯',
   bolt: '🥏',
   shield: '🛡️',
+  rocket: '🚀',
+  comet: '☄️',
   roll: '🎲',
 };
 const fmtT = (t: number): string => {
@@ -309,7 +311,8 @@ export class Remote {
       }
       this.lastPlace = h.place;
     }
-    $('wrongWay').classList.toggle('on', h.wrongWay);
+    $('wrongWay').classList.toggle('on', h.wrongWay || h.threat);
+    $('wrongWay').textContent = h.threat ? '⚠ INCOMING!' : '⚠ WRONG WAY';
     const fin = $('finCard');
     if (h.finished && fin.hidden) {
       $('finPlace').innerHTML = `${h.place}<sup>${ord(h.place)}</sup>`;

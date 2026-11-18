@@ -113,6 +113,13 @@ export interface Kart {
   offroad: boolean;
   /** Surface under the kart (section 11.2). */
   surf: SurfaceId;
+  /** Seconds left on an incoming-projectile warning (orb closing in, Seeker Comet). */
+  threat: number;
+  /** AI: index of the shortcut it is taking, or -1. */
+  aiSc: number;
+  /** Position at the last checkpoint test, so pushes from collisions between steps are counted too. */
+  gpx: number;
+  gpz: number;
   /** tan(banking) of the road under the kart (the renderer rolls the kart). */
   bank: number;
   /** Airborne after a jump ramp: height above the road and vertical speed. */
@@ -173,6 +180,20 @@ export interface Orb {
   y: number;
   target: Kart | null;
 }
+/** Seeker Comet: flies over the field to the leader, striking when its warning runs out (D8). */
+export interface Comet {
+  owner: Kart;
+  target: Kart;
+  /** Seconds until it strikes. */
+  t: number;
+  t0: number;
+  sx: number;
+  sy: number;
+  sz: number;
+  x: number;
+  y: number;
+  z: number;
+}
 export interface Bolt {
   x: number;
   z: number;
@@ -217,6 +238,12 @@ export type GameEventType =
   | 'jump'
   | 'land'
   | 'missedgate'
+  | 'driftperfect'
+  | 'userocket'
+  | 'usecomet'
+  | 'comethit'
+  | 'cometmiss'
+  | 'warn'
   | 'finish'
   | 'raceover';
 
@@ -287,6 +314,19 @@ export interface Handling {
   /** AI starts a drift when the road ahead turns more than this (rad), and holds it above aiDriftHold. */
   aiDriftIn: number;
   aiDriftHold: number;
+  /**
+   * Phase 11 mechanics (D46): tyre slip-angle grip, drift-release bonus, car-shaped collisions, the 8-item roll,
+   * stat balance and the v2 AI. Off in PROTOTYPE_HANDLING, so the parity test still reproduces the prototype.
+   */
+  v2: boolean;
+  /** Tyre model: the most sideways deceleration the tyres give (m/s²) at the peak slip angle. */
+  tyrePeak: number;
+  /** Tyre model: share of the peak grip left deep in a slide (the soft fall-off). */
+  tyreFall: number;
+  /** How strongly the speed stat changes top speed (1 = prototype). */
+  statSpeed: number;
+  /** Extra boost (s) for releasing a drift right as a tier is reached. */
+  driftBonus: number;
 }
 export const PROTOTYPE_HANDLING: Readonly<Handling> = {
   driftLatGrip: 4.5,
@@ -298,6 +338,11 @@ export const PROTOTYPE_HANDLING: Readonly<Handling> = {
   turnFalloff: 0.3,
   aiDriftIn: 0.55,
   aiDriftHold: 0.22,
+  v2: false,
+  tyrePeak: 0,
+  tyreFall: 1,
+  statSpeed: 1,
+  driftBonus: 0,
 };
 export const DEFAULT_HANDLING: Readonly<Handling> = {
   driftLatGrip: 2.4,
@@ -307,8 +352,13 @@ export const DEFAULT_HANDLING: Readonly<Handling> = {
   speedMul: 1.3,
   turnRate: 2.15,
   turnFalloff: 0.22,
-  aiDriftIn: 0.42,
-  aiDriftHold: 0.18,
+  aiDriftIn: 0.32,
+  aiDriftHold: 0.14,
+  v2: true,
+  tyrePeak: 34,
+  tyreFall: 0.72,
+  statSpeed: 0.45,
+  driftBonus: 0.35,
 };
 
 export interface GameState {
@@ -326,6 +376,7 @@ export interface GameState {
   boxes: ItemBox[];
   pads: BoostPad[];
   slicks: Slick[];
+  comets: Comet[];
   orbs: Orb[];
   bolts: Bolt[];
   events: GameEvent[];
@@ -349,6 +400,8 @@ export const NEUTRAL: Readonly<KartInput> = {
   item: false,
   itemBack: false,
 };
+/** Phase 11: half the distance between a car's front and rear collision circles (m). */
+const CAR_HALF = 1.75;
 const AI_LANES = [-6, 6, -3, 3, 0];
 
 /** The prototype's grid: the single player started 5th (grid 4), AI filled the rest. */
@@ -428,6 +481,10 @@ function makeKart(T: Track, i: number, gridPos: number, ci: number, slot: number
     prog: 0,
     offroad: false,
     surf: 'asphalt',
+    threat: 0,
+    gpx: 0,
+    gpz: 0,
+    aiSc: -1,
     bank: 0,
     air: false,
     alt: 0,
@@ -446,6 +503,8 @@ function makeKart(T: Track, i: number, gridPos: number, ci: number, slot: number
     aiCfg,
   };
   locate(T, k, true);
+  k.gpx = k.x;
+  k.gpz = k.z;
   k.lastIdx = k.idx;
   k.prog = k.lap * N + k.idx + k.frac;
   k.px = k.x;
@@ -485,6 +544,7 @@ export class Game {
       boxes: [],
       pads: [],
       slicks: [],
+      comets: [],
       orbs: [],
       bolts: [],
       events: [],
@@ -519,11 +579,11 @@ export class Game {
     for (let a = 0; i < total; a++, i++) {
       const ci = aiChars[a % aiChars.length]!;
       const cfg: AiConfig = {
-        skill: D.skill[a % D.skill.length]!,
+        skill: D.skill[a % D.skill.length]! * (s.handling.v2 ? D.pace : 1),
         lane: AI_LANES[a % AI_LANES.length]!,
         ph: rng.range(0, 6),
         drifts: !!D.drift[a % D.drift.length],
-        corner: D.corner,
+        corner: s.handling.v2 ? D.cornerV2 : D.corner,
       };
       s.karts.push(makeKart(track, i, grid[i]!, ci, null, cfg));
     }
@@ -531,6 +591,10 @@ export class Game {
     const { CX, CZ, RX, RZ, H } = track;
     // D36: a faster game, scaled evenly for every kart so the field and the AI stay balanced
     const m = s.handling.speedMul;
+    // D46: the speed stat matters less on these long, fast tracks, so every character stays within 4%
+    if (s.handling.v2)
+      for (const k of s.karts)
+        k.P = { ...k.P, top: k.P.top - (k.ch.stats.speed - 3) * 0.8 * (1 - s.handling.statSpeed) };
     if (m !== 1) for (const k of s.karts) k.P = { ...k.P, top: k.P.top * m, acc: k.P.acc * m };
 
     if (opts.itemsOn) {
@@ -649,7 +713,12 @@ export class Game {
   }
 
   private endDrift(k: Kart): void {
-    if (k.drifting && k.driftLevel > 0) this.giveBoost(k, [0, 0.7, 1.2, 1.9][k.driftLevel]!, 'drift');
+    if (k.drifting && k.driftLevel > 0) {
+      // D46: releasing within a moment of reaching a tier earns a little extra
+      const perfect = this.handling.driftBonus > 0 && k.driftT - k.driftLevel < 0.2;
+      this.giveBoost(k, [0, 0.7, 1.2, 1.9][k.driftLevel]! + (perfect ? this.handling.driftBonus : 0), 'drift');
+      if (perfect) this.emit({ type: 'driftperfect', kart: k.id, lvl: k.driftLevel });
+    }
     k.drifting = false;
     k.driftT = 0;
     k.driftLevel = 0;
@@ -773,6 +842,8 @@ export class Game {
       k.ph = k.h;
       k.lastIdx = k.idx;
       k.prog = k.lap * T.N + k.idx + k.frac;
+      k.gpx = k.x;
+      k.gpz = k.z;
       // a rescue is a legitimate recovery: count the gates behind the drop point (never fewer than before)
       if (T.gates.length) {
         let g = 0;
@@ -819,6 +890,7 @@ export class Game {
     }
     if (k.hop > 0) k.hop -= dt;
     if (k.padCool > 0) k.padCool -= dt;
+    if (k.threat > 0) k.threat = Math.max(0, k.threat - dt);
     if (k.shield > 0) k.shield -= dt;
     if (k.stall > 0) k.stall -= dt;
     const P = k.P,
@@ -910,7 +982,16 @@ export class Game {
       const H = this.handling;
       // ice limits drift grip too; in the air there is no grip at all
       const grip = k.drifting ? (S.slick ? Math.min(H.driftLatGrip, S.grip) : H.driftLatGrip) : S.grip;
-      const newLat = air ? lat : lat * Math.exp(-grip * dt);
+      let newLat = air ? lat : lat * Math.exp(-grip * dt);
+      if (H.v2 && !air && !k.drifting) {
+        // D46 tyre model: grip follows the slip angle, rising to a peak and then falling off softly, so a big
+        // slide saturates and recovers predictably instead of snapping straight
+        const alpha = Math.atan2(Math.abs(lat), Math.max(1, Math.abs(sp)));
+        const f = alpha < 0.12 ? 1 : H.tyreFall + (1 - H.tyreFall) * Math.exp(-(alpha - 0.12) / 0.35);
+        const maxDrop = H.tyrePeak * f * (S.grip / 9) * dt;
+        const drop = Math.abs(lat - newLat);
+        if (drop > maxDrop) newLat = lat - Math.sign(lat) * maxDrop;
+      }
       const v2 = (sp * sp + lat * lat) * Math.exp(-(k.drifting ? H.driftDrag : 0.1) * dt);
       sp = (sp >= 0 ? 1 : -1) * Math.sqrt(Math.max(0, v2 - newLat * newLat));
       lat = newLat;
@@ -918,8 +999,6 @@ export class Game {
     k.vx = fx * sp + rx * lat;
     k.vz = fz * sp + rz * lat;
     k.sp = sp;
-    const ox = k.x,
-      oz = k.z;
     k.x += k.vx * dt;
     k.z += k.vz * dt;
 
@@ -982,11 +1061,13 @@ export class Game {
     const G = T.gates;
     if (G.length) {
       // ordered checkpoint gates (section 12.4): a lap counts only after passing every gate in order
-      if (k.gate < G.length && this.crossGate(G[k.gate]!, ox, oz, k.x, k.z) === 1) {
+      if (k.gate < G.length && this.crossGate(G[k.gate]!, k.gpx, k.gpz, k.x, k.z) === 1) {
         k.gate++;
         const sn = T.sectors.indexOf(G[k.gate - 1]!);
         if (sn > 0) this.sectorDone(k, sn);
-      } else if (k.gate > 0 && this.crossGate(G[k.gate - 1]!, ox, oz, k.x, k.z) === -1) k.gate--;
+      } else if (k.gate > 0 && this.crossGate(G[k.gate - 1]!, k.gpx, k.gpz, k.x, k.z) === -1) k.gate--;
+      k.gpx = k.x;
+      k.gpz = k.z;
     }
     const lineFwd = k.lastIdx > N * 0.75 && k.idx < N * 0.25;
     if (lineFwd && G.length && k.gate < G.length) {
@@ -1023,7 +1104,8 @@ export class Game {
       else k.wrongT = Math.max(0, k.wrongT - dt * 2);
       if (thr && k.spin <= 0 && Math.abs(sp) < 3) k.stuckT += dt;
       else k.stuckT = Math.max(0, k.stuckT - dt);
-      const bot = Game.autoDriven(k);
+      // an AI on a shortcut points away from the road it skips: that is not being lost
+      const bot = Game.autoDriven(k) && k.aiSc < 0 && !k.inSc;
       if (bot && k.spin <= 0 && Math.abs(wrapA(k.h - ANG[k.idx]!)) > 1.4) k.lostT += dt;
       else k.lostT = 0;
       // off the track for 4 s (not in a shortcut) also calls the drone; the prototype track keeps its own rules
@@ -1106,6 +1188,69 @@ export class Game {
     } else if (it === 'shield') {
       k.shield = 10;
       this.emit({ type: 'useshield', kart: k.id });
+    } else if (it === 'rocket') {
+      // a long boost that also ploughs through hazards
+      this.giveBoost(k, MAX_BOOST, 'item');
+      k.boostTier = 3;
+      k.invuln = Math.max(k.invuln, MAX_BOOST);
+      this.emit({ type: 'userocket', kart: k.id });
+    } else if (it === 'comet') {
+      let tgt: Kart | null = null;
+      for (const c of s.karts) if (c !== k && !c.finished && c.rescue <= 0 && (!tgt || c.rank < tgt.rank)) tgt = c;
+      if (tgt) {
+        const T0 = 2.4;
+        s.comets.push({
+          owner: k,
+          target: tgt,
+          t: T0,
+          t0: T0,
+          sx: k.x,
+          sy: k.y + 30,
+          sz: k.z,
+          x: k.x,
+          y: k.y + 30,
+          z: k.z,
+        });
+        this.threaten(tgt, T0);
+        this.emit({ type: 'usecomet', kart: k.id, other: tgt.id });
+      }
+    }
+  }
+
+  /** Start (or extend) an incoming-projectile warning; the first moment emits a 'warn' event for the phone and HUD. */
+  private threaten(k: Kart, t: number): void {
+    if (k.threat <= 0) this.emit({ type: 'warn', kart: k.id });
+    k.threat = Math.max(k.threat, t);
+  }
+
+  /** Seeker Comets arc over the field and strike the leader; a boost dodges, a shield blocks (D8). */
+  private stepComets(dt: number): void {
+    const s = this.s;
+    for (let n = s.comets.length - 1; n >= 0; n--) {
+      const c = s.comets[n]!,
+        g = c.target;
+      c.t -= dt;
+      const u = 1 - Math.max(0, c.t) / c.t0,
+        e = u * u * (3 - 2 * u);
+      c.x = c.sx + (g.x - c.sx) * e;
+      c.z = c.sz + (g.z - c.sz) * e;
+      c.y = c.sy + (g.y + 1 - c.sy) * e + Math.sin(u * Math.PI) * 40;
+      if (g.finished || g.rescue > 0) {
+        s.comets.splice(n, 1);
+        continue;
+      }
+      g.threat = Math.max(g.threat, 0.1);
+      if (c.t > 0) continue;
+      s.comets.splice(n, 1);
+      if (g.boost > 0) this.emit({ type: 'cometmiss', kart: g.id, x: g.x, y: g.y, z: g.z });
+      else {
+        const hit = this.spinOut(g);
+        if (hit) {
+          g.vx *= 0.4;
+          g.vz *= 0.4;
+        }
+        this.emit({ type: hit ? 'comethit' : 'cometmiss', kart: g.id, x: g.x, y: g.y, z: g.z });
+      }
     }
   }
 
@@ -1126,6 +1271,8 @@ export class Game {
         }
       }
       o.target = tgt;
+      // warn the target once the orb is close behind it (section 12.3 fairness)
+      if (tgt && this.handling.v2 && (tgt.prog - o.prog) * o.dir * T.DS < 70) this.threaten(tgt, 0.25);
       o.prog += (o.dir * 80 * dt) / T.DS;
       if (tgt) o.lat += (tgt.lat - o.lat) * Math.min(1, 5 * dt);
       posOnTrack(T, o.prog, o.lat, o);
@@ -1272,8 +1419,26 @@ export class Game {
         if (a.rescue > 0 || b.rescue > 0 || Math.abs(a.y - b.y) > 1.6) continue;
         let dx = a.x - b.x,
           dz = a.z - b.z;
-        const d2 = dx * dx + dz * dz,
-          R = KART_R * 2;
+        let d2 = dx * dx + dz * dz;
+        const R = KART_R * 2;
+        if (this.handling.v2 && d2 < 64) {
+          // D46: the race car is long; collide its front and rear circles instead of one centre circle
+          const fa = [Math.sin(a.h) * CAR_HALF, Math.cos(a.h) * CAR_HALF],
+            fb = [Math.sin(b.h) * CAR_HALF, Math.cos(b.h) * CAR_HALF];
+          let best = 1e9;
+          for (const sa of [-1, 1])
+            for (const sb of [-1, 1]) {
+              const ex = a.x + fa[0]! * sa - (b.x + fb[0]! * sb),
+                ez = a.z + fa[1]! * sa - (b.z + fb[1]! * sb),
+                e2 = ex * ex + ez * ez;
+              if (e2 < best) {
+                best = e2;
+                dx = ex;
+                dz = ez;
+              }
+            }
+          d2 = best;
+        }
         if (d2 < R * R) {
           const d = Math.sqrt(d2) || 0.001;
           dx /= d;
@@ -1318,7 +1483,11 @@ export class Game {
         if (dx * dx + dz * dz < 3.8 * 3.8) {
           b.cool = 4;
           k.roll = 1.0;
-          k.pending = chooseItem(k.rank, s.rng);
+          k.pending = chooseItem(
+            k.rank,
+            s.rng,
+            this.handling.v2 ? { total: s.karts.length, lap: k.lap, cometActive: s.comets.length > 0 } : undefined,
+          );
           this.emit({ type: 'pickup', kart: k.id, box: bi });
         }
       }
@@ -1353,6 +1522,7 @@ export class Game {
     }
     for (const b of s.boxes) if (b.cool > 0) b.cool -= dt;
     this.stepOrbs(dt);
+    this.stepComets(dt);
     this.stepBolts(dt);
     this.stepSlicks(dt);
     const order = this.updateRanks();

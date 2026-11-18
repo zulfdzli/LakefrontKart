@@ -4,6 +4,7 @@
  * compares against the average progress of the human players (section 8.4).
  */
 import { clamp, wrapA, BOOSTSP } from './constants';
+import { SURF } from './track';
 import type { GameState, Kart } from './game';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
@@ -30,6 +31,13 @@ export interface DifficultyTable {
   items: number;
   /** Rubber-band top-speed multipliers: [when far ahead of the humans, when far behind]. */
   rb: readonly [number, number];
+  /** v2 (D46): a driving mistake (late turn-in, running wide) every `period` s, lasting `dur` s. */
+  mistake: readonly [number, number];
+  /** v2: chance that an AI takes a worthwhile shortcut. */
+  shortcut: number;
+  /** v2 corner caution and pace (skill multiplier): these set the 3% gaps between levels (D9, D46). */
+  cornerV2: number;
+  pace: number;
 }
 
 export const DIFF: Record<Difficulty, DifficultyTable> = {
@@ -40,6 +48,10 @@ export const DIFF: Record<Difficulty, DifficultyTable> = {
     start: 0.1,
     items: 0.6,
     rb: [0.93, 1.03],
+    mistake: [13, 1.6],
+    shortcut: 0,
+    cornerV2: 1.15,
+    pace: 1,
   },
   normal: {
     skill: [0.96, 0.945, 0.935, 0.92, 0.905],
@@ -48,6 +60,10 @@ export const DIFF: Record<Difficulty, DifficultyTable> = {
     start: 0.35,
     items: 1.0,
     rb: [0.95, 1.04],
+    mistake: [28, 1.0],
+    shortcut: 0.45,
+    cornerV2: 1.0,
+    pace: 0.985,
   },
   hard: {
     skill: [1.0, 0.995, 0.985, 0.975, 0.965],
@@ -56,6 +72,10 @@ export const DIFF: Record<Difficulty, DifficultyTable> = {
     start: 0.65,
     items: 1.4,
     rb: [0.97, 1.05],
+    mistake: [70, 0.6],
+    shortcut: 0.85,
+    cornerV2: 0.78,
+    pace: 1,
   },
 };
 
@@ -72,6 +92,84 @@ function humanReference(s: GameState): number | null {
     n++;
   }
   return n ? sum / n : null;
+}
+
+/** Deterministic per-kart, per-lap hash in [0, 1). */
+function h01(a: number, b: number): number {
+  let h = Math.imul(a + 1, 374761393) ^ Math.imul(b + 7, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** v2: steer target inside a shortcut corridor, 14 m further along its polyline; or null when not taking one. */
+function shortcutTarget(s: GameState, k: Kart): { x: number; z: number } | null {
+  const T = s.track,
+    N = T.N;
+  if (k.slot !== null || !s.handling.v2 || !T.shortcuts.length) {
+    k.aiSc = -1;
+    return null;
+  }
+  if (k.aiSc < 0) {
+    T.shortcuts.forEach((sc, si) => {
+      const ahead = ((sc.i0 - k.idx + N) % N) * T.DS;
+      if (ahead > 15 && ahead < 45 && k.aiSc < 0) {
+        // only where it pays: braking for the turn-in costs more than the distance saved, unless the AI holds a
+        // boost to fire inside (a fast surface needs one turbo; a slow sand or snow trail needs the long rocket)
+        const fast = (SURF[sc.surface].cap ?? 99) * s.handling.speedMul >= 24;
+        const worth = k.item === 'rocket' || k.boost > 2 || (fast && (k.item === 'turbo' || k.item === 'turbo3'));
+        if (worth && h01(k.id * 31 + si, k.lap) < DIFF[s.diff].shortcut) k.aiSc = si;
+      }
+    });
+    if (k.aiSc < 0) return null;
+  }
+  const sc = T.shortcuts[k.aiSc]!;
+  // done once back on the road past the exit, or abandoned when far from the corridor
+  const pastExit = ((k.idx - sc.i1 + N) % N) * T.DS;
+  if (!k.inSc && pastExit > 0 && pastExit < 60 && (k.idx - sc.i0 + N) % N > (sc.i1 - sc.i0 + N) % N) {
+    k.aiSc = -1;
+    return null;
+  }
+  const p = sc.pts;
+  let best = 1e18,
+    bs = 0,
+    bt = 0;
+  for (let i = 0; i + 3 < p.length; i += 2) {
+    const ax = p[i]!,
+      az = p[i + 1]!,
+      ex = p[i + 2]! - ax,
+      ez = p[i + 3]! - az,
+      l2 = ex * ex + ez * ez || 1;
+    const t = clamp(((k.x - ax) * ex + (k.z - az) * ez) / l2, 0, 1);
+    const d = (k.x - ax - ex * t) ** 2 + (k.z - az - ez * t) ** 2;
+    if (d < best) {
+      best = d;
+      bs = i;
+      bt = t;
+    }
+  }
+  if (best > 60 * 60) {
+    k.aiSc = -1;
+    return null;
+  }
+  // walk 14 m along the polyline from the closest point
+  let rem = k.inSc ? 14 : 9,
+    i = bs,
+    t = bt;
+  for (;;) {
+    const ax = p[i]!,
+      az = p[i + 1]!,
+      ex = p[i + 2]! - ax,
+      ez = p[i + 3]! - az,
+      L = Math.hypot(ex, ez);
+    const left = (1 - t) * L;
+    if (rem <= left || i + 5 >= p.length) {
+      const tt = Math.min(1, t + rem / (L || 1));
+      return { x: ax + ex * tt, z: az + ez * tt };
+    }
+    rem -= left;
+    i += 2;
+    t = 0;
+  }
 }
 
 export function aiInput(s: GameState, k: Kart, dt: number): void {
@@ -96,11 +194,20 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
       break;
     }
   }
-  lane = clamp(lane, -10, 10);
-  const tx = CX[j]! + RX[j]! * lane,
+  const v2 = s.handling.v2;
+  lane = v2 ? clamp(lane, -(T.HW[j]! - 3), T.HW[j]! - 3) : clamp(lane, -10, 10);
+  let tx = CX[j]! + RX[j]! * lane,
     tz = CZ[j]! + RZ[j]! * lane;
+  const sct = shortcutTarget(s, k);
+  if (sct) {
+    tx = sct.x;
+    tz = sct.z;
+  }
   const diff = wrapA(Math.atan2(tx - k.x, tz - k.z) - k.h);
-  inp.steer = clamp(-diff * 2.6, -1, 1);
+  // v2 mistakes (D46): now and then the AI turns in late and runs wide; more often on Easy
+  const mk = DIFF[s.diff].mistake;
+  const mistake = v2 && k.slot === null && (s.time + a.ph * 9.7) % mk[0] < mk[1] && s.phase === 'race' && !sct;
+  inp.steer = clamp(-diff * (mistake ? 1.3 : 2.6), -1, 1);
 
   const ahead = Math.round((8 + Math.max(0, sp) * 1.0) / DS);
   const turnAng = Math.abs(wrapA(ANG[(k.idx + ahead) % N]! - ANG[k.idx]!));
@@ -115,9 +222,13 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
     }
   }
   let target = k.P.top * k.rbMul * a.skill;
-  target = Math.min(target, Math.max(17 * s.handling.speedMul, k.P.top - turnAng * 38 * a.corner));
+  // v2: better handling carries more speed through corners (balances the speed stat); mistakes brake late
+  const cornerK = v2 ? (38 * a.corner) / k.P.turn : 38 * a.corner;
+  target = Math.min(target, Math.max(17 * s.handling.speedMul, k.P.top - turnAng * cornerK * (mistake ? 0.75 : 1)));
   if (k.boost > 0) target = BOOSTSP * s.handling.speedMul;
   if (Math.abs(diff) > 1.0) target = Math.min(target, 9); // target far off the nose: slow down so the turn tightens
+  // v2: brake for a shortcut's turn-in, harder the sharper it leaves the road, so the car stays inside the corridor
+  if (sct && !k.inSc) target = Math.min(target, Math.max(12, 30 - Math.abs(diff) * 28));
   inp.throttle = sp < target;
   inp.brake = sp > target + 5;
   const Hd = s.handling;
@@ -162,7 +273,15 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
       case 'shield':
         use = k.shield <= 0;
         break;
+      case 'rocket':
+        use = turnAng < 0.35 || k.aiSc >= 0 || k.itemWait < -4;
+        break;
+      case 'comet':
+        use = true;
+        break;
     }
+    // turbos fire on entering a shortcut, where the boost pays most
+    if ((k.item === 'turbo' || k.item === 'turbo3') && k.inSc) use = true;
     if (use) {
       inp.item = true;
       inp.itemBack = back;

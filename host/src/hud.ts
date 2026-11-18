@@ -10,8 +10,17 @@ import { DRIFT_COL } from './art/palette';
 import { hexStr } from './art/geo';
 import type { Rect } from './renderer';
 
-const ICON: Record<string, string> = { turbo: '⚡', turbo3: '⚡', oil: '🛢️', orb: '🎯', bolt: '🥏', shield: '🛡️' };
-const ROUL = ['⚡', '🛢️', '🎯', '🥏', '🛡️'];
+const ICON: Record<string, string> = {
+  turbo: '⚡',
+  turbo3: '⚡',
+  oil: '🛢️',
+  orb: '🎯',
+  bolt: '🥏',
+  shield: '🛡️',
+  rocket: '🚀',
+  comet: '☄️',
+};
+const ROUL = ['⚡', '🛢️', '🎯', '🥏', '🛡️', '🚀', '☄️'];
 
 export const ord = (n: number): string =>
   n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
@@ -46,6 +55,7 @@ const TEMPLATE = /* html */ `
   <div class="draftTag">💨 SLIPSTREAM</div>
   <div class="msg"></div>
   <div class="wrong">⚠ WRONG WAY</div>
+  <div class="threat">⚠ INCOMING!</div>
   <div class="bottom">
     <div class="driftbar"><i class="driftfill"></i></div>
     <div class="speed"><span class="spd">0</span> <small>km/h</small></div>
@@ -325,7 +335,8 @@ export class PlayerHud {
     const f = this.q('driftfill');
     f.style.width = bw + '%';
     f.style.background = hexStr(DRIFT_COL[p.drifting ? Math.min(3, p.driftLevel + 1) : 0]!);
-    this.cls('wrong', 'on', p.wrongT > 1 && !p.finished);
+    this.cls('wrong', 'on', p.wrongT > 1 && !p.finished && p.threat <= 0);
+    this.cls('threat', 'on', p.threat > 0 && !p.finished);
     this.cls('draftTag', 'on', p.drafting && p.boost <= 0);
     // countdown lights
     const L = this.q('lights'),
