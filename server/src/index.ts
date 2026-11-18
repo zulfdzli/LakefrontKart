@@ -125,7 +125,11 @@ hostNs.on('connection', (socket) => {
     if (!room || !Array.isArray(r?.standings)) return;
     for (const p of rooms.players(room))
       if (p.socketId)
-        ctrlNs.to(p.socketId).emit('results', { standings: r.standings, isLeader: rooms.isLeader(room, p) });
+        ctrlNs.to(p.socketId).emit('results', {
+          standings: r.standings,
+          isLeader: rooms.isLeader(room, p),
+          ...(r.gp && typeof r.gp === 'object' ? { gp: r.gp } : {}),
+        });
   });
   socket.on('host:kick', (k) => {
     if (!room || typeof k?.slot !== 'number') return;

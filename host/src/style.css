@@ -1325,3 +1325,97 @@ h1.logo span {
 .phud .threat.on {
   display: block;
 }
+
+/* phase 12: Grand Prix table and the race intro title card */
+#standings .pts {
+  font-style: normal;
+  color: var(--sun);
+  margin-left: 8px;
+}
+#gpTable {
+  width: 100%;
+  padding: 8px 12px 10px;
+  border-radius: 16px;
+  background: rgba(14, 18, 38, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+#gpTable h4 {
+  margin: 0 0 6px;
+  text-align: center;
+  letter-spacing: 3px;
+  font-size: 13px;
+  opacity: 0.8;
+}
+#gpTable ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+#gpTable li {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 8px;
+  border-radius: 8px;
+}
+#gpTable li.me {
+  background: rgba(255, 235, 59, 0.22);
+}
+#gpTable li b {
+  color: var(--sun);
+}
+#gpTable .dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--c);
+  margin: 0 4px;
+}
+.introCard {
+  position: fixed;
+  left: 50%;
+  bottom: 14%;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 40px;
+  border-radius: 20px;
+  background: rgba(14, 18, 38, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  opacity: 0;
+}
+.introCard b {
+  font-size: 48px;
+  letter-spacing: 2px;
+  color: #fff;
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+.introCard span {
+  font-size: 18px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #ffd86b;
+}
+.introCard.on {
+  animation: introCard 4.2s ease-out both;
+}
+@keyframes introCard {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  12%,
+  78% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+}

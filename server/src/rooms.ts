@@ -51,7 +51,7 @@ export interface Room {
 export const DEFAULT_CONFIG: LeaderConfig = {
   mode: 'single',
   trackId: 'meadows',
-  gpOrder: ['meadows', 'canyon', 'frosty'],
+  gpOrder: ['meadows', 'canyon', 'frosty', 'sepang'],
   laps: 2,
   aiFill: true,
   aiDifficulty: 'normal',
@@ -228,9 +228,10 @@ export class RoomManager {
     if (typeof o.trackId === 'string' && tracks.includes(o.trackId)) c.trackId = o.trackId;
     if (
       Array.isArray(o.gpOrder) &&
-      o.gpOrder.length === 3 &&
+      o.gpOrder.length >= 1 &&
+      o.gpOrder.length <= tracks.length &&
       o.gpOrder.every((t) => tracks.includes(t)) &&
-      new Set(o.gpOrder).size === 3
+      new Set(o.gpOrder).size === o.gpOrder.length
     )
       c.gpOrder = [...o.gpOrder];
     if (o.laps === 1 || o.laps === 2 || o.laps === 3) c.laps = o.laps;

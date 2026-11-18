@@ -149,7 +149,7 @@ export class World {
     this.themeId = th.id;
     const s = this.scene;
     (s.background as THREE.Color).setHex(th.horizon);
-    (s.fog as THREE.Fog).color.setHex(th.horizon);
+    (s.fog as THREE.Fog | null)?.color.setHex(th.horizon);
     this.hemi.color.setHex(th.hemiSky);
     this.hemi.groundColor.setHex(th.hemiGround);
     this.hemi.intensity = th.hemi * LEGACY_LIGHT_SCALE;
@@ -255,7 +255,58 @@ export class World {
     for (const v of this.views) v.root.visible = only === null || only.has(v.kartId);
   }
 
+  private trophy: THREE.Group | null = null;
+  /** The Grand Prix trophy: a golden cup turning above the winner's step (D48). */
+  setTrophy(on: boolean): void {
+    if (on && !this.trophy) {
+      const gold = new THREE.MeshPhysicalMaterial({
+        color: 0xffc83d,
+        metalness: 1,
+        roughness: 0.18,
+        clearcoat: 1,
+        emissive: 0x3a2400,
+      });
+      const g = new THREE.Group();
+      const prof: THREE.Vector2[] = [];
+      for (const [x, y] of [
+        [0, 0],
+        [0.55, 0],
+        [0.55, 0.12],
+        [0.22, 0.2],
+        [0.16, 0.7],
+        [0.32, 0.85],
+        [0.62, 1.15],
+        [0.72, 1.7],
+        [0.66, 1.72],
+        [0.5, 1.2],
+        [0, 1.0],
+      ] as const)
+        prof.push(new THREE.Vector2(x, y));
+      g.add(new THREE.Mesh(new THREE.LatheGeometry(prof, 32), gold));
+      for (const sd of [-1, 1]) {
+        const h = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.06, 8, 20, Math.PI), gold);
+        h.position.set(sd * 0.72, 1.35, 0);
+        h.rotation.z = (sd * -Math.PI) / 2;
+        g.add(h);
+      }
+      g.scale.setScalar(1.6);
+      this.trophy = g;
+      this.scene.add(g);
+    }
+    if (this.trophy) this.trophy.visible = on;
+  }
+
   podiumPose(order: Kart[], t: number): void {
+    if (this.trophy?.visible) {
+      const p = this.podium,
+        sp = p.spots[0]!;
+      this.trophy.position.set(
+        p.x + Math.cos(p.ry) * sp[0] + Math.sin(p.ry) * sp[2],
+        p.y + sp[1] + 4.2 + Math.sin(t * 2) * 0.15,
+        p.z - Math.sin(p.ry) * sp[0] + Math.cos(p.ry) * sp[2],
+      );
+      this.trophy.rotation.y = t * 0.9;
+    }
     const p = this.podium,
       s = Math.sin(p.ry),
       c = Math.cos(p.ry);

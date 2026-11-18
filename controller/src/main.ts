@@ -7,8 +7,10 @@ import {
   SLOT_COLORS,
   isRoomCode,
   type JoinErrorReason,
+  type LeaderConfig,
   type LobbyUpdate,
   type Phase,
+  type GpInfo,
   type Standing,
 } from '@tk/shared';
 import { PhoneNet } from './net';
@@ -24,7 +26,7 @@ const remote = new Remote();
 let phase: Phase = 'lobby';
 let lobby: LobbyUpdate | null = null;
 let ready = false;
-let results: { standings: Standing[]; isLeader: boolean } | null = null;
+let results: { standings: Standing[]; isLeader: boolean; gp?: GpInfo } | null = null;
 
 /* ---------------- screens ---------------- */
 type Screen = 'join' | 'wait' | 'drive' | 'results';
@@ -152,11 +154,64 @@ net.onJoinLost = (reason) => {
 };
 
 /* ---------------- waiting room ---------------- */
+const TRACK_NAMES: Record<string, string> = {
+  meadows: 'Sunny Meadows',
+  canyon: 'Dusty Canyon',
+  frosty: 'Frosty Peaks',
+  sepang: 'Sepang Circuit',
+};
+
+/** The leader's race settings (section 12.6): mode, track, laps, AI difficulty, AI fill, items. */
+function renderConfig(leader: boolean): void {
+  if (!lobby) return;
+  const c = lobby.config;
+  $('cfgBox').hidden = !leader;
+  const track = $('cfgTrack');
+  if (track.children.length !== Object.keys(TRACK_NAMES).length) {
+    track.innerHTML = Object.entries(TRACK_NAMES)
+      .map(([id, n]) => `<button data-v="${id}" type="button">${n}</button>`)
+      .join('');
+    for (const b of Array.from(track.children) as HTMLElement[])
+      b.addEventListener('click', () => sendConfig({ trackId: b.dataset.v! }));
+  }
+  const sel = (id: string, v: string): void => {
+    for (const b of Array.from($(id).children) as HTMLElement[]) b.classList.toggle('sel', b.dataset.v === v);
+  };
+  sel('cfgMode', c.mode);
+  sel('cfgTrack', c.trackId);
+  sel('cfgLaps', String(c.laps));
+  sel('cfgDiff', c.aiDifficulty);
+  $('cfgTrackRow').hidden = c.mode === 'gp';
+  $('cfgFill').classList.toggle('on', c.aiFill);
+  $('cfgItems').classList.toggle('on', c.itemsOn);
+  const where =
+    c.mode === 'gp' ? `Grand Prix: ${c.gpOrder.map((t) => TRACK_NAMES[t] ?? t).join(' → ')}` : TRACK_NAMES[c.trackId];
+  $('cfgSummary').textContent =
+    `${where} · ${c.laps} lap${c.laps > 1 ? 's' : ''} · ${c.aiDifficulty} AI${c.aiFill ? '' : ' (off)'} · items ${c.itemsOn ? 'on' : 'off'}`;
+}
+function sendConfig(patch: Partial<LeaderConfig>): void {
+  if (!lobby) return;
+  haptic('tap');
+  net.config({ ...lobby.config, ...patch });
+}
+for (const [id, key] of [
+  ['cfgMode', 'mode'],
+  ['cfgLaps', 'laps'],
+  ['cfgDiff', 'aiDifficulty'],
+] as const)
+  for (const b of Array.from($(id).children) as HTMLElement[])
+    b.addEventListener('click', () =>
+      sendConfig({ [key]: key === 'laps' ? Number(b.dataset.v) : b.dataset.v } as Partial<LeaderConfig>),
+    );
+$('cfgFill').addEventListener('click', () => sendConfig({ aiFill: !lobby?.config.aiFill }));
+$('cfgItems').addEventListener('click', () => sendConfig({ itemsOn: !lobby?.config.itemsOn }));
+
 function renderWait(): void {
   const j = net.joined;
   if (!j || !lobby) return;
   const me = lobby.players.find((p) => p.slot === j.slot);
   const leader = !!me?.isLeader;
+  renderConfig(leader);
   (document.querySelector('.leaderTag') as HTMLElement).hidden = !leader;
   $('startBtn').hidden = !leader;
   $('waitNote').textContent = leader ? 'You lead: start when everyone is in.' : 'Waiting for the leader to start…';
@@ -290,6 +345,28 @@ function renderResults(): void {
     .join('');
   $('leaderRow').hidden = !results.isLeader;
   $('resNote').hidden = results.isLeader;
+  // Grand Prix: points for this race, the totals, and the leader's NEXT RACE
+  const gp = results.gp;
+  $('gpBox').hidden = !gp;
+  $('againBtn').textContent = gp ? (gp.final ? 'NEW GRAND PRIX' : 'NEXT RACE') : 'RACE AGAIN';
+  if (gp) {
+    const mine = gp.table.findIndex((s) => s.slot === j.slot);
+    $('gpHead').textContent = gp.final ? 'GRAND PRIX · FINAL' : `GRAND PRIX · AFTER RACE ${gp.race} OF ${gp.total}`;
+    if (gp.final && mine >= 0)
+      $('resTitle').textContent =
+        mine === 0 ? 'You won the Grand Prix! 🏆' : `Grand Prix: ${mine + 1}${['st', 'nd', 'rd'][mine] ?? 'th'}`;
+    $('gpStand').innerHTML = gp.table
+      .map(
+        (s, i) =>
+          `<li class="${s.slot === j.slot ? 'me' : ''}" style="--c:${s.color}"><em class="rk">${i + 1}</em><i></i><span>${s.name.replace(/</g, '&lt;')}</span><b>${s.points ?? 0}</b></li>`,
+      )
+      .join('');
+    $('resNote').textContent = gp.next ? `Next: ${gp.next}. Waiting for the leader…` : 'Waiting for the leader…';
+    for (const li of Array.from($('standings').children) as HTMLElement[]) {
+      const s = results.standings[Array.from($('standings').children).indexOf(li)];
+      if (s?.points !== undefined) li.querySelector('b')!.textContent += ` +${s.points}`;
+    }
+  } else $('resNote').textContent = 'Waiting for the leader…';
 }
 const fmtT = (t: number): string => {
   const m = Math.floor(t / 60),

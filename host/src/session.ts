@@ -17,7 +17,7 @@ import {
   type Phase,
 } from '@tk/shared';
 import { World, type Rect, type ViewToRender } from './renderer';
-import { ChaseCam } from './camera';
+import { ChaseCam, INTRO_T } from './camera';
 import { PlayerHud, MinimapBase, SharedPanel } from './hud';
 import { SpeedLines } from './art/effects';
 import { kartPaint } from './art/palette';
@@ -39,7 +39,7 @@ export interface PlayerView {
   rect: Rect;
 }
 
-export type SessionStage = 'preview' | 'racing' | 'podium';
+export type SessionStage = 'preview' | 'intro' | 'racing' | 'podium';
 
 export class RaceSession {
   readonly game: Game;
@@ -59,6 +59,11 @@ export class RaceSession {
   private readonly panel: SharedPanel;
   private readonly camPositions: THREE.Vector3[] = [];
   onResults: ((order: Kart[]) => void) | null = null;
+  /** Grand Prix: when the race ends, may reorder the podium (overall standings after the final). */
+  podiumFor: ((race: Kart[]) => Kart[] | null) | null = null;
+  /** Show the Grand Prix trophy on the podium. */
+  trophy = false;
+  private introLeft = 0;
   /** Feedback for a player's phone (vibration, countdown, alerts). */
   onHaptic: ((slot: number, kind: HapticKind, n?: number) => void) | null = null;
 
@@ -120,15 +125,18 @@ export class RaceSession {
   setStage(stage: SessionStage): void {
     this.stage = stage;
     for (const p of this.players) {
-      p.cam.mode = stage === 'preview' ? 'orbit' : stage === 'podium' ? 'podium' : 'chase';
+      p.cam.mode =
+        stage === 'preview' ? 'orbit' : stage === 'podium' ? 'podium' : stage === 'intro' ? 'intro' : 'chase';
       p.hud.setVisible(stage === 'racing');
     }
     this.panel.setVisible(stage === 'racing');
     this.world.setVisibleKarts(stage === 'podium' ? new Set(this.podiumOrder.slice(0, 3).map((k) => k.id)) : null);
     this.audio.mood = stage === 'preview' ? 'menu' : stage === 'podium' ? 'podium' : 'race';
+    this.world.setTrophy(stage === 'podium' && this.trophy);
   }
 
-  start(): void {
+  /** Start the race; with `intro`, a track flyover plays before the countdown. */
+  start(intro = false): void {
     this.world.effects?.clearAll(this.world.views);
     for (const p of this.players) {
       p.cam.reset(p.kart.h);
@@ -140,6 +148,13 @@ export class RaceSession {
     this.audio.tempo = 1;
     this.slowMo = 0;
     this.lastFinish = null;
+    if (intro) {
+      // section 12.4: a flyover first, then the grid and the countdown
+      for (const p of this.players) p.cam.introT = 0;
+      this.introLeft = INTRO_T;
+      this.setStage('intro');
+      return;
+    }
     this.setStage('racing');
     this.game.startCountdown();
   }
@@ -180,6 +195,11 @@ export class RaceSession {
         this.doneT += dt;
         if (this.doneT > RESULTS_DELAY) this.showPodium();
       }
+    } else if (live && this.stage === 'intro') {
+      this.game.step(STEP); // grid phase: ambient time only
+      this.game.drainEvents();
+      this.introLeft -= dt;
+      if (this.introLeft <= 0) this.skipIntro();
     } else if (live && this.stage === 'preview') {
       this.game.step(STEP); // grid phase: only keeps time moving for ambient animation
       this.game.drainEvents();
@@ -221,6 +241,14 @@ export class RaceSession {
         k.drifting || (k.wall && Math.abs(k.sp) > 10),
       );
     }
+  }
+
+  /** End the intro now (Space on the host): straight to the countdown. */
+  skipIntro(): void {
+    if (this.stage !== 'intro') return;
+    this.introLeft = 0;
+    this.setStage('racing');
+    this.game.startCountdown();
   }
 
   /** The phase phones should show. */
@@ -274,7 +302,8 @@ export class RaceSession {
 
   private showPodium(): void {
     if (this.stage === 'podium') return;
-    this.podiumOrder = this.s.standings ?? this.game.updateRanks();
+    const race = this.s.standings ?? this.game.updateRanks();
+    this.podiumOrder = this.podiumFor?.(race) ?? race;
     this.podT = 0;
     this.setStage('podium');
     this.world.hideTags();
@@ -285,7 +314,7 @@ export class RaceSession {
       a.tone(659, 0.18, 'triangle', 0.12, 0, a.at(0.18));
       a.tone(784, 0.4, 'triangle', 0.12, 0, a.at(0.36));
     }
-    this.onResults?.(this.podiumOrder);
+    this.onResults?.(race);
   }
 
   private playerOf(kartId: number): PlayerView | undefined {

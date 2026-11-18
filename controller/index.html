@@ -45,6 +45,38 @@
       <section id="wait" class="screen" hidden>
         <div class="me"><i class="meDot"></i><b id="meName"></b><span class="leaderTag" hidden>👑 Leader</span></div>
         <div class="chars" id="chars"></div>
+        <div class="cfgBox" id="cfgBox">
+          <div class="cfgRow">
+            <span>Mode</span>
+            <div class="seg" id="cfgMode">
+              <button data-v="single" type="button">Single race</button
+              ><button data-v="gp" type="button">Grand Prix</button>
+            </div>
+          </div>
+          <div class="cfgRow" id="cfgTrackRow">
+            <span>Track</span>
+            <div class="seg wrap" id="cfgTrack"></div>
+          </div>
+          <div class="cfgRow">
+            <span>Laps</span>
+            <div class="seg" id="cfgLaps">
+              <button data-v="1" type="button">1</button><button data-v="2" type="button">2</button
+              ><button data-v="3" type="button">3</button>
+            </div>
+          </div>
+          <div class="cfgRow">
+            <span>AI</span>
+            <div class="seg" id="cfgDiff">
+              <button data-v="easy" type="button">Easy</button><button data-v="normal" type="button">Normal</button
+              ><button data-v="hard" type="button">Hard</button>
+            </div>
+          </div>
+          <div class="cfgRow">
+            <span>AI racers</span><button class="tog" id="cfgFill" type="button"></button><span>Items</span
+            ><button class="tog" id="cfgItems" type="button"></button>
+          </div>
+        </div>
+        <p class="cfgSummary" id="cfgSummary"></p>
         <button id="readyBtn" class="pbtn" type="button">READY</button>
         <button id="startBtn" class="pbtn primary" type="button" hidden>START RACE</button>
         <p class="note" id="waitNote">Waiting for the leader to start…</p>
@@ -57,6 +89,10 @@
       <section id="results" class="screen" hidden>
         <div class="resTitle" id="resTitle">FINISHED</div>
         <ol class="standings" id="standings"></ol>
+        <div class="gpBox" id="gpBox" hidden>
+          <h4 id="gpHead">GRAND PRIX</h4>
+          <ol class="standings" id="gpStand"></ol>
+        </div>
         <div class="row" id="leaderRow" hidden>
           <button class="pbtn primary" id="againBtn" type="button">RACE AGAIN</button>
           <button class="pbtn" id="lobbyBtn" type="button">LOBBY</button>

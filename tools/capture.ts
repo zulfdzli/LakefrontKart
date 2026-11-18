@@ -118,6 +118,17 @@ async function main(): Promise<void> {
     };
 
     await shot('01-title');
+    if (args.includes('--intro')) {
+      // phase 12: the race intro flyover
+      await page.evaluate(
+        ([seed, track]) => window.__tk.race({ seed, ci: 1, laps: 2, autopilot: true, track, intro: true }),
+        [SEED, TRACK] as const,
+      );
+      await frames(page, 1200);
+      await shot('00-intro-a');
+      await frames(page, 1800);
+      await shot('00-intro-b');
+    }
     await page.evaluate((seed) => window.__tk.race({ seed, ci: 1, laps: 2, autopilot: true }), SEED);
     await frames(page, 1300);
     await shot('02-countdown');

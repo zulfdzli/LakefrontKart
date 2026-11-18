@@ -578,6 +578,20 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **Grand Prix**: runs all four tracks in the order Meadows → Canyon → Frosty → Sepang (phase 12).
 - **Why**: Your requests.
 
+### D48 · Modes and flow (2026-11-19, phase 12)
+- **Q**: How do the leader's settings, the Grand Prix, the trophy ceremony and the race intro work?
+- **A**:
+  - **Leader settings on the phone**: on the waiting screen the leader sets the mode (Single race or Grand Prix), the track (single race), laps (1 to 3), AI difficulty, AI racers on or off, and items on or off. The server validates every value (section 12.8); everyone else sees a one-line summary. Host shortcuts remain: T cycles the track and G toggles the mode.
+  - **Grand Prix**: all four tracks in the order Meadows → Canyon → Frosty → Sepang (your choice: Sepang is in).
+    - **Points**: 15, 12, 10, 8, 6 and 4. Ties go to the better best finish, then to the latest race.
+    - **Identity across races**: players by slot, AI by character.
+    - **After each race**: the host shows the race results with "+points" and the standings so far. The phones show the same, and the leader gets NEXT RACE (Enter on the host).
+    - **After the final**: the podium shows the overall top three under a spinning golden trophy, the title names the champion, and the leader gets NEW GRAND PRIX or LOBBY. Going back to the lobby abandons a Grand Prix.
+    - **Data**: scoring is plain data (`shared/src/gp.ts`) with unit tests.
+  - **Race intro** (section 12.4): a 4.2 s flyover from high over the track back down the start straight to the grid, with a title card (track, and "Grand Prix · Race 2 of 4" or laps and difficulty). Space skips it. Automation skips it unless asked (`race({ intro: true })`).
+  - **Fixed**: switching to a second track crashed since phase 10, because the cinematic pass removes the scene's fog and the next theme change recoloured it. This affected T in the lobby and every Grand Prix race after the first.
+- **Why**: Section 12.6 and section 12.4.
+
 ---
 
 ## Gate 0 status

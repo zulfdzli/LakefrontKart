@@ -296,6 +296,64 @@ async function main(): Promise<void> {
     await aPortrait.setViewportSize({ width: 852, height: 393 });
     await aPortrait.waitForTimeout(300);
 
+    // phase 12: the leader sets up a 1-lap Grand Prix on the phone and the four races run with points
+    await host.keyboard.press('Escape');
+    await aPortrait.waitForSelector('#wait:not([hidden])', { timeout: 10000 });
+    await aPortrait.click('#cfgLaps button[data-v="1"]');
+    await aPortrait.click('#cfgMode button[data-v="gp"]');
+    const cfgOk = await host
+      .waitForFunction(
+        () => {
+          const c = (window.__tk.lobby() as unknown as { config: { mode: string; laps: number } }).config;
+          return c.mode === 'gp' && c.laps === 1;
+        },
+        null,
+        { timeout: 5000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    check('the leader sets mode and laps on the phone; the host follows', cfgOk);
+    const finishRace = (): Promise<string> =>
+      host.evaluate(() => {
+        const ses = window.__tk.session() as unknown as {
+          game: { setHumanAi(slot: number, on: boolean): void; startCountdown(): void };
+          skipIntro(): void;
+          s: { track: { id: string }; humans: { slot: number; finished: boolean }[] };
+        };
+        ses.skipIntro();
+        for (const k of ses.s.humans) ses.game.setHumanAi(k.slot, true);
+        for (let i = 0; i < 60 * 400 && !ses.s.humans.every((k) => k.finished); i++) window.__tk.advance(1 / 60);
+        return ses.s.track.id;
+      });
+    const tracks: string[] = [];
+    let gpOk = true,
+      gpNote = '';
+    await aPortrait.click('#startBtn');
+    for (let r = 0; r < 4; r++) {
+      await host.waitForFunction(() => window.__tk.state().inRace, null, { timeout: 10000 });
+      tracks.push(await finishRace());
+      await aPortrait.waitForSelector('#results:not([hidden])', { timeout: 20000 });
+      await aPortrait.waitForSelector('#gpBox:not([hidden])', { timeout: 5000 });
+      const head = (await aPortrait.textContent('#gpHead')) ?? '',
+        btn = (await aPortrait.textContent('#againBtn')) ?? '';
+      const want = r < 3 ? `AFTER RACE ${r + 1} OF 4` : 'FINAL';
+      if (!head.includes(want) || btn !== (r < 3 ? 'NEXT RACE' : 'NEW GRAND PRIX')) {
+        gpOk = false;
+        gpNote = `race ${r + 1}: "${head}" / "${btn}"`;
+      }
+      if (r === 3) {
+        await aPortrait.screenshot({ path: path.join(OUT, 'phone-gp-final.png') });
+        await host.waitForTimeout(2500);
+        await host.screenshot({ path: path.join(OUT, 'host-gp-final.png') });
+      } else await aPortrait.click('#againBtn');
+    }
+    const trophy = await host.evaluate(() => (window.__tk.session() as unknown as { trophy: boolean }).trophy);
+    check(
+      'a 4-race Grand Prix: points after each race, NEXT RACE, final standings and the trophy',
+      gpOk && trophy && tracks.join(',') === 'meadows,canyon,frosty,sepang',
+      gpNote || tracks.join(' → '),
+    );
+
     // controller next to the reference image
     const ref = readFileSync(path.join(ROOT, 'reference', 'controller', 'controller.jpeg')).toString('base64');
     const mine = readFileSync(path.join(OUT, 'phone-drive-iphone-race.png')).toString('base64');

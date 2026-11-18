@@ -23,6 +23,7 @@ declare global {
         autopilot?: boolean;
         humans?: number;
         track?: string;
+        intro?: boolean;
       }): void;
       advance(s: number): void;
       state(): { phase: string; raceTime: number; stage: string; inRace: boolean; room: string | null };

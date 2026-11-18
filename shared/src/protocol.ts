@@ -122,6 +122,19 @@ export interface HudUpdate {
   threat: boolean;
 }
 
+/** Grand Prix progress sent with each race's results (D48). */
+export interface GpInfo {
+  /** 1-based number of the race just finished, and the total. */
+  race: number;
+  total: number;
+  /** Totals after this race, best first (points = total points). */
+  table: Standing[];
+  /** The Grand Prix is over (trophy ceremony). */
+  final: boolean;
+  /** Name of the next track, when there is one. */
+  next: string | null;
+}
+
 export interface Standing {
   slot: number | null;
   name: string;
@@ -195,7 +208,7 @@ export interface ServerToController {
   phase: (p: { phase: Phase; pausedBy?: string }) => void;
   hud: (p: HudUpdate) => void;
   haptic: (p: { kind: HapticKind; n?: number }) => void;
-  results: (p: { standings: Standing[]; isLeader: boolean }) => void;
+  results: (p: { standings: Standing[]; isLeader: boolean; gp?: GpInfo }) => void;
   'host:status': (p: { online: boolean }) => void;
   'select:error': (p: { reason: 'taken' | 'unknown' }) => void;
   kicked: () => void;
@@ -206,7 +219,7 @@ export interface HostToServer {
   'host:resume': (p: { room: string; hostToken: string }, ack: Ack<{ ok: boolean }>) => void;
   'host:state': (p: HostState) => void;
   'host:haptic': (p: { slot: number; kind: HapticKind; n?: number }) => void;
-  'host:results': (p: { standings: Standing[] }) => void;
+  'host:results': (p: { standings: Standing[]; gp?: GpInfo }) => void;
   'host:kick': (p: { slot: number }) => void;
   'host:config': (p: LeaderConfig) => void;
   'net:info': (ack: Ack<NetInfo>) => void;

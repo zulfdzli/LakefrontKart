@@ -7,3 +7,4 @@ export * from './items';
 export * from './ai';
 export * from './game';
 export * from './tracks';
+export * from './gp';

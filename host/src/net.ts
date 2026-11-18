@@ -4,6 +4,7 @@
  */
 import { io, type Socket } from 'socket.io-client';
 import type {
+  GpInfo,
   HostToServer,
   ServerToHost,
   LobbyUpdate,
@@ -114,8 +115,8 @@ export class HostNet {
     this.socket.emit('host:haptic', n === undefined ? { slot, kind } : { slot, kind, n });
   }
 
-  results(standings: Standing[]): void {
-    this.socket.emit('host:results', { standings });
+  results(standings: Standing[], gp?: GpInfo): void {
+    this.socket.emit('host:results', gp ? { standings, gp } : { standings });
   }
 
   kick(slot: number): void {

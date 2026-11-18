@@ -399,3 +399,26 @@ Shots: `docs/screens/p10-final/` (Meadows, all split counts), `p10-canyon/`, `p1
 | Gameplay | AI believability | **4** (was 3*) | Racing line, drifts, occasional mistakes per level, takes shortcuts with a boost; clear 3%+ gaps |
 | Gameplay | Drift feel | 4 | Unchanged feel, plus the perfect-release bonus |
 | Gameplay | Steering smoothness | 4 | Linear grip unchanged; slides recover predictably |
+
+---
+
+## Phase 12: modes and flow (2026-11-19, D47, D48)
+
+### What changed
+- **Car finish (D47)**: clear-coat metallic paint, carbon weave, metal rims, rubber tyres, and reflections that sweep across the panels.
+- **Leader settings on the phone**, the four-track **Grand Prix** with points and standings, the **trophy ceremony**, and the **race intro flyover** with a title card.
+- **e2e: 20/20** (two new checks):
+  - the leader sets mode and laps on the phone and the host follows;
+  - a full four-race Grand Prix: Meadows → Canyon → Frosty → Sepang, standings after each race, NEXT RACE, the final standings and the trophy.
+- **Tests**: 69 (Grand Prix scoring added).
+
+### Fixes this loop
+1. **Crash on the second track** (since phase 10): the theme change recoloured fog that the post chain had removed. Found by the Grand Prix e2e.
+2. **Phone Grand Prix results overflowed** a landscape iPhone (the title was cut off): tighter rows on short screens, and the card scrolls as a fallback.
+3. **The "SLIPSTREAM" tag covered the sector split**: moved down.
+
+### Scores (compared with phase 11)
+| Area | Item | Score | Reason |
+|---|---|---|---|
+| Graphics | Kart and character detail | **4** (was 3) | Clear-coat metallic paint, carbon, metal rims and rubber, with sweeping reflections |
+| Graphics | UI finish | 4 | Leader settings, Grand Prix tables on the host and phones, title card, trophy |

@@ -3,11 +3,14 @@
  * shake on hits, and FOV kick on boost. Plus the lobby orbit and the podium camera. Frame-rate independent.
  */
 import * as THREE from 'three';
-import { COUNTDOWN_T, clamp, smooth01, wrapA, type GameState, type Kart } from '@tk/shared';
+import { COUNTDOWN_T, clamp, posOnTrack, smooth01, wrapA, type GameState, type Kart } from '@tk/shared';
 import type { KartView } from './art/kart';
 import type { Podium } from './art/track-builder';
 
-export type CamMode = 'orbit' | 'chase' | 'finish' | 'podium';
+export type CamMode = 'orbit' | 'intro' | 'chase' | 'finish' | 'podium';
+
+/** Race intro flyover length (s), section 12.4. */
+export const INTRO_T = 4.2;
 
 export class ChaseCam {
   readonly camera = new THREE.PerspectiveCamera(70, 1, 0.5, 3200);
@@ -24,6 +27,9 @@ export class ChaseCam {
   shake = 0;
   private spin = 0;
   private podT = 0;
+  introT = 0;
+  private readonly fly = { x: 0, y: 0, z: 0 };
+  private readonly flyLook = { x: 0, y: 0, z: 0 };
   private readonly target = new THREE.Vector3();
   private readonly look = new THREE.Vector3();
 
@@ -79,6 +85,29 @@ export class ChaseCam {
       cam.lookAt(ix, iy + (cam.aspect < 1 ? -0.8 : 0.2), iz);
       this.setFov(this.baseFov - 18, dt);
       this.focus.set(ix, iy, iz);
+      return;
+    }
+    if (this.mode === 'intro') {
+      // section 12.4 race intro: start high over the track well ahead of the grid and fly back down it towards
+      // the field, ending just in front of this player's car looking back at it, where the countdown swing begins
+      this.introT += dt;
+      const T = s.track,
+        u = clamp(this.introT / INTRO_T, 0, 1),
+        e = smooth01(u);
+      const endAhead = 12.4 / T.DS;
+      const ahead = endAhead + (1 - e) * T.N * 0.14;
+      const side = Math.sin(u * Math.PI) * 22 * (k.id % 2 ? 1 : -1);
+      posOnTrack(T, k.idx + ahead, k.lat * e + side * (1 - e * 0.6), this.fly);
+      posOnTrack(T, k.idx + ahead - 45 / T.DS, k.lat, this.flyLook);
+      cam.position.set(this.fly.x, this.fly.y + 6.7 + (1 - e) * 46, this.fly.z);
+      const lx = this.flyLook.x + (ix - this.flyLook.x) * e,
+        ly = this.flyLook.y + (iy + 1.6 - this.flyLook.y) * e,
+        lz = this.flyLook.z + (iz - this.flyLook.z) * e;
+      cam.lookAt(lx, ly, lz);
+      this.setFov(this.baseFov + 6 * (1 - e), dt);
+      this.focus.set(lx, ly, lz);
+      this.camH = k.h;
+      this.init = false;
       return;
     }
     if (this.mode === 'finish') {
