@@ -1,0 +1,84 @@
+{
+  "phoneBase": "http://192.168.0.26:3101",
+  "results": [
+    {
+      "check": "host creates a 4-letter room",
+      "ok": true,
+      "note": "VTTQ"
+    },
+    {
+      "check": "phone 1 joins and becomes leader",
+      "ok": true
+    },
+    {
+      "check": "phone 2 joins (not leader)",
+      "ok": true
+    },
+    {
+      "check": "a 6th phone gets \"Room full\"",
+      "ok": true,
+      "note": "Room full: 5 players are already in."
+    },
+    {
+      "check": "leader START on the phone starts the race",
+      "ok": true
+    },
+    {
+      "check": "phones switch to the driving screen",
+      "ok": true
+    },
+    {
+      "check": "phone 1 RIGHT steers kart P1 only",
+      "ok": true,
+      "note": "P1 steer 0.93, P2 steer 0.00"
+    },
+    {
+      "check": "phone 2 BRAKE reaches kart P2 only",
+      "ok": true
+    },
+    {
+      "check": "a phone pauses the race for everyone; another phone resumes it",
+      "ok": true,
+      "note": "card: \"by Ana\""
+    },
+    {
+      "check": "steer and drift together on one phone (two pointers)",
+      "ok": true
+    },
+    {
+      "check": "closing a phone mid-race hands its kart to the AI",
+      "ok": true
+    },
+    {
+      "check": "reopening the page restores control of the same kart",
+      "ok": true
+    },
+    {
+      "check": "a finished player sees their place and time on the phone",
+      "ok": true,
+      "note": "FINISHED 4th 4:00.57 Waiting for the others…"
+    },
+    {
+      "check": "results on every phone: leader gets RACE AGAIN, others wait for the leader",
+      "ok": true,
+      "note": "You finished 4th"
+    },
+    {
+      "check": "RACE AGAIN restarts; phones count down to GO",
+      "ok": true
+    },
+    {
+      "check": "refreshing the host keeps the room and the players",
+      "ok": true,
+      "note": "VTTQ → VTTQ"
+    },
+    {
+      "check": "phones return to the waiting screen after a host refresh",
+      "ok": true
+    },
+    {
+      "check": "portrait while driving shows \"Rotate your phone\"",
+      "ok": true
+    }
+  ]
+}

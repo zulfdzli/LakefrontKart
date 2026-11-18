@@ -2,12 +2,13 @@
  * Headless gameplay metrics for the polish loop (section 13): lap times per difficulty and character,
  * AI gaps, rescues, items used, longest stuck time and simulation cost.
  *
- *   npm run sim-report               (20 races per row)
+ *   npm run sim-report                       (Sunny Meadows, 20 races per row)
+ *   npm run sim-report -- --track canyon     (meadows | canyon | frosty | proto)
  *   npm run sim-report -- --races 50 --json docs/sim-report.json
  */
 import { writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { CHARS, createGame, STEP, type Difficulty, type Game } from '@tk/shared';
+import { CHARS, createGame, getTrack, isTrackId, STEP, type Difficulty, type Game, type Track } from '@tk/shared';
 
 const args = process.argv.slice(2);
 const arg = (name: string, def: string): string => {
@@ -15,7 +16,9 @@ const arg = (name: string, def: string): string => {
   return i >= 0 && args[i + 1] ? args[i + 1]! : def;
 };
 const RACES = Number(arg('races', '20'));
-const LAPS = Number(arg('laps', '3'));
+const TRACK_ID = arg('track', 'meadows');
+const TRACK: Track | undefined = isTrackId(TRACK_ID) ? getTrack(TRACK_ID) : undefined;
+const LAPS = Number(arg('laps', TRACK ? '2' : '3'));
 const JSON_OUT = arg('json', '');
 /** The steady test driver from section 11.1. */
 const DRIVER_SKILL = 0.93;
@@ -29,6 +32,8 @@ interface RaceStats {
   aiLaps: number[];
   driverPlace: number;
   rescues: number;
+  missedGates: number;
+  jumps: number;
   unfinished: number;
   itemsUsed: number;
   maxStuck: number;
@@ -44,13 +49,16 @@ function race(seed: number, diff: Difficulty, itemsOn: boolean, ci: number): Rac
     difficulty: diff,
     itemsOn,
     raceEndGrace: 1e9,
+    ...(TRACK ? { track: TRACK } : {}),
   });
   g.setHumanAi(0, true);
   const s = g.getSnapshot();
   s.humans[0]!.aiCfg.skill = DRIVER_SKILL;
   g.startCountdown();
   let rescues = 0,
-    itemsUsed = 0;
+    itemsUsed = 0,
+    missedGates = 0,
+    jumps = 0;
   const stuck = new Map<number, number>();
   let maxStuck = 0;
   const stepMs: number[] = [];
@@ -60,6 +68,8 @@ function race(seed: number, diff: Difficulty, itemsOn: boolean, ci: number): Rac
     stepMs.push(performance.now() - t0);
     for (const e of g.drainEvents()) {
       if (e.type === 'rescue') rescues++;
+      if (e.type === 'missedgate') missedGates++;
+      if (e.type === 'jump') jumps++;
       if (e.type.startsWith('use')) itemsUsed++;
     }
     if (s.phase === 'race' || s.phase === 'finished') {
@@ -78,6 +88,8 @@ function race(seed: number, diff: Difficulty, itemsOn: boolean, ci: number): Rac
     aiLaps: s.karts.filter((k) => k.slot === null).flatMap((k) => k.lapTimes),
     driverPlace: me.rank + 1,
     rescues,
+    missedGates,
+    jumps,
     unfinished: s.karts.filter((k) => !k.finished).length,
     itemsUsed,
     maxStuck,
@@ -92,15 +104,17 @@ const track = createGame({
   laps: 1,
   difficulty: 'normal',
   itemsOn: false,
+  ...(TRACK ? { track: TRACK } : {}),
 }).getSnapshot().track;
 const out: Record<string, unknown> = {
+  track: track.id,
   trackLengthM: Math.round(track.LEN),
   samples: track.N,
   races: RACES,
   laps: LAPS,
 };
 console.log(
-  `\nTrack: ${Math.round(track.LEN)} m, ${track.N} samples · ${RACES} races per row · ${LAPS} laps · test driver skill ${DRIVER_SKILL}\n`,
+  `\nTrack: ${track.id}, ${Math.round(track.LEN)} m, ${track.N} samples · ${RACES} races per row · ${LAPS} laps · test driver skill ${DRIVER_SKILL}\n`,
 );
 
 const rows: Record<string, unknown>[] = [];
@@ -121,12 +135,14 @@ for (const itemsOn of [false, true]) {
       itemsPerRace: mean(R.map((r) => r.itemsUsed)),
       unfinished: R.reduce((a, r) => a + r.unfinished, 0),
       maxStuck: Math.max(...R.map((r) => r.maxStuck)),
+      missedGates: R.reduce((a, r) => a + r.missedGates, 0),
+      jumpsPerRace: mean(R.map((r) => r.jumps)),
     };
     for (const r of R) allStep.push(...r.stepMs);
     if (!itemsOn) aiMedian[diff] = row.aiLap;
     rows.push(row);
     console.log(
-      `${itemsOn ? 'on ' : 'off'}    ${diff.padEnd(7)} ${row.driverLap.toFixed(1).padStart(7)} s  ${row.aiLap.toFixed(1).padStart(5)} s  ${row.driverPlace.toFixed(2).padStart(9)}     ${row.rescuesPerRace.toFixed(2).padStart(8)}      ${row.itemsPerRace.toFixed(1).padStart(6)}      ${String(row.unfinished).padStart(5)}      ${row.maxStuck.toFixed(1)} s`,
+      `${itemsOn ? 'on ' : 'off'}    ${diff.padEnd(7)} ${row.driverLap.toFixed(1).padStart(7)} s  ${row.aiLap.toFixed(1).padStart(5)} s  ${row.driverPlace.toFixed(2).padStart(9)}     ${row.rescuesPerRace.toFixed(2).padStart(8)}      ${row.itemsPerRace.toFixed(1).padStart(6)}      ${String(row.unfinished).padStart(5)}      ${row.maxStuck.toFixed(1)} s${row.missedGates ? `  missed gates ${row.missedGates}` : ''}`,
     );
   }
 }

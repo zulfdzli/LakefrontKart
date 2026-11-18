@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import './tk-hook';
 import { chromium, type Page } from 'playwright-core';
+import { TRACKS, isTrackId } from '@tk/shared';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const args = process.argv.slice(2);
@@ -22,6 +23,7 @@ const PHASE = arg('phase', 'latest');
 const PORT = Number(arg('port', '3100'));
 const OUT = path.join(ROOT, 'docs', 'screens', PHASE);
 const SEED = Number(arg('seed', '7'));
+const TRACK = arg('track', 'meadows');
 const W = Number(arg('w', '1600')),
   H = Number(arg('h', '900'));
 
@@ -101,7 +103,7 @@ async function main(): Promise<void> {
       if (m.type() === 'error') errors.push(m.text());
     });
     page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto(`http://localhost:${PORT}/?noadapt=1`);
+    await page.goto(`http://localhost:${PORT}/?noadapt=1&track=${TRACK}`);
     await page.waitForFunction(() => window.__tk?.ready, null, { timeout: 30000 });
     await frames(page, 1500);
     const gpu = await page.evaluate(() => {
@@ -141,7 +143,7 @@ async function main(): Promise<void> {
         const s = window.__tk.session()!;
         const k = s.players[0]!.kart;
         let seen = 0;
-        for (let i = 0; i < 60 * 40; i++) {
+        for (let i = 0; i < 60 * 90; i++) {
           if (k.drifting) seen++;
           if ((c === 'drift' && k.drifting && k.driftLevel >= 1) || (c === 'boost' && k.boost > 0.5)) return 'ok';
           window.__tk.advance(1 / 60);
@@ -166,6 +168,47 @@ async function main(): Promise<void> {
     });
     await frames(page, 2500);
     await shot('08-podium');
+
+    // phase 8: one shot just before each landmark, ramp (in the air), shortcut entrance and ice patch
+    if (isTrackId(TRACK) && !args.includes('--no-features')) {
+      const def = TRACKS[TRACK];
+      const feats: [string, number, boolean][] = [
+        ...def.landmarks.map((l) => [l.kind, l.at, false] as [string, number, boolean]),
+        ...def.ramps.map((r) => ['jump', r.at, true] as [string, number, boolean]),
+        ...def.shortcuts.map((c) => ['shortcut', c.from, false] as [string, number, boolean]),
+        ...def.zones
+          .filter((z) => z.surface === 'ice')
+          .slice(0, 1)
+          .map((z) => ['ice', z.from, false] as [string, number, boolean]),
+      ];
+      for (const [kind, at, air] of feats) {
+        await page.evaluate((seed) => window.__tk.race({ seed, ci: 1, laps: 2, autopilot: true }), SEED);
+        await page.waitForFunction(() => (window.__tk.state() as { raceTime: number }).raceTime > 0.5, null, {
+          timeout: 20000,
+        });
+        const ok = await page.evaluate(
+          ([f, wantAir]) => {
+            const ses = window.__tk.session() as unknown as {
+              s: { track: { N: number } };
+              players: { kart: { idx: number; lap: number; air: boolean } }[];
+            };
+            const k = ses.players[0]!.kart,
+              N = ses.s.track.N;
+            const target = (((f - 0.012) % 1) + 1) % 1;
+            for (let i = 0; i < 60 * 200; i++) {
+              const fr = k.idx / N;
+              if (wantAir ? k.air && k.lap >= 1 : k.lap >= 1 && fr >= target && fr < target + 0.006) return true;
+              window.__tk.advance(1 / 60);
+            }
+            return false;
+          },
+          [at, air] as const,
+        );
+        await frames(page, air ? 120 : 700);
+        if (ok) await shot(`feat-${kind}-${at.toFixed(2)}`);
+        else console.log('  skipped feature', kind, at);
+      }
+    }
 
     // split-screen (section 6.2): every player count, with frame stats summed over all viewports
     const split: Record<string, unknown> = {};

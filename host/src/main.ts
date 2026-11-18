@@ -3,8 +3,11 @@ import '@fontsource/fredoka/600.css';
 import '@fontsource/fredoka/700.css';
 import './style.css';
 import {
-  buildPrototypeTrack,
   charIndex,
+  getTrack,
+  isTrackId,
+  TRACK_IDS,
+  type TrackId,
   SLOT_COLORS,
   AI_COLOR,
   type Difficulty,
@@ -35,7 +38,13 @@ const KEYBOARD = params.has('keyboard');
 /** Section 5.4: no input for this long means steer 0, no drift or brake, but keep the throttle on. */
 const INPUT_STALE_MS = 500;
 
-const track = buildPrototypeTrack();
+/** The race track: the leader's choice from the lobby; ?track= overrides it for development. */
+const URL_TRACK = params.get('track');
+function chosenTrack(over?: string): TrackId {
+  for (const t of [over, URL_TRACK, lobby?.config.trackId]) if (isTrackId(t)) return t;
+  return 'meadows';
+}
+let previewTrack: TrackId | null = null;
 const world = new World($<HTMLCanvasElement>('c'));
 const audio = new Audio();
 const keyboard = new Keyboard();
@@ -62,6 +71,7 @@ const net = new HostNet({
   lobby: (u) => {
     lobby = u;
     lobbyUI.update(u, net.latency);
+    if (!inRace && previewTrack !== chosenTrack()) preview();
     if (inRace) {
       // a dropped phone hands its kart to the AI until it reconnects (section 5.4)
       for (const p of session.players) {
@@ -100,6 +110,13 @@ const net = new HostNet({
 lobbyUI.onKick = (slot) => {
   if (!inRace) net.kick(slot);
 };
+/** Cycle the lobby's track (the server keeps it in the room config, so phones and the preview follow). */
+function nextTrack(): void {
+  if (inRace || !lobby) return;
+  const i = TRACK_IDS.indexOf(chosenTrack());
+  net.config({ ...lobby.config, trackId: TRACK_IDS[(i + 1) % TRACK_IDS.length]! });
+}
+lobbyUI.onTrack = nextTrack;
 lobbyUI.onSound = () => {
   audio.unlock();
   lobbyUI.setSoundOn(true);
@@ -121,7 +138,7 @@ function preview(): void {
   session?.dispose();
   const humans: HumanSpec[] = [{ slot: 0, ci: 1, name: 'Pip' }];
   session = new RaceSession(
-    { seed: 1, humans, aiFill: true, laps: 2, difficulty: 'normal', itemsOn: true, track },
+    { seed: 1, humans, aiFill: true, laps: 2, difficulty: 'normal', itemsOn: true, track: getTrack(chosenTrack()) },
     world,
     audio,
     $('huds'),
@@ -130,10 +147,19 @@ function preview(): void {
   session.game.setHumanAi(0, true);
   for (const p of session.players) p.cam.wideOrbit = true;
   session.layout([{ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight }]);
+  previewTrack = chosenTrack();
 }
 
 function startRace(
-  opts: { seed?: number; autopilot?: boolean; laps?: number; diff?: Difficulty; ci?: number; humans?: number } = {},
+  opts: {
+    seed?: number;
+    autopilot?: boolean;
+    laps?: number;
+    diff?: Difficulty;
+    ci?: number;
+    humans?: number;
+    track?: string;
+  } = {},
 ): void {
   audio.unlock();
   lobbyUI.setSoundOn(true);
@@ -161,7 +187,7 @@ function startRace(
       laps: opts.laps ?? cfg?.laps ?? 2,
       difficulty: opts.diff ?? cfg?.aiDifficulty ?? 'normal',
       itemsOn: cfg?.itemsOn ?? true,
-      track,
+      track: getTrack(chosenTrack(opts.track)),
     },
     world,
     audio,
@@ -245,6 +271,7 @@ window.addEventListener('keydown', (e) => {
     if (inRace) backToLobby();
   } else if (e.key === 'p' || e.key === 'P') setPaused(!session.paused);
   else if (e.key === 'm' || e.key === 'M') audio.setMuted(!audio.muted);
+  else if (e.key === 't' || e.key === 'T') nextTrack();
   else if (e.key === 'f' || e.key === 'F') debug.toggleFps();
   else if (e.key === 'd' || e.key === 'D') debug.toggleFull();
 });
@@ -312,6 +339,7 @@ declare global {
         laps?: number;
         autopilot?: boolean;
         humans?: number;
+        track?: string;
       }): void;
       advance(seconds: number): void;
       state(): unknown;

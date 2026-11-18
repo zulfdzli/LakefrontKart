@@ -253,3 +253,50 @@ Shots: `docs/screens/phase6/split-2.png` to `split-5.png`, `split-5-offline.png`
 |---|---|---|---|
 | Graphics | UI finish | 4 | The phone screens now cover the whole race: countdown, alerts, finish card and results |
 | (all others) | | unchanged | |
+
+---
+
+## Phase 8: tracks and lap length (2026-11-18)
+
+### What changed (D41)
+- **Tracks**: `TrackDef` data, a builder for the physics tables, and three full-length tracks with sectors, gates, surfaces, pads, item rows, a jump ramp, tunnels, arches, a river and bridge, and shortcuts.
+- **Look**: a theme per track: sky, light, ground, walls, mountains and scenery.
+- **HUD**: sector splits. **Feedback**: jump and landing.
+- **Lobby**: a track picker (chip or T).
+- **Tools**:
+  - `npm run track-view` draws each layout to `docs/screens/tracks/`.
+  - `npm run sim-report -- --track canyon` measures any track.
+  - `npm run capture -- --track frosty` also shoots every landmark (`feat-*.png`).
+
+### Headless metrics (sim-report, 10 races per row, 2 laps, items off)
+| Track | Length | Normal AI lap | Easy→Normal | Normal→Hard | Character spread | Rescues | Unfinished |
+|---|---|---|---|---|---|---|---|
+| Sunny Meadows | 3.95 km | 117.7 s | 5.9% | 2.9% | 6.0% | 0 | 0 |
+| Dusty Canyon | 4.11 km | 120.3 s | 6.3% | 2.8% | 5.6% | 0 | 0 |
+| Frosty Peaks | 4.05 km | 120.3 s | 6.0% | 2.8% | 6.0% | 0 | 0 |
+
+- **Robustness**: 150 seeded races per track (section 15, `ROBUST_RACES=150`): every kart finishes, and none is pinned for 5 s. The default test run uses 12 per track.
+- **Off the road**: the AI is off the road under 1% of the time, mostly in the hairpins when the pack is pushed wide.
+
+### Capture (GTX 1650, 1600 × 900, vsync)
+| Track | 1 view | 5 views |
+|---|---|---|
+| Meadows | 60 FPS, 128 calls, 190k tris | |
+| Canyon | 60 FPS, 130 calls, 181k tris | |
+| Frosty | 60 FPS, 127 calls, 213k tris | 60 FPS, 519 calls, 1.02M tris |
+
+### Fixes this loop (the 3 lowest items this phase can touch)
+1. **Layout: hairpins.** After scaling the tracks up for lap length, the tightest turn was only 108 to 143° within 120 m, so there was no real hairpin. Each is now a U with parallel legs (167 to 175°). `tests/tracks.test.ts` checks for at least 160° within 200 m.
+2. **Gameplay: the jump ramp sat on a bend.** Karts reached the lip wide and missed the launch. That stretch of the Canyon is now straight.
+3. **Graphics: shortcut entrances.** The road's grass verges were drawn across the corridor, hiding the dirt path and leaving a raised edge. Walls and verges now have a gap where a corridor crosses. Also, Frosty's ice shortcut saved about 100 m at full speed, so it is now a slower snow trail worth about 1 s.
+
+### Scores (compared with phase 7)
+| Area | Item | Score | Reason |
+|---|---|---|---|
+| Graphics | Scenery density and variety | **3** (was 2) | Three themes, sector landmarks (tunnel, arches, bridge, village, mesas) and themed scenery. Real materials wait for phases 9 and 10 |
+| Graphics | Colour harmony | 3 | Each theme is consistent; Frosty's twilight and Canyon's warm haze read well. Toon lighting is unchanged (phase 10) |
+| Gameplay | AI believability | 3* | No rescues or unfinished karts on any track, but the AI rarely drifts on the wider corners and ignores shortcuts (phase 11) |
+| Gameplay | Frame-time stability | 4 | 5 views on the heaviest track: a steady 60 FPS with vsync |
+| (all others) | | unchanged | |
+
+Open for phase 11: AI drifting, AI shortcuts, the character spread (target 4%) and the Normal→Hard gap (target 3%).

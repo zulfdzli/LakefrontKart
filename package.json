@@ -24,7 +24,8 @@
     "capture": "tsx tools/capture.ts",
     "bots": "tsx tools/bots.ts",
     "icons": "tsx tools/gen-icons.ts",
-    "e2e": "tsx tools/e2e.ts"
+    "e2e": "tsx tools/e2e.ts",
+    "track-view": "tsx tools/track-view.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

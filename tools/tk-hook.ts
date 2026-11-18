@@ -16,7 +16,14 @@ declare global {
     __name?: (f: unknown) => unknown;
     __tk: {
       ready: boolean;
-      race(o: { seed?: number; ci?: number; laps?: number; autopilot?: boolean; humans?: number }): void;
+      race(o: {
+        seed?: number;
+        ci?: number;
+        laps?: number;
+        autopilot?: boolean;
+        humans?: number;
+        track?: string;
+      }): void;
       advance(s: number): void;
       state(): { phase: string; raceTime: number; stage: string; inRace: boolean; room: string | null };
       session(): { s: { phase: string; humans: TkKart[] }; players: { kart: TkKart }[]; paused: boolean } | null;

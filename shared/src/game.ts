@@ -9,9 +9,7 @@
 import {
   STEP,
   NKARTS,
-  ROAD_HALF,
   KERB_W,
-  WALL,
   KART_R,
   BOOSTSP,
   SPIN_T,
@@ -23,7 +21,16 @@ import {
   wrapA,
 } from './constants';
 import { CHARS, charParams, type Character, type CharacterParams } from './characters';
-import { buildPrototypeTrack, locate, posOnTrack, type Track } from './track';
+import {
+  SURF,
+  buildPrototypeTrack,
+  locate,
+  posOnTrack,
+  shortcutAt,
+  surfaceAt,
+  type SurfaceId,
+  type Track,
+} from './track';
 import { chooseItem, type ItemId } from './items';
 import { Rng } from './rng';
 import { aiInput, DIFF, HUMAN_AUTOPILOT, type AiConfig, type Difficulty } from './ai';
@@ -104,6 +111,22 @@ export interface Kart {
   bestLap: number;
   prog: number;
   offroad: boolean;
+  /** Surface under the kart (section 11.2). */
+  surf: SurfaceId;
+  /** tan(banking) of the road under the kart (the renderer rolls the kart). */
+  bank: number;
+  /** Airborne after a jump ramp: height above the road and vertical speed. */
+  air: boolean;
+  alt: number;
+  vy: number;
+  /** Next checkpoint gate to pass (index into track.gates); a lap counts only when all are passed. */
+  gate: number;
+  /** Inside a shortcut corridor, off the road. */
+  inSc: boolean;
+  /** Seconds off the track (not in a shortcut); 4 s calls the rescue drone. */
+  offT: number;
+  /** Race time when the current sector started. */
+  secStart: number;
   finished: boolean;
   finishTime: number;
   rank: number;
@@ -190,6 +213,10 @@ export type GameEventType =
   | 'driftlevel'
   | 'rescue'
   | 'lap'
+  | 'sector'
+  | 'jump'
+  | 'land'
+  | 'missedgate'
   | 'finish'
   | 'raceover';
 
@@ -203,7 +230,7 @@ export interface GameEvent {
   z?: number;
   /** Boost duration. */
   t?: number;
-  src?: 'drift' | 'pad' | 'item' | 'start';
+  src?: 'drift' | 'pad' | 'item' | 'start' | 'jump';
   lvl?: number;
   power?: number;
   box?: number;
@@ -257,6 +284,9 @@ export interface Handling {
   turnRate: number;
   /** Share of the turn rate lost at 40 m/s and above. */
   turnFalloff: number;
+  /** AI starts a drift when the road ahead turns more than this (rad), and holds it above aiDriftHold. */
+  aiDriftIn: number;
+  aiDriftHold: number;
 }
 export const PROTOTYPE_HANDLING: Readonly<Handling> = {
   driftLatGrip: 4.5,
@@ -266,6 +296,8 @@ export const PROTOTYPE_HANDLING: Readonly<Handling> = {
   speedMul: 1,
   turnRate: 1.8,
   turnFalloff: 0.3,
+  aiDriftIn: 0.55,
+  aiDriftHold: 0.22,
 };
 export const DEFAULT_HANDLING: Readonly<Handling> = {
   driftLatGrip: 2.4,
@@ -275,6 +307,8 @@ export const DEFAULT_HANDLING: Readonly<Handling> = {
   speedMul: 1.08,
   turnRate: 2.15,
   turnFalloff: 0.22,
+  aiDriftIn: 0.42,
+  aiDriftHold: 0.18,
 };
 
 export interface GameState {
@@ -315,8 +349,6 @@ export const NEUTRAL: Readonly<KartInput> = {
   item: false,
   itemBack: false,
 };
-const PAD_FRACS = [0.13, 0.4, 0.68, 0.93];
-const BOX_FRACS = [0.07, 0.2, 0.33, 0.47, 0.6, 0.75, 0.9];
 const AI_LANES = [-6, 6, -3, 3, 0];
 
 /** The prototype's grid: the single player started 5th (grid 4), AI filled the rest. */
@@ -395,6 +427,15 @@ function makeKart(T: Track, i: number, gridPos: number, ci: number, slot: number
     bestLap: 0,
     prog: 0,
     offroad: false,
+    surf: 'asphalt',
+    bank: 0,
+    air: false,
+    alt: 0,
+    vy: 0,
+    gate: T.gates.length,
+    inSc: false,
+    offT: 0,
+    secStart: 0,
     finished: false,
     finishTime: 0,
     rank: i,
@@ -487,21 +528,23 @@ export class Game {
       s.karts.push(makeKart(track, i, grid[i]!, ci, null, cfg));
     }
 
-    const { N, CX, CZ, RX, RZ, H } = track;
+    const { CX, CZ, RX, RZ, H } = track;
     // D36: a faster game, scaled evenly for every kart so the field and the AI stay balanced
     const m = s.handling.speedMul;
     if (m !== 1) for (const k of s.karts) k.P = { ...k.P, top: k.P.top * m, acc: k.P.acc * m };
 
     if (opts.itemsOn) {
-      for (const f of BOX_FRACS) {
-        const bi = Math.floor(f * N);
-        for (const lat of [-9, -3, 3, 9])
+      for (const bi of track.boxRows) {
+        const sc = track.HW[bi]! / 13;
+        for (const l of [-9, -3, 3, 9]) {
+          const lat = l * sc;
           s.boxes.push({ x: CX[bi]! + RX[bi]! * lat, z: CZ[bi]! + RZ[bi]! * lat, y: H[bi]!, idx: bi, lat, cool: 0 });
+        }
       }
     }
-    for (const f of PAD_FRACS) {
-      const pi = Math.floor(f * N);
-      s.pads.push({ x: CX[pi]!, z: CZ[pi]!, y: H[pi]!, idx: pi });
+    for (const p of track.pads) {
+      const pi = p.idx;
+      s.pads.push({ x: CX[pi]! + RX[pi]! * p.lat, z: CZ[pi]! + RZ[pi]! * p.lat, y: H[pi]!, idx: pi });
     }
     this.updateRanks();
   }
@@ -631,9 +674,72 @@ export class Game {
     return true;
   }
 
+  /** Which way (if any) a kart's step from (ox, oz) to (x, z) crossed gate sample g: 1 forward, -1 back, 0 not. */
+  private crossGate(g: number, ox: number, oz: number, x: number, z: number): number {
+    const T = this.s.track,
+      w = T.WALLD[g]! + 2;
+    const ax = T.CX[g]! - T.RX[g]! * w,
+      az = T.CZ[g]! - T.RZ[g]! * w;
+    const d1x = x - ox,
+      d1z = z - oz,
+      d2x = T.RX[g]! * 2 * w,
+      d2z = T.RZ[g]! * 2 * w;
+    const den = d1x * d2z - d1z * d2x;
+    if (Math.abs(den) < 1e-9) return 0;
+    const t = ((ax - ox) * d2z - (az - oz) * d2x) / den,
+      u = ((ax - ox) * d1z - (az - oz) * d1x) / den;
+    if (t < 0 || t > 1 || u < 0 || u > 1) return 0;
+    return d1x * T.TX[g]! + d1z * T.TZ[g]! > 0 ? 1 : -1;
+  }
+
+  /** A sector was completed; `entered` is the sector the kart is now in (0 after the line). */
+  private sectorDone(k: Kart, entered: number): void {
+    const s = this.s;
+    const t = s.raceTime - k.secStart;
+    k.secStart = s.raceTime;
+    const n = entered === 0 ? s.track.sectors.length : entered;
+    this.emit({ type: 'sector', kart: k.id, n, t });
+  }
+
+  /** Jump ramps (section 11.2): launch off the lip, fly ballistically, land; landing straight gives a small boost. */
+  private stepAir(k: Kart, dt: number, sp: number): void {
+    const T = this.s.track;
+    if (k.air) {
+      k.vy -= 30 * dt;
+      k.alt += k.vy * dt;
+      if (k.alt <= 0) {
+        k.air = false;
+        k.alt = 0;
+        k.vy = 0;
+        const slip = Math.abs(wrapA(Math.atan2(k.vx, k.vz) - k.h));
+        const straight = slip < 0.22 && k.spin <= 0;
+        if (straight) this.giveBoost(k, 0.6, 'jump');
+        this.emit({ type: 'land', kart: k.id, power: straight ? 1 : 0 });
+      }
+    } else if (T.ramps.length && sp > 10) {
+      for (const r of T.ramps) {
+        const before = (r.i1 - k.lastIdx + T.N) % T.N,
+          after = (k.idx - r.i1 + T.N) % T.N;
+        if (before <= 3 && after >= 1 && after <= 4 && Math.abs(k.lat) <= T.HW[r.i1]! + KERB_W) {
+          k.air = true;
+          k.alt = r.lift;
+          k.vy = sp * 0.17 + 1.5;
+          this.emit({ type: 'jump', kart: k.id });
+          break;
+        }
+      }
+    }
+    if (k.alt > 0) k.y += k.alt;
+  }
+
   private startRescue(k: Kart): void {
     if (k.rescue > 0) return;
     k.rescue = RESCUE_T;
+    k.air = false;
+    k.alt = 0;
+    k.vy = 0;
+    k.offT = 0;
+    k.inSc = false;
     k.drifting = false;
     k.driftT = 0;
     k.driftLevel = 0;
@@ -667,6 +773,12 @@ export class Game {
       k.ph = k.h;
       k.lastIdx = k.idx;
       k.prog = k.lap * T.N + k.idx + k.frac;
+      // a rescue is a legitimate recovery: count the gates behind the drop point (never fewer than before)
+      if (T.gates.length) {
+        let g = 0;
+        while (g < T.gates.length && T.gates[g]! <= k.idx) g++;
+        if (k.gate < T.gates.length && g > k.gate && k.idx < T.N * 0.75) k.gate = g;
+      }
     }
     if (k.rescue <= 0) {
       k.rescue = 0;
@@ -727,11 +839,16 @@ export class Game {
       sp += k.kick;
       k.kick = 0;
     }
-    const off = k.offroad;
+    const S = SURF[k.surf],
+      off = S.off,
+      air = k.air;
     const m = this.handling.speedMul;
-    const top = k.boost > 0 ? (off ? 32 * m : BOOSTSP * m) : off ? 15 * m : P.top * k.rbMul + (k.drafting ? 4 : 0);
+    const top =
+      k.boost > 0 ? (off ? 32 * m : BOOSTSP * m) : off ? (S.cap ?? 15) * m : P.top * k.rbMul + (k.drafting ? 4 : 0);
 
-    if (thr) {
+    if (air) {
+      // airborne: no drive, no brakes; the kart carries its speed until it lands
+    } else if (thr) {
       if (sp < top)
         sp = Math.min(
           top,
@@ -741,16 +858,16 @@ export class Game {
       const d = 7 * dt;
       sp = Math.abs(sp) <= d ? 0 : sp - Math.sign(sp) * d;
     }
-    if (inp.brake) sp = sp > 0 ? Math.max(0, sp - 48 * dt) : Math.max(-10, sp - 16 * dt);
-    if (racing) sp -= k.slope * 9 * dt;
-    if (sp > top) sp -= (sp - top) * Math.min(1, 2.2 * dt);
-    if (off) sp *= Math.exp(-0.8 * dt);
+    if (inp.brake && !air) sp = sp > 0 ? Math.max(0, sp - 48 * dt) : Math.max(-10, sp - 16 * dt);
+    if (racing && !air) sp -= k.slope * 9 * dt;
+    if (sp > top && !air) sp -= (sp - top) * Math.min(1, 2.2 * dt);
+    if (off && !air) sp *= Math.exp(-S.drag * dt);
     if (k.spin > 0) {
       sp *= Math.exp(-2.5 * dt);
       lat *= Math.exp(-2.5 * dt);
     }
 
-    if (!k.drifting && inp.drift && Math.abs(steer) > 0.3 && sp > 17 && k.spin <= 0) {
+    if (!k.drifting && inp.drift && Math.abs(steer) > 0.3 && sp > 17 && k.spin <= 0 && !air) {
       k.drifting = true;
       k.driftDir = steer > 0 ? 1 : -1;
       k.driftT = 0;
@@ -778,6 +895,7 @@ export class Game {
     let rate = this.handling.turnRate * sf * (1 - this.handling.turnFalloff * Math.min(1, spAbs / 40)) * P.turn;
     if (k.drifting) rate *= 1.3;
     if (k.spin > 0) rate = 0;
+    if (air) rate *= 0.25;
     const vx = fx * sp + rx * lat,
       vz = fz * sp + rz * lat;
     k.h = wrapA(k.h - turn * rate * (sp >= 0 ? 1 : -1) * dt);
@@ -790,7 +908,9 @@ export class Game {
     {
       // sideways grip turns the slide back into forward motion instead of bleeding speed away
       const H = this.handling;
-      const newLat = lat * Math.exp(-(k.drifting ? H.driftLatGrip : off ? 4 : 9) * dt);
+      // ice limits drift grip too; in the air there is no grip at all
+      const grip = k.drifting ? (S.slick ? Math.min(H.driftLatGrip, S.grip) : H.driftLatGrip) : S.grip;
+      const newLat = air ? lat : lat * Math.exp(-grip * dt);
       const v2 = (sp * sp + lat * lat) * Math.exp(-(k.drifting ? H.driftDrag : 0.1) * dt);
       sp = (sp >= 0 ? 1 : -1) * Math.sqrt(Math.max(0, v2 - newLat * newLat));
       lat = newLat;
@@ -798,15 +918,35 @@ export class Game {
     k.vx = fx * sp + rx * lat;
     k.vz = fz * sp + rz * lat;
     k.sp = sp;
+    const ox = k.x,
+      oz = k.z;
     k.x += k.vx * dt;
     k.z += k.vz * dt;
 
-    locate(T, k, false);
+    // inside a shortcut corridor the nearest road sample can jump, so search the whole track
+    locate(T, k, k.inSc);
     k.wall = false;
-    if (Math.abs(k.lat) > WALL) {
+    const sc = T.shortcuts.length ? shortcutAt(T, k.x, k.z, 4) : null;
+    const inCorr = !!sc && sc.d <= sc.sc.half;
+    const wl = T.WALLD[k.idx]!;
+    if (sc && k.inSc && !inCorr && Math.abs(k.lat) > wl) {
+      // the corridor's edges are walls
+      const nx = (k.x - sc.cx) / (sc.d || 1),
+        nz = (k.z - sc.cz) / (sc.d || 1);
+      k.x = sc.cx + nx * sc.sc.half;
+      k.z = sc.cz + nz * sc.sc.half;
+      const vo = k.vx * nx + k.vz * nz;
+      if (vo > 0) {
+        k.vx -= nx * vo * 1.25;
+        k.vz -= nz * vo * 1.25;
+        if (vo > 9) this.emit({ type: 'bump', kart: k.id, power: vo / (Math.hypot(k.vx, k.vz) + 1e-6) });
+      }
+      k.wall = true;
+      locate(T, k, true);
+    } else if (Math.abs(k.lat) > wl && !inCorr) {
       // walls: slide along with friction that depends on the impact angle
       const sgn = k.lat > 0 ? 1 : -1,
-        over = Math.abs(k.lat) - WALL,
+        over = Math.abs(k.lat) - wl,
         i = k.idx;
       k.x -= RX[i]! * sgn * over;
       k.z -= RZ[i]! * sgn * over;
@@ -831,11 +971,32 @@ export class Game {
         k.h = wrapA(k.h + clamp(wrapA(tgt - k.h), -2.4 * dt, 2.4 * dt));
       }
       k.wall = true;
-      k.lat = sgn * WALL;
+      k.lat = sgn * wl;
     }
-    k.offroad = Math.abs(k.lat) > ROAD_HALF + KERB_W;
+    k.inSc = inCorr && Math.abs(k.lat) > T.HW[k.idx]! + KERB_W;
+    k.surf = k.inSc ? sc!.sc.surface : surfaceAt(T, k.idx, k.lat);
+    k.offroad = SURF[k.surf].off;
+    k.bank = T.BT[k.idx]!;
+    this.stepAir(k, dt, sp);
 
-    if (k.lastIdx > N * 0.75 && k.idx < N * 0.25) {
+    const G = T.gates;
+    if (G.length) {
+      // ordered checkpoint gates (section 12.4): a lap counts only after passing every gate in order
+      if (k.gate < G.length && this.crossGate(G[k.gate]!, ox, oz, k.x, k.z) === 1) {
+        k.gate++;
+        const sn = T.sectors.indexOf(G[k.gate - 1]!);
+        if (sn > 0) this.sectorDone(k, sn);
+      } else if (k.gate > 0 && this.crossGate(G[k.gate - 1]!, ox, oz, k.x, k.z) === -1) k.gate--;
+    }
+    const lineFwd = k.lastIdx > N * 0.75 && k.idx < N * 0.25;
+    if (lineFwd && G.length && k.gate < G.length) {
+      this.emit({ type: 'missedgate', kart: k.id });
+    } else if (lineFwd) {
+      if (G.length) {
+        k.gate = 0;
+        if (k.lap >= 1) this.sectorDone(k, 0);
+        else k.secStart = s.raceTime;
+      }
       k.lap++;
       if (k.lap >= 2) {
         const lt = s.raceTime - k.lapStart;
@@ -849,7 +1010,10 @@ export class Game {
         k.finishTime = s.raceTime;
         this.emit({ type: 'finish', kart: k.id });
       }
-    } else if (k.lastIdx < N * 0.25 && k.idx > N * 0.75) k.lap--;
+    } else if (k.lastIdx < N * 0.25 && k.idx > N * 0.75) {
+      k.lap--;
+      if (G.length) k.gate = G.length;
+    }
     k.lastIdx = k.idx;
     k.prog = k.lap * N + k.idx + k.frac;
 
@@ -862,7 +1026,12 @@ export class Game {
       const bot = Game.autoDriven(k);
       if (bot && k.spin <= 0 && Math.abs(wrapA(k.h - ANG[k.idx]!)) > 1.4) k.lostT += dt;
       else k.lostT = 0;
-      if (k.stuckT > 2.5 || (bot && (k.wrongT > 2.5 || k.lostT > 3))) this.startRescue(k);
+      // off the track for 4 s (not in a shortcut) also calls the drone; the prototype track keeps its own rules
+      if (T.id !== 'proto') {
+        if (k.offroad && !k.inSc && !k.air) k.offT += dt;
+        else k.offT = 0;
+      }
+      if (k.stuckT > 2.5 || k.offT > 4 || (bot && (k.wrongT > 2.5 || k.lostT > 3))) this.startRescue(k);
     }
 
     if (inp.item && k.item && k.spin <= 0 && k.roll <= 0 && k.rescue <= 0) this.useItem(k, inp.itemBack);
@@ -986,7 +1155,7 @@ export class Game {
       b.x += b.vx * dt;
       b.z += b.vz * dt;
       locate(T, b, false);
-      const LIM = WALL + 0.8;
+      const LIM = T.WALLD[b.idx]! + 0.8;
       if (Math.abs(b.lat) > LIM) {
         const sgn = b.lat > 0 ? 1 : -1,
           i = b.idx,
@@ -1100,7 +1269,7 @@ export class Game {
       for (let j = i + 1; j < karts.length; j++) {
         const a = karts[i]!,
           b = karts[j]!;
-        if (a.rescue > 0 || b.rescue > 0) continue;
+        if (a.rescue > 0 || b.rescue > 0 || Math.abs(a.y - b.y) > 1.6) continue;
         let dx = a.x - b.x,
           dz = a.z - b.z;
         const d2 = dx * dx + dz * dz,

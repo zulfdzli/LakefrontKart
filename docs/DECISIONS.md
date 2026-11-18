@@ -329,7 +329,7 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 - **Q**: Retest: steering 3, drift 4, camera 4; the cross pad size is good; you prefer the slider; "make the kart a little faster"; steering "turns too slowly". What changes?
 - **A**:
   - **Speed**: every kart is 8% faster (top speed, acceleration, boost and off-road caps), scaled evenly so the field and the AI stay balanced. Laps on the test track drop from about 48.5 s to 45.5 s. (12% was tried first; your third test found it "a little bit" too fast.)
-  - **Overrides section 11**: it says the prototype's speeds feel right. Phase 8 keeps the 2-minute lap target by making tracks longer (about 3.2 to 3.6 km instead of 3.0 to 3.4 km).
+  - **Overrides section 11**: it says the prototype's speeds feel right. Phase 8 keeps the 2-minute lap target by making tracks longer. In the event the tracks came out at 3.9 to 4.1 km, because the AI averages about 34 m/s on them (D41).
   - **Turning**: base turn rate 1.8 → 2.15 rad/s, and less of it is lost at speed (30% → 22% at 40 m/s).
   - **Slider**: full lock at 85% of the travel, with a near-linear response (power 1.15, was 1.5). Halfway across now gives about 55% lock instead of 30%.
   - **Default steering**: the slider (you preferred it). The cross pad stays in Controls.
@@ -387,6 +387,35 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **Validation**: the server now relays only known haptic kinds, with a whole-number `n`.
   - **HUD data**: `HudUpdate` gains `finishTime` and `wrongWay`.
 - **Why**: Section 7.2 (results flow), section 6.4 (GO on every phone), and section 12 (feedback) without waiting for the host screen.
+
+### D41 · Track system and the three tracks (2026-11-18, phase 8, my decision)
+- **Q**: How are tracks described and built, and what is on each one?
+- **A**:
+  - **Data**: a `TrackDef` (`shared/src/tracks/`) holds control points (x, z, height, half-width, banking), 3 to 4 sectors, extra checkpoint gates, boost pads, jump ramps, item rows (default every ~400 m), surface zones, shortcuts and landmarks. `buildTrackFromDef` makes the physics tables, and the host's track builder makes the meshes from the same data. `npm run track-view` draws every layout with its checks to `docs/screens/tracks/`.
+  - **Lengths**: the tracks are 3.95 km (Meadows), 4.11 km (Canyon) and 4.05 km (Frosty), longer than section 11's 3.0 to 3.4 km. The karts are 8% faster (D36) and the corners are wide, so the AI averages about 34 m/s. The lap-time target (115 to 125 s) decides the length, as section 11.1 says.
+  - **Normal AI median laps** (sim-report, 10 races): 117.7 s, 120.3 s and 120.3 s.
+  - **Surfaces**: asphalt, kerb, ice, grass, dirt, gravel, sand and snow, each with its own grip, top speed and drag. Grass keeps the prototype's numbers exactly. Ice lowers drift grip too.
+  - **Checkpoint gates**: a lap counts only after passing every gate in order (physical line crossing). Missing one shows "MISSED A CHECKPOINT!" and the lap does not count. Driving backwards over the line takes the lap back. A rescue counts the gates behind its drop point.
+  - **Sectors**: crossing a sector gate shows the split on the HUD ("S2 41.23"), green or red against the player's best this race.
+  - **Jump ramps**: the road rises before the lip; crossing it at speed launches the kart (no drive, no grip, 25% steering). A straight landing gives a 0.6 s boost and "NICE LANDING!".
+  - **Banking**: per point. It raises one road edge (physics height and the road mesh), and the karts roll with it.
+  - **Shortcuts**: a corridor with its own surface. Inside it the road walls are off and its edges act as walls; the road walls and verges have a gap where it joins. The AI does not take shortcuts yet (phase 11).
+    - Meadows: a dirt farm track, about 1 s faster.
+    - Canyon: a sand riverbed across switchback 2.
+    - Frosty: a snow trail across the first hairpin. It was planned as ice, but on ice it saved about 100 m at full speed, far too much.
+  - **Off-track rescue**: 4 s off the track (not in a shortcut) calls the drone. The prototype track keeps its own rules.
+  - **Tunnels**: walls close in to 3.5 m beyond the road edge.
+  - **The three tracks** (D7 order):
+    - **Sunny Meadows**: windmill sweepers, a riverside hairpin, an orchard climb with a stone bridge over a river, and a lakeside run with the farm-track shortcut.
+    - **Dusty Canyon**: a mesa straight under two rock arches, a ridge tunnel, a ravine jump, and switchbacks with the riverbed shortcut.
+    - **Frosty Peaks** (twilight): avalanche sweepers, a frozen lake with three ice patches, a double-hairpin pass with the snow-trail shortcut, and a village run.
+  - **Themes**: each track has its own sky, light, ground colours, walls, mountains (peaks or mesas) and scenery (trees and flowers; cacti, rock spires and scrub; snowy pines and drifts). This is the base; phases 9 and 10 make it realistic (D38).
+  - **Choosing a track before phase 12**: the lobby's track chip is a button, and T on the host cycles it. The server keeps it in the room config. `?track=canyon` overrides it for development.
+- **Why**: Section 11 and section 12.4. Data-driven tracks keep the physics and the art in step.
+- **Left for phase 11**:
+  - The AI rarely drifts on these wider corners (1 to 3 drifts per race for the whole field). Its rule needs firm steering above 22 m/s.
+  - The character spread is 5.6 to 6.0% (target 4%).
+  - Normal to Hard is 2.8 to 2.9% (target 3%, D9).
 
 ---
 

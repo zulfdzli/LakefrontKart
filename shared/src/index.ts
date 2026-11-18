@@ -6,3 +6,4 @@ export * from './track';
 export * from './items';
 export * from './ai';
 export * from './game';
+export * from './tracks';

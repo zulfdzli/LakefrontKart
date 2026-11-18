@@ -31,6 +31,8 @@ const RESULTS_DELAY = 3;
 export interface PlayerView {
   slot: number;
   kart: Kart;
+  /** Best time per sector this race (index = sector number). */
+  bestSec: (number | null)[];
   cam: ChaseCam;
   hud: PlayerHud;
   lines: SpeedLines;
@@ -81,6 +83,7 @@ export class RaceSession {
         cam,
         hud,
         lines: new SpeedLines(hud.fx.getContext('2d')!),
+        bestSec: [],
         rect: { x: 0, y: 0, w: 1, h: 1 },
       });
     }
@@ -127,6 +130,7 @@ export class RaceSession {
     for (const p of this.players) {
       p.cam.reset(p.kart.h);
       p.hud.reset();
+      p.bestSec = [];
     }
     this.panel.reset();
     for (const v of this.world.views) v.resetMotion();
@@ -378,6 +382,26 @@ export class RaceSession {
         }
         case 'draft':
           if (me) a.tone(400, 0.3, 'sine', 0.06, 800);
+          break;
+        case 'sector':
+          if (me && e.n !== undefined && e.t !== undefined) {
+            const best = me.bestSec[e.n] ?? null;
+            me.hud.split(e.n, e.t, best);
+            if (best === null || e.t < best) me.bestSec[e.n] = e.t;
+          }
+          break;
+        case 'jump':
+          if (me) a.tone(420, 0.25, 'triangle', 0.07, 760);
+          break;
+        case 'land':
+          if (me) {
+            a.noiseHit(0.18, 0.2, 380);
+            me.cam.shake = Math.max(me.cam.shake, 0.35);
+            if (e.power) me.hud.say('NICE LANDING!', 900, 'small blue');
+          }
+          break;
+        case 'missedgate':
+          if (me) me.hud.say('MISSED A CHECKPOINT!', 1600, 'small');
           break;
         case 'rescue':
           if (me) me.hud.say('RESCUE!', 900, 'small');

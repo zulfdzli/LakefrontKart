@@ -207,6 +207,32 @@ button {
 .phud.multi .lastlap {
   display: none;
 }
+/* sector split (phase 8) */
+.phud .split {
+  font-size: 15px;
+  padding: 1px 12px;
+  border-radius: 999px;
+  background: rgba(29, 27, 46, 0.6);
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 0.25s,
+    transform 0.25s;
+}
+.phud .split.on {
+  opacity: 1;
+  transform: none;
+}
+.phud .split em {
+  font-style: normal;
+}
+.phud .split em.good {
+  color: #69f0ae;
+}
+.phud .split em.bad {
+  color: #ff8a80;
+}
 .phud .rightCol {
   display: flex;
   flex-direction: column;
@@ -1108,6 +1134,20 @@ h1.logo span {
   border: 2px solid rgba(255, 255, 255, 0.6);
   font-weight: 600;
   font-size: 15px;
+}
+.lobbyFoot .cfg .trackChip {
+  padding: 3px 14px;
+  border-radius: 999px;
+  background: #3949ab;
+  border: 2px solid #fff;
+  color: #fff;
+  font: 700 15px var(--font);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.15s;
+}
+.lobbyFoot .cfg .trackChip:hover {
+  transform: scale(1.06);
 }
 .lobbyFoot .status {
   font-size: 20px;

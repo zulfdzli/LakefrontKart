@@ -301,6 +301,7 @@ export class KartView {
   iz = 0;
   ih = 0;
   private yaw = 0;
+  private roll = 0;
   private lean = 0;
   private pitch = 0;
   private pitchAcc = 0;
@@ -429,6 +430,9 @@ export class KartView {
     const kd = 1 - Math.exp(-10 * dt);
     this.pitch += (-Math.atan(k.slope) - this.pitch) * kd;
     this.root.rotation.x = this.pitch;
+    // banked road: roll with it (smoothed)
+    this.roll += (-Math.atan(k.bank) - this.roll) * kd;
+    this.root.rotation.z = this.roll;
     // suspension spring
     if (dt > 0) {
       this.susV += (-140 * this.sus - 13 * this.susV) * dt;

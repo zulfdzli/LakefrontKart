@@ -1,9 +1,69 @@
 /**
  * Track geometry: a closed Catmull-Rom spline resampled to evenly spaced points,
  * plus elevation, slope, curvature and a smoothed racing line. Ported from the prototype.
- * Phase 8 replaces the hard-coded control points with TrackDef data.
+ *
+ * Phase 8: a Track also carries per-sample road width, wall distance and banking, surface zones, checkpoint
+ * gates, sectors, pads, item rows, jump ramps and shortcut corridors. Real tracks come from TrackDef data
+ * (shared/src/tracks/); the prototype track keeps its exact original numbers (parity test).
  */
-import { TWO_PI, clamp, wrapA } from './constants';
+import { KERB_W, ROAD_HALF, TWO_PI, WALL, clamp, wrapA } from './constants';
+
+/* ---------------- surfaces (section 11.2) ---------------- */
+
+export type SurfaceId = 'asphalt' | 'kerb' | 'ice' | 'grass' | 'dirt' | 'gravel' | 'sand' | 'snow';
+
+export interface SurfaceParams {
+  /** Sideways grip (1/s) when not drifting. */
+  grip: number;
+  /** Top speed on this surface (m/s, before the game speed multiplier), or null for the kart's own top speed. */
+  cap: number | null;
+  /** Extra speed bleed (1/s). */
+  drag: number;
+  /** Off the road: slower, no drift-free grip, counts towards the off-track rescue. */
+  off: boolean;
+  /** Low grip that also limits drift grip (ice). */
+  slick?: boolean;
+}
+
+/** Grass keeps the prototype's exact off-road numbers (cap 15, drag 0.8, grip 4). */
+export const SURF: Readonly<Record<SurfaceId, Readonly<SurfaceParams>>> = {
+  asphalt: { grip: 9, cap: null, drag: 0, off: false },
+  kerb: { grip: 9, cap: null, drag: 0, off: false },
+  ice: { grip: 1.7, cap: null, drag: 0, off: false, slick: true },
+  grass: { grip: 4, cap: 15, drag: 0.8, off: true },
+  dirt: { grip: 5.5, cap: 26, drag: 0.3, off: true },
+  gravel: { grip: 3.2, cap: 11, drag: 1.6, off: true },
+  sand: { grip: 3.8, cap: 14, drag: 1, off: true },
+  snow: { grip: 4.2, cap: 16, drag: 0.7, off: true },
+};
+
+/** A surface patch: samples [i0, i1] (inclusive, may wrap), lateral range in metres. */
+export interface LatZone {
+  latMin: number;
+  latMax: number;
+  surface: SurfaceId;
+}
+
+/** A jump ramp: the road rises over samples [i0, i1] by `lift` metres, then drops back; crossing i1 launches. */
+export interface Ramp {
+  i0: number;
+  i1: number;
+  lift: number;
+}
+
+/**
+ * A risk/reward shortcut: a corridor (polyline, half-width) that leaves the road and rejoins it further on.
+ * Inside it there are no road walls; its own edges act as walls.
+ */
+export interface Shortcut {
+  /** Polyline points [x0, z0, x1, z1, ...]. */
+  pts: number[];
+  half: number;
+  surface: SurfaceId;
+  /** Road samples where it leaves and rejoins. */
+  i0: number;
+  i1: number;
+}
 
 export interface Track {
   /** Number of samples. */
@@ -30,6 +90,87 @@ export interface Track {
   CURV: number[];
   /** Racing-line lateral offset (m). */
   RLINE: number[];
+  /** Track id ('proto' for the prototype track). */
+  id: string;
+  /** Road half-width per sample (m). */
+  HW: number[];
+  /** Wall distance from the centreline per sample (m). */
+  WALLD: number[];
+  /** tan(banking) per sample: the road surface height changes by lat * BT. */
+  BT: number[];
+  /** Surface beyond the kerbs when no zone says otherwise. */
+  offroad: SurfaceId;
+  /** Surface patches per sample, or null. */
+  zones: (LatZone[] | null)[];
+  /** Ordered checkpoint gates (sample indices, ascending, excluding the start line at 0). */
+  gates: number[];
+  /** Sector start samples (the first is 0). Each later one is also a gate. */
+  sectors: number[];
+  /** Boost pads. */
+  pads: { idx: number; lat: number }[];
+  /** Item box rows (sample indices). */
+  boxRows: number[];
+  ramps: Ramp[];
+  shortcuts: Shortcut[];
+}
+
+/** Defaults that reproduce the prototype exactly (constant width, no banking, no gates). */
+export function prototypeExtras(
+  N: number,
+): Omit<Track, 'N' | 'DS' | 'LEN' | 'CX' | 'CZ' | 'TX' | 'TZ' | 'RX' | 'RZ' | 'ANG' | 'H' | 'SL' | 'CURV' | 'RLINE'> {
+  return {
+    id: 'proto',
+    HW: new Array<number>(N).fill(ROAD_HALF),
+    WALLD: new Array<number>(N).fill(WALL),
+    BT: new Array<number>(N).fill(0),
+    offroad: 'grass',
+    zones: new Array<LatZone[] | null>(N).fill(null),
+    gates: [],
+    sectors: [0],
+    pads: [0.13, 0.4, 0.68, 0.93].map((f) => ({ idx: Math.floor(f * N), lat: 0 })),
+    boxRows: [0.07, 0.2, 0.33, 0.47, 0.6, 0.75, 0.9].map((f) => Math.floor(f * N)),
+    ramps: [],
+    shortcuts: [],
+  };
+}
+
+/** The surface under a track-relative point. */
+export function surfaceAt(T: Track, idx: number, lat: number): SurfaceId {
+  const a = Math.abs(lat),
+    hw = T.HW[idx]!;
+  const zs = T.zones[idx];
+  if (zs) for (const z of zs) if (lat >= z.latMin && lat <= z.latMax) return z.surface;
+  if (a <= hw) return 'asphalt';
+  if (a <= hw + KERB_W) return 'kerb';
+  return T.offroad;
+}
+
+/** Closest point on a shortcut corridor, or null when no corridor is within `margin` of its edge. */
+export function shortcutAt(
+  T: Track,
+  x: number,
+  z: number,
+  margin = 0,
+): { sc: Shortcut; d: number; cx: number; cz: number } | null {
+  let best: { sc: Shortcut; d: number; cx: number; cz: number } | null = null;
+  for (const sc of T.shortcuts) {
+    const p = sc.pts;
+    for (let i = 0; i + 3 < p.length; i += 2) {
+      const ax = p[i]!,
+        az = p[i + 1]!,
+        bx = p[i + 2]!,
+        bz = p[i + 3]!;
+      const ex = bx - ax,
+        ez = bz - az,
+        l2 = ex * ex + ez * ez || 1;
+      const t = clamp(((x - ax) * ex + (z - az) * ez) / l2, 0, 1);
+      const cx = ax + ex * t,
+        cz = az + ez * t,
+        d = Math.hypot(x - cx, z - cz);
+      if (d <= sc.half + margin && (!best || d < best.d)) best = { sc, d, cx, cz };
+    }
+  }
+  return best;
 }
 
 export function buildTrack(ctrl: readonly (readonly [number, number])[], count: number, startOffset: number): Track {
@@ -116,7 +257,7 @@ export function buildTrack(ctrl: readonly (readonly [number, number])[], count: 
     }
     line = nl;
   }
-  return { N: count, DS, LEN, CX, CZ, TX, TZ, RX, RZ, ANG, H, SL, CURV, RLINE: line };
+  return { N: count, DS, LEN, CX, CZ, TX, TZ, RX, RZ, ANG, H, SL, CURV, RLINE: line, ...prototypeExtras(count) };
 }
 
 /** The prototype's track (about 1.28 km). Replaced by full-length TrackDefs in phase 8. */
@@ -188,7 +329,7 @@ export function locate(T: Track, k: Locatable, glob: boolean): void {
   k.lat = dx * RX[best]! + dz * RZ[best]!;
   k.frac = clamp((dx * TX[best]! + dz * TZ[best]!) / DS, -0.5, 0.5);
   const j = k.frac >= 0 ? (best + 1) % N : (best - 1 + N) % N;
-  k.y = H[best]! + (H[j]! - H[best]!) * Math.abs(k.frac);
+  k.y = H[best]! + (H[j]! - H[best]!) * Math.abs(k.frac) + k.lat * T.BT[best]!;
   k.slope = SL[best]!;
 }
 
@@ -201,5 +342,5 @@ export function posOnTrack(T: Track, prog: number, lat: number, out: { x: number
     j = (i + 1) % N;
   out.x = CX[i]! + (CX[j]! - CX[i]!) * f + RX[i]! * lat;
   out.z = CZ[i]! + (CZ[j]! - CZ[i]!) * f + RZ[i]! * lat;
-  out.y = H[i]! + (H[j]! - H[i]!) * f;
+  out.y = H[i]! + (H[j]! - H[i]!) * f + lat * T.BT[i]!;
 }

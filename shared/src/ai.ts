@@ -120,7 +120,9 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
   if (Math.abs(diff) > 1.0) target = Math.min(target, 9); // target far off the nose: slow down so the turn tightens
   inp.throttle = sp < target;
   inp.brake = sp > target + 5;
-  if (a.drifts) inp.drift = k.drifting ? turnAng > 0.22 : turnAng > 0.55 && sp > 22 && Math.abs(inp.steer) > 0.5;
+  const Hd = s.handling;
+  if (a.drifts)
+    inp.drift = k.drifting ? turnAng > Hd.aiDriftHold : turnAng > Hd.aiDriftIn && sp > 22 && Math.abs(inp.steer) > 0.5;
   else inp.drift = false;
 
   if (k.item && k.roll <= 0 && k.itemWait <= 0) {

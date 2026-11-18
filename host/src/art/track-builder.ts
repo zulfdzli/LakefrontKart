@@ -1,11 +1,13 @@
 /**
  * Turns a Track into meshes: road, kerbs, walls, terrain, pond, landmarks, signs, boost pads and item boxes.
- * Ported from the prototype. Phase 8 feeds it TrackDef data; phase 9 replaces the surfaces with texture sets.
+ * Ported from the prototype. Phase 8: per-sample road width, walls and banking, shortcut corridors (with wall
+ * gaps), surface patches, jump ramps, and each track's theme and landmarks (tunnel, arches, river and bridge,
+ * barn, village, mesas). Phase 9 replaces the surfaces with texture sets.
  */
 import * as THREE from 'three';
-import { ROAD_HALF, KERB_W, WALL, TWO_PI, clamp, smooth01, Rng, type Track, type GameState } from '@tk/shared';
+import { KERB_W, TWO_PI, clamp, smooth01, Rng, type Track, type GameState, type TrackDef } from '@tk/shared';
 import { P_, inFrame, merge, jitter, canvasTex, noiseDots, box, cyl, ico, cone, octa, hash3, type Part } from './geo';
-import { MEADOWS } from './palette';
+import { MEADOWS, type Theme } from './palette';
 import type { Materials } from './materials';
 
 export interface Zone {
@@ -46,8 +48,16 @@ export interface TrackWorld {
   dispose(): void;
 }
 
-export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorld {
-  const { N, DS, CX, CZ, RX, RZ, TX, TZ, ANG, H, SL, CURV } = T;
+export function buildTrackWorld(
+  T: Track,
+  M: Materials,
+  seed: number,
+  th: Theme = MEADOWS,
+  def: TrackDef | null = null,
+): TrackWorld {
+  const { N, DS, CX, CZ, RX, RZ, TX, TZ, ANG, H, SL, CURV, HW, WALLD, BT } = T;
+  const fracIdx = (f: number): number => ((Math.round(f * N) % N) + N) % N;
+  const marks = def?.landmarks ?? [];
   const rng = new Rng(seed);
   const rnd = (a: number, b: number): number => rng.range(a, b);
   const rand = (): number => rng.next();
@@ -65,7 +75,7 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
   /* ---------------- track surfaces ---------------- */
   const roadTex = track(
     canvasTex(256, 512, (g, w, h) => {
-      g.fillStyle = MEADOWS.road;
+      g.fillStyle = th.road;
       g.fillRect(0, 0, w, h);
       noiseDots(g, w, h, 1600, 0.05, rand);
       g.fillStyle = 'rgba(0,0,0,.08)';
@@ -80,17 +90,17 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
   );
   const kerbTex = track(
     canvasTex(16, 64, (g, w, h) => {
-      g.fillStyle = MEADOWS.kerbRed;
+      g.fillStyle = th.kerbRed;
       g.fillRect(0, 0, w, h / 2);
-      g.fillStyle = MEADOWS.kerbWhite;
+      g.fillStyle = th.kerbWhite;
       g.fillRect(0, h / 2, w, h / 2);
     }),
   );
   const wallTex = track(
     canvasTex(64, 64, (g, w, h) => {
-      g.fillStyle = '#fafafa';
+      g.fillStyle = th.wallA;
       g.fillRect(0, 0, w, h);
-      g.fillStyle = '#ef3b3b';
+      g.fillStyle = th.wallB;
       g.fillRect(0, 0, w / 2, h);
       g.fillStyle = '#2b2d42';
       g.fillRect(0, h * 0.86, w, h * 0.14);
@@ -100,40 +110,54 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
   );
   const grassTex = track(
     canvasTex(64, 128, (g, w, h) => {
-      g.fillStyle = MEADOWS.grassA;
+      g.fillStyle = th.grassA;
       g.fillRect(0, 0, w, h);
-      g.fillStyle = MEADOWS.grassB;
+      g.fillStyle = th.grassB;
       g.fillRect(0, 0, w, h / 2);
       noiseDots(g, w, h, 160, 0.05, rand);
     }),
   );
+  type PerSample = number | ((i: number) => number);
+  const at = (f: PerSample, i: number): number => (typeof f === 'number' ? f : f(i));
+  /**
+   * A ribbon along the track between two lateral offsets (per sample), following height and banking.
+   * `keep(i)` drops the quad from sample i to i+1; `range` limits it to samples [i0, i1] (wrapping).
+   */
   function strip(
-    latA: number,
-    yA: number,
-    latB: number,
-    yB: number,
+    latA: PerSample,
+    yA: PerSample,
+    latB: PerSample,
+    yB: PerSample,
     vDiv: number,
     mat: THREE.Material,
     rs = true,
+    keep?: (i: number) => boolean,
+    range?: [number, number],
   ): THREE.Mesh {
     const pos: number[] = [],
       uv: number[] = [],
       idx: number[] = [];
-    for (let i = 0; i <= N; i++) {
-      const j = i % N,
-        v = (i * DS) / vDiv;
+    const count = range ? ((range[1] - range[0] + N) % N) + 1 : N + 1;
+    const start = range ? range[0] : 0;
+    for (let k = 0; k < count; k++) {
+      const i = start + k,
+        j = i % N,
+        v = (i * DS) / vDiv,
+        la = at(latA, j),
+        lb = at(latB, j);
       pos.push(
-        CX[j]! + RX[j]! * latA,
-        H[j]! + yA,
-        CZ[j]! + RZ[j]! * latA,
-        CX[j]! + RX[j]! * latB,
-        H[j]! + yB,
-        CZ[j]! + RZ[j]! * latB,
+        CX[j]! + RX[j]! * la,
+        H[j]! + at(yA, j) + la * BT[j]!,
+        CZ[j]! + RZ[j]! * la,
+        CX[j]! + RX[j]! * lb,
+        H[j]! + at(yB, j) + lb * BT[j]!,
+        CZ[j]! + RZ[j]! * lb,
       );
       uv.push(0, v, 1, v);
     }
-    for (let i = 0; i < N; i++) {
-      const a = i * 2;
+    for (let k = 0; k < count - 1; k++) {
+      if (keep && !keep((start + k) % N)) continue;
+      const a = k * 2;
       idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
     }
     const g = track(new THREE.BufferGeometry());
@@ -153,15 +177,104 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
   const wallMat = lambert({ map: wallTex, side: THREE.DoubleSide });
   const grassMat = lambert({ map: grassTex, side: THREE.DoubleSide });
   const capMat = lambert({ color: 0xffffff, side: THREE.DoubleSide });
-  const WV = WALL + 1.4;
-  strip(-ROAD_HALF, 0.05, ROAD_HALF, 0.05, 26, roadMat);
-  strip(ROAD_HALF, 0.08, ROAD_HALF + KERB_W, 0.08, 6, kerbMat);
-  strip(-ROAD_HALF - KERB_W, 0.08, -ROAD_HALF, 0.08, 6, kerbMat);
+  const WV = (i: number): number => WALLD[i]! + 1.4;
+  /* ---- shortcut corridors: where they cross a wall line, the wall has a gap ---- */
+  const corridorD = (x: number, z: number): number => {
+    let best = 1e9;
+    for (const sc of T.shortcuts) {
+      const p = sc.pts;
+      for (let i = 0; i + 3 < p.length; i += 2) {
+        const ax = p[i]!,
+          az = p[i + 1]!,
+          ex = p[i + 2]! - ax,
+          ez = p[i + 3]! - az,
+          l2 = ex * ex + ez * ez || 1;
+        const t = clamp(((x - ax) * ex + (z - az) * ez) / l2, 0, 1);
+        best = Math.min(best, Math.hypot(x - ax - ex * t, z - az - ez * t) - sc.half);
+      }
+    }
+    return best;
+  };
+  /** Drop a ribbon quad where a shortcut corridor crosses any of the given lateral offsets. */
+  const gapKeep =
+    (lats: ((k: number) => number)[]) =>
+    (i: number): boolean => {
+      if (!T.shortcuts.length) return true;
+      for (const k of [i, (i + 1) % N])
+        for (const lf of lats) {
+          const l = lf(k);
+          if (corridorD(CX[k]! + RX[k]! * l, CZ[k]! + RZ[k]! * l) < 1.5) return false;
+        }
+      return true;
+    };
+  const wallKeep = (side: number) => gapKeep([(k) => side * WV(k)]);
+  const vergeKeep = (side: number) =>
+    gapKeep([(k) => side * (HW[k]! + KERB_W + 1), (k) => side * WALLD[k]!, (k) => side * (WALLD[k]! + 5)]);
+  strip(
+    (i) => -HW[i]!,
+    0.05,
+    (i) => HW[i]!,
+    0.05,
+    26,
+    roadMat,
+  );
+  strip(
+    (i) => HW[i]!,
+    0.08,
+    (i) => HW[i]! + KERB_W,
+    0.08,
+    6,
+    kerbMat,
+  );
+  strip(
+    (i) => -HW[i]! - KERB_W,
+    0.08,
+    (i) => -HW[i]!,
+    0.08,
+    6,
+    kerbMat,
+  );
   for (const s of [1, -1]) {
-    strip(s * (ROAD_HALF + KERB_W), 0.0, s * (WALL + 3), 0.0, 14, grassMat);
-    strip(s * (WALL + 3), 0.0, s * (WALL + 8), -0.7, 14, grassMat);
-    strip(s * WV, 0.0, s * WV, 1.35, 7, wallMat);
-    strip(s * WV, 1.35, s * (WV + 0.6), 1.35, 7, capMat, false);
+    strip(
+      (i) => s * (HW[i]! + KERB_W),
+      0.0,
+      (i) => s * (WALLD[i]! + 3),
+      0.0,
+      14,
+      grassMat,
+      true,
+      vergeKeep(s),
+    );
+    strip(
+      (i) => s * (WALLD[i]! + 3),
+      0.0,
+      (i) => s * (WALLD[i]! + 8),
+      -0.7,
+      14,
+      grassMat,
+      true,
+      vergeKeep(s),
+    );
+    strip(
+      (i) => s * WV(i),
+      0.0,
+      (i) => s * WV(i),
+      1.35,
+      7,
+      wallMat,
+      true,
+      wallKeep(s),
+    );
+    strip(
+      (i) => s * WV(i),
+      1.35,
+      (i) => s * (WV(i) + 0.6),
+      1.35,
+      7,
+      capMat,
+      false,
+      wallKeep(s),
+    );
   }
 
   /* ---------------- terrain ---------------- */
@@ -179,6 +292,57 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
     bx1 = Math.max(bx1, CX[i]!);
     bz0 = Math.min(bz0, CZ[i]!);
     bz1 = Math.max(bz1, CZ[i]!);
+  }
+  /* ---- rivers (Meadows): a meandering channel crossing under the road at a landmark ---- */
+  interface River {
+    pts: number[];
+    half: number;
+    y: number;
+    dist(x: number, z: number): number;
+  }
+  const rivers: River[] = [];
+  for (const l of marks)
+    if (l.kind === 'river') {
+      const i = fracIdx(l.at),
+        pts: number[] = [];
+      for (let k = -14; k <= 14; k++) {
+        const d = k * 32,
+          wig = Math.sin(k * 0.55) * 22 + Math.sin(k * 0.21 + 1) * 30;
+        pts.push(CX[i]! + RX[i]! * d + TX[i]! * wig, CZ[i]! + RZ[i]! * d + TZ[i]! * wig);
+      }
+      const half = 9;
+      rivers.push({
+        pts,
+        half,
+        y: H[i]! - 3.2,
+        dist(x, z) {
+          let b = 1e9;
+          for (let k = 0; k + 3 < pts.length; k += 2) {
+            const ax = pts[k]!,
+              az = pts[k + 1]!,
+              ex = pts[k + 2]! - ax,
+              ez = pts[k + 3]! - az,
+              l2 = ex * ex + ez * ez || 1;
+            const t = clamp(((x - ax) * ex + (z - az) * ez) / l2, 0, 1);
+            b = Math.min(b, Math.hypot(x - ax - ex * t, z - az - ez * t));
+          }
+          return b;
+        },
+      });
+    }
+  /** Road-surface height under a world point in a shortcut corridor (as the physics' global locate). */
+  function scY(x: number, z: number): number {
+    let bi = 0,
+      bd = 1e18;
+    for (let i = 0; i < N; i++) {
+      const d = (x - CX[i]!) ** 2 + (z - CZ[i]!) ** 2;
+      if (d < bd) {
+        bd = d;
+        bi = i;
+      }
+    }
+    const lat = (x - CX[bi]!) * RX[bi]! + (z - CZ[bi]!) * RZ[bi]!;
+    return H[bi]! + lat * BT[bi]!;
   }
   function nearTrack(x: number, z: number): { i: number; d: number; base: number } {
     let bi = 0,
@@ -216,11 +380,26 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
       0.25 * Math.sin(x * 0.057 + z * 0.043 + 0.7)) *
       10 +
     7;
-  function terrainRaw(x: number, z: number, n: { d: number; base: number }): number {
-    const t = smooth01((n.d - (WALL + 6)) / 95),
+  let RMAX = 0;
+  for (let i = 0; i < N; i++) RMAX = Math.max(RMAX, Math.hypot(CX[i]! - TC.x, CZ[i]! - TC.z));
+  function terrainRaw(x: number, z: number, n: { i: number; d: number; base: number }): number {
+    const t = smooth01((n.d - (WALLD[n.i]! + 6)) / 95),
       r = Math.hypot(x - TC.x, z - TC.z),
-      far = smooth01((r - 560) / 480) * 80;
-    return (n.base - 0.45) * (1 - t) + (hills(x, z) + far + n.base * 0.4) * t;
+      far = smooth01((r - RMAX - 40) / 480) * 80;
+    let h = (n.base - 0.45) * (1 - t) + (hills(x, z) + far + n.base * 0.4) * t;
+    // shortcut corridors and rivers cut through the ground
+    if (T.shortcuts.length) {
+      const d = corridorD(x, z);
+      if (d < 10) h = Math.min(h, scY(x, z) - 0.3 + Math.max(0, d) * 0.12);
+    }
+    for (const rv of rivers) {
+      const d = rv.dist(x, z);
+      if (d < rv.half + 14) {
+        const f = smooth01((d - rv.half * 0.6) / 14);
+        h = h * f + (rv.y - 2.2) * (1 - f);
+      }
+    }
+    return h;
   }
   let pond: TerrainInfo['pond'] = null;
   function terrainH(x: number, z: number, n?: { i: number; d: number; base: number }): number {
@@ -269,10 +448,10 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
   let podSpot: { x: number; z: number } | null = pickSpot(56, used, pond ? pond.r + 46 : 0);
   if (!podSpot) {
     const i = N - 30;
-    podSpot = { x: CX[i]! + RX[i]! * (WALL + 40), z: CZ[i]! + RZ[i]! * (WALL + 40) };
+    podSpot = { x: CX[i]! + RX[i]! * (WALLD[i]! + 40), z: CZ[i]! + RZ[i]! * (WALLD[i]! + 40) };
   }
   zones.push({ x: podSpot.x, z: podSpot.z, r: 24 });
-  const millSpot = pickSpot(55, [...used, podSpot], 70);
+  const millSpot = th.id === 'meadows' ? pickSpot(55, [...used, podSpot], 70) : null;
   if (millSpot) zones.push({ x: millSpot.x, z: millSpot.z, r: 14 });
 
   {
@@ -286,7 +465,7 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
     for (let r = 0; r < V; r++) for (let c = 0; c < V; c++) hh[r * V + c] = terrainH(ox + c * cell, oz + r * cell);
     const pos = new Float32Array(TN * TN * 18),
       col = new Float32Array(TN * TN * 18);
-    const greens = MEADOWS.grassTerrain,
+    const greens = th.grassTerrain,
       _c = new THREE.Color();
     let o = 0;
     const put = (x: number, y: number, z: number): void => {
@@ -297,9 +476,9 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
     const colTri = (ci: number, x: number, z: number, h: number, k: number): void => {
       let hex: number;
       const dp = pond ? Math.hypot(x - pond.x, z - pond.z) : 1e9;
-      if (pond && dp < pond.r + 22 && h < pond.y + 1.4) hex = h < pond.y - 0.4 ? MEADOWS.sandWet : MEADOWS.sandDry;
-      else if (h > 64) hex = MEADOWS.snow;
-      else if (h > 44) hex = MEADOWS.rock[k % 3]!;
+      if (pond && dp < pond.r + 22 && h < pond.y + 1.4) hex = h < pond.y - 0.4 ? th.sandWet : th.sandDry;
+      else if (h > 64) hex = th.snow;
+      else if (h > 44) hex = th.rock[k % 3]!;
       else {
         const v = 0.5 + 0.5 * Math.sin(x * 0.02 + z * 0.013) * Math.cos(z * 0.017 - x * 0.007);
         hex = greens[clamp(Math.floor(v * 3.6 + hash3(Math.round(x), Math.round(z), 3, 9) * 1.6), 0, 4)]!;
@@ -347,10 +526,12 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
   if (pond) {
     const wg = track(jitter(new THREE.CircleGeometry(pond.r + 20, 18).rotateX(-Math.PI / 2), 1.2, 4));
     wg.computeVertexNormals();
-    water = add(new THREE.Mesh(wg, lambert({ color: MEADOWS.water, transparent: true, opacity: 0.88 })));
+    water = add(
+      new THREE.Mesh(wg, lambert({ color: th.water, transparent: th.waterOpacity < 1, opacity: th.waterOpacity })),
+    );
     water.position.set(pond.x, pond.y, pond.z);
     const lily: Part[] = [];
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < (th.id === 'meadows' ? 9 : 0); i++) {
       const a = rand() * TWO_PI,
         r = rand() * pond.r * 0.8;
       lily.push(P_(cyl(1.1, 1.1, 0.12, 7), i % 3 ? 0x66bb6a : 0x81c784, Math.cos(a) * r, 0.08, Math.sin(a) * r));
@@ -369,7 +550,7 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
   // start / finish gantry with bunting
   {
     const parts: Part[] = [],
-      hw = ROAD_HALF + 3.5;
+      hw = HW[0]! + 3.5;
     for (const s of [-1, 1]) {
       parts.push(P_(cyl(0.6, 0.75, 11, 6), 0xeceff1, s * hw, 5.5, 0));
       parts.push(P_(box(1.8, 0.6, 1.8), 0x5c6bc0, s * hw, 0.3, 0));
@@ -392,7 +573,7 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
     );
     const line = add(
       new THREE.Mesh(
-        track(new THREE.PlaneGeometry(ROAD_HALF * 2, 3.2).rotateX(-Math.PI / 2)),
+        track(new THREE.PlaneGeometry(HW[0]! * 2, 3.2).rotateX(-Math.PI / 2)),
         lambert({ map: checker, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
       ),
     );
@@ -435,7 +616,7 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
   const crowd: THREE.InstancedMesh[] = [];
   {
     const i = 14,
-      outer = WALL + 9;
+      outer = WALLD[14]! + 9;
     const cp = clearOther(CX[i]! + RX[i]! * outer, CZ[i]! + RZ[i]! * outer, i),
       cm = clearOther(CX[i]! - RX[i]! * outer, CZ[i]! - RZ[i]! * outer, i);
     const sG = cp >= cm ? 1 : -1;
@@ -638,7 +819,7 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
       if (!list.length) continue;
       const im = add(new THREE.InstancedMesh(plate, lambert({ map: mkTex(left) }), list.length));
       list.forEach(([i, s], n) => {
-        const lat = s * (WV + 2.2),
+        const lat = s * (WV(i) + 2.2),
           x = CX[i]! + RX[i]! * lat,
           z = CZ[i]! + RZ[i]! * lat;
         m4.compose(v.set(x, H[i]! + 2.6, z), q.setFromEuler(e.set(0, ANG[i]! + Math.PI, 0)), one);
@@ -672,7 +853,7 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
     let n = 0;
     for (const [i, s] of tyreSpots)
       for (const off of [0, 1.3]) {
-        const lat = s * (WV + 1.2),
+        const lat = s * (WV(i) + 1.2),
           fwd = off ? 1.3 : 0,
           x = CX[i]! + RX[i]! * lat + TX[i]! * fwd,
           z = CZ[i]! + RZ[i]! * lat + TZ[i]! * fwd;
@@ -693,23 +874,25 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
     const parts: Part[] = [];
     for (let i = 0; i < 22; i++) {
       const a = (i / 22) * TWO_PI + rnd(-0.08, 0.08),
-        r = rnd(980, 1180),
+        r = RMAX + rnd(420, 620),
         hgt = rnd(170, 360),
         rad = rnd(130, 240),
         peak = hgt;
       parts.push(
         P_(
-          jitter(new THREE.ConeGeometry(rad, hgt, 7, 3), rad * 0.18, i + 20),
+          jitter(
+            th.mountains === 'mesa'
+              ? new THREE.CylinderGeometry(rad * 0.62, rad, hgt * 0.55, 7, 3)
+              : new THREE.ConeGeometry(rad, hgt, 7, 3),
+            rad * 0.18,
+            i + 20,
+          ),
           (x, y) => {
             const t = (y - 30) / peak; // colour fn sees world y; the base sits at y = 30
-            return t > 0.62
-              ? MEADOWS.mountainSnow
-              : t > 0.42
-                ? MEADOWS.mountainMid
-                : MEADOWS.mountain[Math.abs(Math.round(x)) % 3]!;
+            return t > 0.62 ? th.mountainSnow : t > 0.42 ? th.mountainMid : th.mountain[Math.abs(Math.round(x)) % 3]!;
           },
           TC.x + Math.cos(a) * r,
-          hgt / 2 + 30,
+          (th.mountains === 'mesa' ? hgt * 0.275 : hgt / 2) + 30,
           TC.z + Math.sin(a) * r,
           0,
           rand() * 6,
@@ -748,7 +931,7 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
       [0x69f0ae, 0xe040fb],
       [0xffab40, 0x7c4dff],
     ] as const;
-    for (let b = 0; b < 4; b++) {
+    for (let b = 0; b < (th.id === 'meadows' ? 4 : 0); b++) {
       const [c1, c2] = pal[b]!;
       const g = track(
         merge([
@@ -785,6 +968,397 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
     }
   }
 
+  /* ---------------- phase 8 features ---------------- */
+  const solid = (c: number, extra: THREE.MeshLambertMaterialParameters = {}): THREE.MeshLambertMaterial =>
+    lambert({ color: c, side: THREE.DoubleSide, ...extra });
+  // surface patches: gravel traps beside the road, ice on it
+  {
+    const bySurf = new Map<string, { latMin: number; latMax: number; i: number }[]>();
+    for (let i = 0; i < N; i++)
+      for (const z of T.zones[i] ?? []) {
+        const l = bySurf.get(z.surface) ?? [];
+        l.push({ latMin: z.latMin, latMax: z.latMax, i });
+        bySurf.set(z.surface, l);
+      }
+    for (const [surf, list] of bySurf) {
+      const onRoad = surf === 'ice';
+      const lift = onRoad ? 0.065 : 0.03;
+      const pos: number[] = [];
+      for (const q of list) {
+        const i = q.i,
+          j = (i + 1) % N;
+        const p = (k: number, lat: number): number[] => [
+          CX[k]! + RX[k]! * lat,
+          H[k]! + lift + lat * BT[k]! + (Math.abs(lat) > HW[k]! + KERB_W ? 0 : 0.03),
+          CZ[k]! + RZ[k]! * lat,
+        ];
+        const a = p(i, q.latMin),
+          b = p(i, q.latMax),
+          c = p(j, q.latMin),
+          d = p(j, q.latMax);
+        pos.push(...a, ...b, ...c, ...b, ...d, ...c);
+      }
+      const g = track(new THREE.BufferGeometry());
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.computeVertexNormals();
+      const col = th.surf[surf as keyof Theme['surf']] ?? 0xcccccc;
+      const m = add(
+        new THREE.Mesh(
+          g,
+          solid(col, {
+            polygonOffset: true,
+            polygonOffsetFactor: -1,
+            polygonOffsetUnits: -1,
+            ...(onRoad ? { transparent: true, opacity: 0.82, emissive: 0x1a3a50 } : {}),
+          }),
+        ),
+      );
+      m.receiveShadow = true;
+    }
+  }
+  // shortcut corridors: a ribbon of their surface with low fences along both sides
+  for (const sc of T.shortcuts) {
+    const p = sc.pts,
+      pts: [number, number][] = [];
+    for (let i = 0; i + 3 < p.length; i += 2) {
+      const ax = p[i]!,
+        az = p[i + 1]!,
+        bx = p[i + 2]!,
+        bz = p[i + 3]!,
+        n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 2));
+      for (let k = 0; k < n; k++) pts.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]);
+    }
+    pts.push([p[p.length - 2]!, p[p.length - 1]!]);
+    const pos: number[] = [],
+      idx: number[] = [],
+      fence: Part[] = [];
+    pts.forEach(([x, z], k) => {
+      const [nx, nz] = pts[Math.min(k + 1, pts.length - 1)]!,
+        [px, pz] = pts[Math.max(k - 1, 0)]!;
+      let dx = nx - px,
+        dz = nz - pz;
+      const l = Math.hypot(dx, dz) || 1;
+      dx /= l;
+      dz /= l;
+      const y = scY(x, z) + 0.04;
+      pos.push(x - dz * sc.half, y, z + dx * sc.half, x + dz * sc.half, y, z - dx * sc.half);
+      if (k) idx.push((k - 1) * 2, k * 2, (k - 1) * 2 + 1, (k - 1) * 2 + 1, k * 2, k * 2 + 1);
+      // fences only away from the road (the road walls take over there)
+      if (k % 2 === 0) {
+        for (const sd of [1, -1]) {
+          const fx = x + sd * -dz * (sc.half + 0.6),
+            fz = z + sd * dx * (sc.half + 0.6);
+          const nt = nearTrack(fx, fz);
+          if (nt.d > HW[nt.i]! + KERB_W + 2)
+            fence.push(
+              P_(box(0.25, 1.1, 0.25), 0x8d6e63, fx, scY(fx, fz) + 0.55, fz),
+              P_(box(0.12, 0.14, 4), 0xbca07a, fx, scY(fx, fz) + 0.85, fz, 0, Math.atan2(dx, dz), 0),
+            );
+        }
+      }
+    });
+    const g = track(new THREE.BufferGeometry());
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    const m = add(new THREE.Mesh(g, solid(th.surf[sc.surface as keyof Theme['surf']] ?? th.surf.dirt)));
+    m.receiveShadow = true;
+    if (fence.length) addStatic(fence);
+  }
+  // jump ramps: chevrons on the kicker and skirts under its raised sides
+  for (const r of T.ramps) {
+    const len = (r.i1 - r.i0 + N) % N;
+    const raise = (i: number): number => {
+      const k = (i - r.i0 + N) % N;
+      return k <= len ? r.lift * Math.pow(k / len, 1.6) : 0;
+    };
+    const chev = track(
+      canvasTex(64, 64, (g, w, h) => {
+        g.fillStyle = '#ff9800';
+        g.fillRect(0, 0, w, h);
+        g.fillStyle = '#fff3e0';
+        g.beginPath();
+        g.moveTo(0, h * 0.75);
+        g.lineTo(w / 2, h * 0.25);
+        g.lineTo(w, h * 0.75);
+        g.lineTo(w, h);
+        g.lineTo(w / 2, h * 0.5);
+        g.lineTo(0, h);
+        g.closePath();
+        g.fill();
+      }),
+    );
+    chev.wrapS = chev.wrapT = THREE.RepeatWrapping;
+    strip(
+      (i) => -HW[i]!,
+      0.075,
+      (i) => HW[i]!,
+      0.075,
+      8,
+      lambert({ map: chev, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      true,
+      undefined,
+      [r.i0, r.i1],
+    );
+    for (const sd of [1, -1])
+      strip(
+        (i) => sd * (HW[i]! + KERB_W),
+        0.08,
+        (i) => sd * (HW[i]! + KERB_W),
+        (i) => -raise(i) - 0.3,
+        6,
+        solid(0x8d6e63),
+        true,
+        undefined,
+        [r.i0, r.i1],
+      );
+    // the lip face
+    const i1 = r.i1;
+    addStatic(
+      inFrame(
+        [P_(box((HW[i1]! + KERB_W) * 2, r.lift + 0.3, 0.5), 0x6d4c41, 0, -(r.lift + 0.3) / 2 + 0.08, 0.25)],
+        CX[i1]!,
+        H[i1]!,
+        CZ[i1]!,
+        ANG[i1]!,
+      ),
+    );
+  }
+  // tunnels: rock walls up to a ceiling, a thick rock shell over the top, lights along the roof
+  for (const l of marks)
+    if (l.kind === 'tunnel' && l.len) {
+      const i0 = fracIdx(l.at),
+        i1 = fracIdx(l.at + l.len);
+      const rock = solid(th.rock[0]!),
+        inner = solid(0x4e4a52);
+      const hgt = 8.5;
+      for (const sd of [1, -1]) {
+        strip(
+          (i) => sd * WV(i),
+          0,
+          (i) => sd * WV(i),
+          hgt,
+          8,
+          inner,
+          true,
+          undefined,
+          [i0, i1],
+        );
+        strip(
+          (i) => sd * WV(i),
+          hgt,
+          (i) => sd * (WV(i) + 34),
+          -1.5,
+          14,
+          rock,
+          true,
+          undefined,
+          [i0, i1],
+        );
+      }
+      strip(
+        (i) => -WV(i),
+        hgt,
+        (i) => WV(i),
+        hgt,
+        8,
+        inner,
+        true,
+        undefined,
+        [i0, i1],
+      ).castShadow = true;
+      strip(
+        (i) => -WV(i),
+        hgt + 3,
+        (i) => WV(i),
+        hgt + 3,
+        8,
+        rock,
+        true,
+        undefined,
+        [i0, i1],
+      ).castShadow = true;
+      const lights: Part[] = [];
+      for (let i = i0; i !== i1; i = (i + 1) % N)
+        if ((i - i0 + N) % 5 === 0)
+          lights.push(P_(box(1.6, 0.25, 0.6), 0xfff3c4, CX[i]!, H[i]! + hgt - 0.2, CZ[i]!, 0, ANG[i]!, 0));
+      const lm = add(new THREE.Mesh(track(merge(lights)), lambert({ vertexColors: true, emissive: 0xffe9a8 })));
+      lm.frustumCulled = false;
+      // portals
+      for (const pi of [i0, i1]) {
+        const w = WV(pi);
+        addStatic(
+          inFrame(
+            [
+              P_(box(3, hgt + 4, 4), th.rock[1]!, -w - 1.5, (hgt + 4) / 2, 0),
+              P_(box(3, hgt + 4, 4), th.rock[1]!, w + 1.5, (hgt + 4) / 2, 0),
+              P_(box(w * 2 + 6, 3.5, 4), th.rock[2]!, 0, hgt + 1.75, 0),
+            ],
+            CX[pi]!,
+            H[pi]!,
+            CZ[pi]!,
+            ANG[pi]!,
+          ),
+        );
+      }
+    }
+  // rock arches over the road
+  for (const l of marks)
+    if (l.kind === 'arch') {
+      const i = fracIdx(l.at),
+        w = WV(i) + 3,
+        parts: Part[] = [];
+      for (const sd of [-1, 1]) parts.push(P_(jitter(cyl(4, 5.5, 18, 7), 0.8, i + sd), th.rock[0]!, sd * w, 9, 0));
+      for (let k = 0; k <= 10; k++) {
+        const a = Math.PI * (k / 10),
+          x = -Math.cos(a) * w,
+          y = 17 + Math.sin(a) * 9;
+        parts.push(P_(jitter(ico(4.2, 0), 0.9, i * 11 + k), th.rock[k % 3]!, x, y, 0));
+      }
+      addStatic(inFrame(parts, CX[i]!, H[i]!, CZ[i]!, ANG[i]!));
+    }
+  // rivers: water ribbon, a stone bridge (parapets and deck sides) where the road crosses
+  for (const rv of rivers) {
+    const p = rv.pts,
+      pos: number[] = [],
+      idx: number[] = [];
+    for (let k = 0; k < p.length; k += 2) {
+      const x = p[k]!,
+        z = p[k + 1]!;
+      const nx = p[Math.min(k + 2, p.length - 2)]! - p[Math.max(k - 2, 0)]!,
+        nz = p[Math.min(k + 3, p.length - 1)]! - p[Math.max(k - 1, 1)]!;
+      const l = Math.hypot(nx, nz) || 1;
+      pos.push(
+        x - (nz / l) * rv.half,
+        rv.y,
+        z + (nx / l) * rv.half,
+        x + (nz / l) * rv.half,
+        rv.y,
+        z - (nx / l) * rv.half,
+      );
+      if (k) {
+        const a = (k / 2 - 1) * 2;
+        idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+      }
+    }
+    const g = track(new THREE.BufferGeometry());
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    add(new THREE.Mesh(g, solid(th.water, { transparent: true, opacity: 0.9 })));
+    // bridge over every road sample near the river
+    let b0 = -1,
+      b1 = -1;
+    for (let i = 0; i < N; i++)
+      if (rv.dist(CX[i]!, CZ[i]!) < rv.half + 12) {
+        if (b0 < 0) b0 = i;
+        b1 = i;
+      }
+    if (b0 >= 0) {
+      const stone = solid(0xc9bfae);
+      for (const sd of [1, -1]) {
+        strip(
+          (i) => sd * (HW[i]! + KERB_W),
+          0.08,
+          (i) => sd * (HW[i]! + KERB_W),
+          1.2,
+          4,
+          stone,
+          true,
+          undefined,
+          [b0, b1],
+        );
+        strip(
+          (i) => sd * WV(i),
+          0,
+          (i) => sd * WV(i),
+          -4.5,
+          6,
+          stone,
+          true,
+          undefined,
+          [b0, b1],
+        );
+      }
+    }
+  }
+  // buildings and big rocks beside the road
+  const house = (
+    x: number,
+    y: number,
+    z: number,
+    ry: number,
+    w: number,
+    d: number,
+    h: number,
+    wall: number,
+    roof: number,
+  ): void =>
+    addStatic(
+      inFrame(
+        [
+          P_(box(w, h, d), wall, 0, h / 2, 0),
+          P_(
+            cone(Math.max(w, d) * 0.78, h * 0.75, 4),
+            roof,
+            0,
+            h + h * 0.37,
+            0,
+            0,
+            Math.PI / 4,
+            0,
+            w / Math.max(w, d),
+            1,
+            d / Math.max(w, d),
+          ),
+          P_(box(1.2, 2.2, 0.2), 0x5d4037, 0, 1.1, d / 2 + 0.05),
+          P_(box(1.3, 1.1, 0.2), 0xfff59d, w * 0.28, h * 0.6, d / 2 + 0.05),
+        ],
+        x,
+        y,
+        z,
+        ry,
+      ),
+    );
+  for (const l of marks) {
+    if (l.side === 0) continue;
+    const i = fracIdx(l.at),
+      lat = l.side * (WALLD[i]! + l.dist * 0.6),
+      x = CX[i]! + RX[i]! * lat,
+      z = CZ[i]! + RZ[i]! * lat,
+      ry = ANG[i]! + (l.side > 0 ? -Math.PI / 2 : Math.PI / 2);
+    if (l.kind === 'barn') {
+      house(x, terrainH(x, z) - 0.2, z, ry, 14, 10, 7, 0xc62828, 0x5d4037);
+      zones.push({ x, z, r: 16 });
+    } else if (l.kind === 'village') {
+      for (let k = 0; k < 7; k++) {
+        const f = l.at + (k - 3) * 0.008,
+          j = fracIdx(f),
+          ll = l.side * (WALLD[j]! + 14 + (k % 2) * 16),
+          hx = CX[j]! + RX[j]! * ll,
+          hz = CZ[j]! + RZ[j]! * ll;
+        house(
+          hx,
+          terrainH(hx, hz) - 0.2,
+          hz,
+          ANG[j]! + (l.side > 0 ? -Math.PI / 2 : Math.PI / 2),
+          8 + (k % 3) * 2,
+          7,
+          5 + (k % 2) * 2,
+          [0xfff3e0, 0xffe0b2, 0xd7ccc8][k % 3]!,
+          [0x8d3b2f, 0x37474f, 0x5d4037][k % 3]!,
+        );
+        zones.push({ x: hx, z: hz, r: 9 });
+      }
+    } else if (l.kind === 'lodge') {
+      house(x, terrainH(x, z) - 0.2, z, ry, 18, 12, 8, 0x8d6e63, 0x37474f);
+      zones.push({ x, z, r: 18 });
+    } else if (l.kind === 'mesa') {
+      addStatic([P_(jitter(cyl(38, 55, 60, 8), 4, i), th.rock[0]!, x, terrainH(x, z) + 24, z)]);
+      zones.push({ x, z, r: 60 });
+    }
+  }
+
   /* ---------------- merged static props ---------------- */
   {
     const m = add(new THREE.Mesh(track(merge(staticParts)), M.prop));
@@ -796,9 +1370,9 @@ export function buildTrackWorld(T: Track, M: Materials, seed: number): TrackWorl
   /* ---------------- boost pads & item boxes ---------------- */
   const padTex = track(
     canvasTex(64, 128, (g, w) => {
-      g.fillStyle = MEADOWS.boostPad;
+      g.fillStyle = th.boostPad;
       g.fillRect(0, 0, w, 128);
-      g.fillStyle = MEADOWS.boostPadDark;
+      g.fillStyle = th.boostPadDark;
       for (let i = 0; i < 4; i++) {
         const y = 6 + i * 32;
         g.beginPath();

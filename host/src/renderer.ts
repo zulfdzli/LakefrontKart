@@ -11,7 +11,8 @@ import { buildScenery, type Scenery } from './art/scenery';
 import { Effects } from './art/effects';
 import { KartView, ProceduralKartProvider, type KartAssetProvider } from './art/kart';
 import { setMaxAnisotropy } from './art/geo';
-import { MEADOWS } from './art/palette';
+import { MEADOWS, THEMES, type Theme } from './art/palette';
+import { TRACKS, isTrackId } from '@tk/shared';
 
 /** A viewport in CSS pixels, top-left origin (layout space). */
 export interface Rect {
@@ -46,7 +47,9 @@ export class World {
   readonly scene = new THREE.Scene();
   readonly sunDir = new THREE.Vector3(0.42, 0.78, 0.46).normalize();
   private readonly sun: THREE.DirectionalLight;
-  private readonly sky: THREE.Mesh;
+  private sky: THREE.Mesh;
+  private readonly hemi: THREE.HemisphereLight;
+  private themeId = 'meadows';
   private M: Materials | null = null;
   private trackWorld: TrackWorld | null = null;
   private scenery: Scenery | null = null;
@@ -73,7 +76,8 @@ export class World {
     const s = this.scene;
     s.background = new THREE.Color(MEADOWS.horizon);
     s.fog = new THREE.Fog(MEADOWS.horizon, 300, 1500);
-    s.add(new THREE.HemisphereLight(MEADOWS.hemiSky, MEADOWS.hemiGround, 0.62 * LEGACY_LIGHT_SCALE));
+    this.hemi = new THREE.HemisphereLight(MEADOWS.hemiSky, MEADOWS.hemiGround, 0.62 * LEGACY_LIGHT_SCALE);
+    s.add(this.hemi);
     this.sun = new THREE.DirectionalLight(MEADOWS.sunLight, 0.82 * LEGACY_LIGHT_SCALE);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
@@ -97,13 +101,38 @@ export class World {
    * Build the world for a race. The track (terrain, props, scenery) is only rebuilt when the track changes;
    * kart views are rebuilt every race, because players and characters change.
    */
+  /** Sky, fog and light for a track's theme (phase 8). */
+  private applyTheme(th: Theme): void {
+    if (th.id === this.themeId) return;
+    this.themeId = th.id;
+    const s = this.scene;
+    (s.background as THREE.Color).setHex(th.horizon);
+    (s.fog as THREE.Fog).color.setHex(th.horizon);
+    this.hemi.color.setHex(th.hemiSky);
+    this.hemi.groundColor.setHex(th.hemiGround);
+    this.hemi.intensity = th.hemi * LEGACY_LIGHT_SCALE;
+    this.sun.color.setHex(th.sunLight);
+    this.sun.intensity = th.sun * LEGACY_LIGHT_SCALE;
+    this.sunDir.set(th.sunDir[0], th.sunDir[1], th.sunDir[2]).normalize();
+    s.remove(this.sky);
+    this.sky.geometry.dispose();
+    (this.sky.material as THREE.Material).dispose();
+    const scale = this.sky.scale.x;
+    this.sky = createSky(th.zenith, th.horizon, this.sunDir, th.sunGlow);
+    this.sky.scale.setScalar(scale);
+    s.add(this.sky);
+  }
+
   build(s: Readonly<GameState>, names: Map<number, string>): void {
     if (this.builtTrack !== s.track) {
       this.disposeTrack();
+      const def = isTrackId(s.track.id) ? TRACKS[s.track.id] : null;
+      const th = THEMES[def?.theme ?? 'meadows'];
+      this.applyTheme(th);
       const M = (this.M = createMaterials());
-      this.trackWorld = buildTrackWorld(s.track, M, 1234);
+      this.trackWorld = buildTrackWorld(s.track, M, 1234, th, def);
       this.scene.add(this.trackWorld.group);
-      this.scenery = buildScenery(s.track, this.trackWorld.terrain, M, 4321);
+      this.scenery = buildScenery(s.track, this.trackWorld.terrain, M, 4321, th);
       this.scene.add(this.scenery.group);
       this.effects = new Effects(M);
       this.scene.add(this.effects.group);

@@ -33,6 +33,7 @@ const TEMPLATE = /* html */ `
       <div class="lap pill">LAP 1/3</div>
       <div class="time pill">0:00.00</div>
       <div class="lastlap"></div>
+      <div class="split"></div>
     </div>
     <div class="rightCol"><canvas class="mini" width="236" height="236"></canvas><ol class="stand stand1"></ol></div>
   </div>
@@ -92,6 +93,18 @@ export class MinimapBase {
     g.strokeStyle = '#6c7086';
     g.lineWidth = 5 * u;
     g.stroke();
+    // shortcuts: a dashed brown path
+    g.setLineDash([5 * u, 4 * u]);
+    g.strokeStyle = '#a1887f';
+    g.lineWidth = 4 * u;
+    for (const sc of T.shortcuts) {
+      g.beginPath();
+      for (let i = 0; i < sc.pts.length; i += 2)
+        if (i) g.lineTo(this.mx(sc.pts[i]!), this.mz(sc.pts[i + 1]!));
+        else g.moveTo(this.mx(sc.pts[i]!), this.mz(sc.pts[i + 1]!));
+      g.stroke();
+    }
+    g.setLineDash([]);
     g.save();
     g.translate(this.mx(T.CX[0]!), this.mz(T.CZ[0]!));
     g.rotate(Math.atan2(T.TZ[0]!, T.TX[0]!) + Math.PI / 2);
@@ -248,6 +261,22 @@ export class PlayerHud {
     this.q('finPlace').innerHTML = `${place}<sup>${ord(place)}</sup>`;
     this.q('finTime').textContent = fmtT(time);
     this.root.classList.add('done');
+  }
+
+  private splitTimer = 0;
+  /** Sector split (section 11.1): the time for the sector just finished, and the change from this player's best. */
+  split(n: number, t: number, best: number | null): void {
+    const el = this.q('split');
+    const d =
+      best === null
+        ? ''
+        : ` <em class="${t <= best ? 'good' : 'bad'}">${t <= best ? '−' : '+'}${Math.abs(t - best).toFixed(2)}</em>`;
+    el.innerHTML = `S${n} ${t.toFixed(2)}${d}`;
+    el.classList.remove('on');
+    void el.offsetWidth;
+    el.classList.add('on');
+    clearTimeout(this.splitTimer);
+    this.splitTimer = window.setTimeout(() => el.classList.remove('on'), 2600);
   }
 
   setLastLap(t: number | null): void {

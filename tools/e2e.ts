@@ -240,7 +240,7 @@ async function main(): Promise<void> {
         s: { phase: string; humans: { slot: number; finished: boolean }[] };
       };
       for (const k of ses.s.humans) ses.game.setHumanAi(k.slot, true);
-      for (let i = 0; i < 60 * 240 && !ses.s.humans.every((k) => k.finished); i++) window.__tk.advance(1 / 60);
+      for (let i = 0; i < 60 * 400 && !ses.s.humans.every((k) => k.finished); i++) window.__tk.advance(1 / 60);
     });
     let finText = '';
     try {

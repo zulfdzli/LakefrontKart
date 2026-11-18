@@ -19,6 +19,8 @@ export class Lobby {
   private lastQr = '';
   onSound: (() => void) | null = null;
   onKick: ((slot: number) => void) | null = null;
+  /** The track chip was clicked (cycle to the next track). */
+  onTrack: (() => void) | null = null;
 
   constructor(root: HTMLElement) {
     this.el = root;
@@ -50,6 +52,9 @@ export class Lobby {
       slots.appendChild(c);
     }
     this.q('.soundBtn').addEventListener('click', () => this.onSound?.());
+    this.q('.cfg').addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('[data-act="track"]')) this.onTrack?.();
+    });
   }
 
   private q<T extends HTMLElement = HTMLElement>(sel: string): T {
@@ -125,7 +130,7 @@ export class Lobby {
     }
     const cfg = u.config;
     const diff = cfg.aiDifficulty[0]!.toUpperCase() + cfg.aiDifficulty.slice(1);
-    this.q('.cfg').innerHTML = [
+    const chips = [
       cfg.mode === 'gp' ? 'Grand Prix' : 'Single race',
       cfg.mode === 'gp'
         ? cfg.gpOrder.map((t) => TRACK_NAMES[t] ?? t).join(' → ')
@@ -134,8 +139,14 @@ export class Lobby {
       diff,
       `AI fill ${cfg.aiFill ? 'on' : 'off'}`,
       `Items ${cfg.itemsOn ? 'on' : 'off'}`,
-    ]
-      .map((s) => `<span>${esc(s)}</span>`)
+    ];
+    // the track chip is a button: click it (or press T) to try another track until phase 12's leader settings
+    this.q('.cfg').innerHTML = chips
+      .map((s, i) =>
+        i === 1 && cfg.mode !== 'gp'
+          ? `<button type="button" class="trackChip" data-act="track" title="Change track (T)">${esc(s)} ▸</button>`
+          : `<span>${esc(s)}</span>`,
+      )
       .join('');
     const n = u.players.length;
     const leader = u.players.find((p) => p.isLeader);
