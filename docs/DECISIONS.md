@@ -328,8 +328,8 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 ### D36 · Faster karts and sharper steering (2026-11-18, phase 5 gate, your feedback)
 - **Q**: Retest: steering 3, drift 4, camera 4; the cross pad size is good; you prefer the slider; "make the kart a little faster"; steering "turns too slowly". What changes?
 - **A**:
-  - **Speed**: every kart is 12% faster (top speed, acceleration, boost and off-road caps), scaled evenly so the field and the AI stay balanced. Laps on the test track drop from about 48.5 s to 44 s.
-  - **Overrides section 11**: it says the prototype's speeds feel right. Phase 8 keeps the 2-minute lap target by making tracks longer (about 3.4 to 3.8 km instead of 3.0 to 3.4 km).
+  - **Speed**: every kart is 8% faster (top speed, acceleration, boost and off-road caps), scaled evenly so the field and the AI stay balanced. Laps on the test track drop from about 48.5 s to 45.5 s. (12% was tried first; your third test found it "a little bit" too fast.)
+  - **Overrides section 11**: it says the prototype's speeds feel right. Phase 8 keeps the 2-minute lap target by making tracks longer (about 3.2 to 3.6 km instead of 3.0 to 3.4 km).
   - **Turning**: base turn rate 1.8 → 2.15 rad/s, and less of it is lost at speed (30% → 22% at 40 m/s).
   - **Slider**: full lock at 85% of the travel, with a near-linear response (power 1.15, was 1.5). Halfway across now gives about 55% lock instead of 30%.
   - **Default steering**: the slider (you preferred it). The cross pad stays in Controls.
