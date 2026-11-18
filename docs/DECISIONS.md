@@ -325,6 +325,39 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - These numbers live in `Handling` (`shared/src/game.ts`); `PROTOTYPE_HANDLING` keeps the parity test exact.
 - **Why**: Driving feel is priority 2, and all three feel scores were under the bar of 4 (D10). Lap times and AI gaps are unchanged (sim-report: 48.2–48.7 s).
 
+### D36 · Faster karts and sharper steering (2026-11-18, phase 5 gate, your feedback)
+- **Q**: Retest: steering 3, drift 4, camera 4; the cross pad size is good; you prefer the slider; "make the kart a little faster"; steering "turns too slowly". What changes?
+- **A**:
+  - **Speed**: every kart is 12% faster (top speed, acceleration, boost and off-road caps), scaled evenly so the field and the AI stay balanced. Laps on the test track drop from about 48.5 s to 44 s.
+  - **Overrides section 11**: it says the prototype's speeds feel right. Phase 8 keeps the 2-minute lap target by making tracks longer (about 3.4 to 3.8 km instead of 3.0 to 3.4 km).
+  - **Turning**: base turn rate 1.8 → 2.15 rad/s, and less of it is lost at speed (30% → 22% at 40 m/s).
+  - **Slider**: full lock at 85% of the travel, with a near-linear response (power 1.15, was 1.5). Halfway across now gives about 55% lock instead of 30%.
+  - **Default steering**: the slider (you preferred it). The cross pad stays in Controls.
+  - **Sense of speed**: the speed FOV widening is partly restored (0.16 → 0.19 per m/s).
+  - All of this lives in `Handling.speedMul`, `turnRate` and `turnFalloff`. `PROTOTYPE_HANDLING` keeps the parity test exact.
+- **Why**: Driving feel is priority 2, and steering is still under 4.
+
+### D37 · Pause from the phone (2026-11-18, phase 5 gate, your request)
+- **Q**: How does a player pause?
+- **A**:
+  - **Pausing**: the centre button of the phone's pill is now PAUSE (it was settings). Any racer can pause the race for everyone during the countdown or the race.
+  - **What everyone sees**: every phone shows a pause card with who paused, RESUME, CONTROLS (the steering settings) and LEAVE. The host shows "Paused by NAME".
+  - **Resuming**: anyone can resume, from any phone or with P on the host.
+  - **Settings**: also still on the waiting screen.
+- **Why**: You asked for it. Section 6.6 only had the host's P key.
+
+### D38 · Art direction moves toward realistic (2026-11-18, phase 5 gate, your choice)
+- **Q**: You asked for "more realistic" graphics. Change D5?
+- **A**:
+  - **Direction**: yes. The art pass goes for a realistic look:
+    - no cartoon outlines;
+    - real PBR materials and textures;
+    - realistic lighting, shadows, sky and post-effects (ACES tone mapping, bloom, ambient occlusion).
+  - **Characters**: the cute animal drivers stay.
+  - **When**: phases 9 to 10 as planned, so the 3 new tracks get it rather than this test track.
+  - **D5**: replaced. **D6** (believable surfaces) still applies and now fits the whole world, not only the road.
+- **Why**: Your choice. Doing it after phase 8 avoids redoing the art on the old track.
+
 ---
 
 ## Gate 0 status

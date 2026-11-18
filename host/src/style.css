@@ -580,6 +580,15 @@ h1.logo span {
   paint-order: stroke fill;
   text-shadow: 0 5px 0 var(--ink);
 }
+#pause .pauseBy {
+  margin: -6px 0 14px;
+  font-size: 20px;
+  font-weight: 600;
+  text-shadow: 0 2px 0 var(--ink);
+}
+#pause .pauseBy:empty {
+  display: none;
+}
 #pause .alt,
 #pause .big {
   width: 240px;

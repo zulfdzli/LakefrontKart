@@ -19,7 +19,7 @@ declare global {
       race(o: { seed?: number; ci?: number; laps?: number; autopilot?: boolean }): void;
       advance(s: number): void;
       state(): { phase: string; raceTime: number; stage: string; inRace: boolean; room: string | null };
-      session(): { s: { phase: string; humans: TkKart[] }; players: { kart: TkKart }[] } | null;
+      session(): { s: { phase: string; humans: TkKart[] }; players: { kart: TkKart }[]; paused: boolean } | null;
       info(): { calls: number; triangles: number; pixelRatio: number };
       lobby(): { players: { slot: number; name: string; connected: boolean }[] } | null;
     };

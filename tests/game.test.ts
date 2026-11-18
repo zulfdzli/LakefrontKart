@@ -280,7 +280,7 @@ describe('rescue', () => {
 });
 
 describe('headless race (prototype track)', () => {
-  it('6 AI karts all finish with laps of about 48-52 s', () => {
+  it('6 AI karts all finish with laps of about 42-46 s (D36 speed)', () => {
     const laps: number[] = [];
     for (const seed of [1, 2, 3]) {
       const g = createGame(base({ seed, itemsOn: false }));
@@ -290,7 +290,7 @@ describe('headless race (prototype track)', () => {
       expect(s.karts.every((k) => k.finished)).toBe(true);
       for (const k of s.karts) laps.push(...k.lapTimes);
     }
-    expect(median(laps)).toBeGreaterThan(46);
-    expect(median(laps)).toBeLessThan(53);
+    expect(median(laps)).toBeGreaterThan(41);
+    expect(median(laps)).toBeLessThan(47.5);
   });
 });

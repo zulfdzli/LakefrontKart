@@ -24,16 +24,18 @@ const SWIPE_BACK_PX = 26;
 /** Cross pad: a press starts at this share of full lock and ramps to full over STEER_RAMP_S (D35). */
 const STEER_BASE = 0.5;
 const STEER_RAMP_S = 0.28;
+/** Slider: share of the half-travel that gives full lock. */
+const SLIDER_FULL = 0.85;
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!;
 
 export class Remote {
   readonly state: InputState = { steer: 0, throttle: true, brake: false, drift: false, item: null };
-  scheme: SteeringScheme = (localStorage.getItem('tk_steer') as SteeringScheme | null) ?? 'buttons';
+  scheme: SteeringScheme = (localStorage.getItem('tk_steer') as SteeringScheme | null) ?? 'slider';
   sensitivity = Number(localStorage.getItem('tk_sens') ?? '1') || 1;
   assist = localStorage.getItem('tk_assist') === '1';
   onItem: ((dir: 'forward' | 'back') => void) | null = null;
-  onSettings: (() => void) | null = null;
+  onPause: (() => void) | null = null;
   onLeave: (() => void) | null = null;
   onSchemeChange: (() => void) | null = null;
   private steerRaw = 0;
@@ -55,7 +57,7 @@ export class Remote {
     this.bindItem();
     this.bindTap('minusBtn', () => this.nudgeSensitivity(-0.1));
     this.bindTap('plusBtn', () => this.nudgeSensitivity(0.1));
-    this.bindTap('menuBtn', () => this.onSettings?.());
+    this.bindTap('menuBtn', () => this.onPause?.());
     this.bindTap('powerBtn', () => this.onLeave?.());
     const releaseAll = (): void => this.releaseAll();
     window.addEventListener('blur', releaseAll);
@@ -119,7 +121,8 @@ export class Remote {
     } else {
       const dz = 0.08,
         a = Math.abs(raw);
-      v = a <= dz ? 0 : Math.sign(raw) * Math.pow((a - dz) / (1 - dz), 1.5) * this.sensitivity;
+      // D36: near-linear, and full lock is reached at 85% of the travel so the thumb need not hit the edge
+      v = a <= dz ? 0 : Math.sign(raw) * Math.pow(Math.min(1, (a - dz) / (SLIDER_FULL - dz)), 1.15) * this.sensitivity;
     }
     this.state.steer = Math.max(-1, Math.min(1, v));
     const dp = $('dpad');

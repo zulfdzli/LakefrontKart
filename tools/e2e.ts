@@ -153,7 +153,7 @@ async function main(): Promise<void> {
         const k = window.__tk.session()!.s.humans[n]!;
         return { ...k.input, ai: k.ai, slot: k.slot };
       }, i);
-    const steerA = hold(aPortrait, '#dpad', 700, 1);
+    const steerA = hold(aPortrait, '#steerZone', 700, 1); // works for the slider (default) and the cross pad
     await aPortrait.waitForTimeout(350);
     const a1 = await kartIn(0),
       b1 = await kartIn(1);
@@ -171,6 +171,28 @@ async function main(): Promise<void> {
     check('phone 2 BRAKE reaches kart P2 only', b2.brake && !a2.brake);
     await aPortrait.screenshot({ path: path.join(OUT, 'phone-drive-iphone-race.png') });
 
+    // pause (D37): phone 2 pauses the race for everyone; phone 1 sees who paused and resumes it
+    await b.click('#menuBtn');
+    let paused = false,
+      resumed = false,
+      by = '';
+    try {
+      await host.waitForFunction(() => window.__tk.session()?.paused === true, null, { timeout: 5000 });
+      await aPortrait.waitForSelector('#pauseSheet:not([hidden])', { timeout: 5000 });
+      by = (await aPortrait.textContent('#pauseBy')) ?? '';
+      paused = /Ana/.test(by);
+      await aPortrait.waitForTimeout(500); // let the card finish its rise animation
+      await aPortrait.screenshot({ path: path.join(OUT, 'phone-paused.png') });
+      await host.screenshot({ path: path.join(OUT, 'host-paused.png') });
+      await aPortrait.click('#resumeBtn');
+      await host.waitForFunction(() => window.__tk.session()?.paused === false, null, { timeout: 5000 });
+      await b.waitForSelector('#pauseSheet', { state: 'hidden', timeout: 5000 });
+      resumed = true;
+    } catch {
+      /* reported below */
+    }
+    check('a phone pauses the race for everyone; another phone resumes it', paused && resumed, `card: "${by}"`);
+
     // multi-touch: steer and drift at the same time on one phone (two pointers via touchscreen events)
     const ms = await aPortrait.evaluate(async () => {
       const fire = (el: Element, type: string, id: number, x: number, y: number): void => {
@@ -185,7 +207,7 @@ async function main(): Promise<void> {
           }),
         );
       };
-      const dp = document.getElementById('dpad')!.getBoundingClientRect(),
+      const dp = document.getElementById('steerZone')!.getBoundingClientRect(),
         dz = document.getElementById('steerZone')!;
       const dr = document.getElementById('driftBtn')!,
         rr = dr.getBoundingClientRect();

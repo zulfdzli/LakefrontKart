@@ -125,7 +125,7 @@ export class ChaseCam {
       cam.position.y += Math.sin(t * 61 + 1) * sk * 0.6;
       cam.position.z += Math.cos(t * 47) * sk;
     }
-    this.setFov(this.baseFov + Math.max(0, k.sp) * 0.16 + this.fovKick * 7, dt);
+    this.setFov(this.baseFov + Math.max(0, k.sp) * 0.19 + this.fovKick * 7, dt);
     this.focus.set(ix, iy, iz);
   }
 }

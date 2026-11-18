@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server, type Namespace, type Socket } from 'socket.io';
 import {
+  cleanName,
   sanitizeInput,
   type ControllerToServer,
   type ServerToController,
@@ -53,6 +54,8 @@ const rooms = new RoomManager();
 
 const hostRoom = (code: string): string => `h:${code}`;
 const ctrlRoom = (code: string): string => `r:${code}`;
+const phaseMsg = (room: Room): { phase: Room['phase']; pausedBy?: string } =>
+  room.phase === 'paused' && room.pausedBy ? { phase: room.phase, pausedBy: room.pausedBy } : { phase: room.phase };
 
 function broadcastLobby(room: Room): void {
   const u = rooms.lobbyUpdate(room);
@@ -99,8 +102,10 @@ hostNs.on('connection', (socket) => {
 
   socket.on('host:state', (st) => {
     if (!room || typeof st !== 'object' || st === null) return;
+    const by = st.phase === 'paused' ? cleanName(st.pausedBy, '') || null : null;
     if (rooms.setPhase(room, st.phase)) {
-      ctrlNs.to(ctrlRoom(room.code)).emit('phase', { phase: room.phase });
+      room.pausedBy = room.phase === 'paused' ? by : null;
+      ctrlNs.to(ctrlRoom(room.code)).emit('phase', phaseMsg(room));
       broadcastLobby(room);
     }
     if (!Array.isArray(st.players)) return;
@@ -158,7 +163,7 @@ ctrlNs.on('connection', (socket) => {
     slot = r.player.slot;
     void socket.join(ctrlRoom(room.code));
     ack({ ok: true, data: r.data });
-    socket.emit('phase', { phase: room.phase });
+    socket.emit('phase', phaseMsg(room));
     socket.emit('host:status', { online: hostSocket() !== null });
     toHost()?.emit('player:device', { slot, device: deviceOf(socket) });
     broadcastLobby(room);
@@ -206,6 +211,11 @@ ctrlNs.on('connection', (socket) => {
     const pl = me();
     if (!room || !pl || !rooms.isLeader(room, pl) || room.phase !== 'results') return;
     toHost()?.emit('player:rematch', { slot, toLobby: p?.toLobby === true });
+  });
+  socket.on('player:pause', (p) => {
+    if (!room || slot < 0 || !me()) return;
+    if (room.phase !== 'countdown' && room.phase !== 'race' && room.phase !== 'paused') return;
+    toHost()?.emit('player:pause', { slot, paused: p?.paused === true });
   });
   socket.on('player:leave', () => {
     if (!room || slot < 0) return;

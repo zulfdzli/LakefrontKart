@@ -211,6 +211,10 @@ function routePhase(): void {
 
 net.socket.on('phase', (p) => {
   phase = p.phase;
+  // every phone shows the pause card while the race is paused; anyone can resume
+  $('pauseSheet').hidden = phase !== 'paused';
+  $('pauseBy').textContent = phase === 'paused' && p.pausedBy ? `by ${p.pausedBy}` : '';
+  if (phase === 'paused') remote.releaseAll();
   if (phase === 'countdown') haptic('item');
   if (phase === 'lobby' && !BOT) ready = false;
   if (phase === 'lobby' && BOT) {
@@ -296,7 +300,15 @@ remote.onItem = (dir) => {
   net.fireItem(dir);
   haptic('item');
 };
-remote.onSettings = () => openSettings();
+remote.onPause = () => {
+  if (phase === 'race' || phase === 'countdown') net.pause(true);
+  else if (phase === 'paused') $('pauseSheet').hidden = false;
+};
+$('resumeBtn').addEventListener('click', () => net.pause(false));
+$('pauseControls').addEventListener('click', () => openSettings());
+$('pauseLeave').addEventListener('click', () => {
+  $('confirm').hidden = false;
+});
 remote.onLeave = () => {
   $('confirm').hidden = false;
 };
@@ -305,6 +317,7 @@ $('stayBtn').addEventListener('click', () => {
 });
 $('quitBtn').addEventListener('click', () => {
   $('confirm').hidden = true;
+  $('pauseSheet').hidden = true;
   net.leave();
   ready = false;
   show('join');
@@ -412,7 +425,7 @@ document.addEventListener('contextmenu', (e) => e.preventDefault());
 let botT = 0;
 function loop(now: number): void {
   requestAnimationFrame(loop);
-  if (current === 'drive' && !$('sheet').hidden) remote.releaseAll();
+  if (current === 'drive' && (!$('sheet').hidden || !$('pauseSheet').hidden)) remote.releaseAll();
   if (BOT && current === 'drive') {
     // bots weave and drift so the network path and the host see realistic input
     botT += 1 / 60;

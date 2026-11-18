@@ -184,4 +184,6 @@ No score dropped. Your keyboard feel check (D19) is due at this gate.
 - **Result**: connected at 54 ms; haptics felt. Steering **2**, drift **2**, camera **2**. Controls too small; drift felt like hopping.
 - **Fixes (D35)**: low drift hop plus a sideways slide and slide angle; a camera that follows the direction of travel; tap-to-correct steering ramp; a much larger cross pad and slider.
 - **Checks after the fixes**: 40 tests pass; sim-report lap times unchanged (48.2–48.7 s); e2e 14/14 (`docs/screens/phase5-feel/`); capture 60 FPS, 121 calls. The drift shot `docs/screens/phase5-feel/04-mid-drift.png` shows the kart angled across its line.
-- **Scores**: waiting for your retest.
+- **Your retest**: steering **3**, drift **4**, camera **4**; the cross pad size is good; you prefer the slider.
+- **Second round (D36, D37)**: karts 12% faster, sharper turning, a near-linear slider that reaches full lock at 85%, slider as the default, and PAUSE on the phone. sim-report: laps about 44 s, no rescues, AI gaps 3.3% and 2.9%, character spread 3.67% (still within 4%). e2e **15/15**, including the new pause check (`docs/screens/phase5-feel2/`).
+- **Scores**: steering waiting for your retest.

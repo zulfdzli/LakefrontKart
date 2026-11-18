@@ -251,18 +251,30 @@ export interface Handling {
   driftKick: number;
   /** Hop timer on drift start (s); the host draws it. */
   driftHop: number;
+  /** Scales every kart's top speed and acceleration, the boost and off-road speed caps (D36). */
+  speedMul: number;
+  /** Base turn rate (rad/s at full lock and low speed). */
+  turnRate: number;
+  /** Share of the turn rate lost at 40 m/s and above. */
+  turnFalloff: number;
 }
 export const PROTOTYPE_HANDLING: Readonly<Handling> = {
   driftLatGrip: 4.5,
   driftDrag: 0.3,
   driftKick: 0,
   driftHop: 0.25,
+  speedMul: 1,
+  turnRate: 1.8,
+  turnFalloff: 0.3,
 };
 export const DEFAULT_HANDLING: Readonly<Handling> = {
   driftLatGrip: 2.4,
   driftDrag: 0.22,
   driftKick: 3.2,
   driftHop: 0.16,
+  speedMul: 1.12,
+  turnRate: 2.15,
+  turnFalloff: 0.22,
 };
 
 export interface GameState {
@@ -290,6 +302,7 @@ export interface GameState {
   raceEndGrace: number;
   /** Final order once phase is 'finished'. */
   standings: Kart[] | null;
+  handling: Readonly<Handling>;
 }
 
 /* ---------------- setup ---------------- */
@@ -439,9 +452,10 @@ export class Game {
       firstHumanFinish: null,
       raceEndGrace: opts.raceEndGrace ?? RACE_END_GRACE,
       standings: null,
+      handling: opts.handling ?? DEFAULT_HANDLING,
     };
     this.s = s;
-    this.handling = opts.handling ?? DEFAULT_HANDLING;
+    this.handling = s.handling;
 
     const total = opts.aiFill ? Math.max(opts.totalKarts ?? NKARTS, opts.humans.length) : opts.humans.length;
     const grid = opts.grid ?? defaultGrid(opts.humans.length, total);
@@ -474,6 +488,10 @@ export class Game {
     }
 
     const { N, CX, CZ, RX, RZ, H } = track;
+    // D36: a faster game, scaled evenly for every kart so the field and the AI stay balanced
+    const m = s.handling.speedMul;
+    if (m !== 1) for (const k of s.karts) k.P = { ...k.P, top: k.P.top * m, acc: k.P.acc * m };
+
     if (opts.itemsOn) {
       for (const f of BOX_FRACS) {
         const bi = Math.floor(f * N);
@@ -710,13 +728,14 @@ export class Game {
       k.kick = 0;
     }
     const off = k.offroad;
-    const top = k.boost > 0 ? (off ? 32 : BOOSTSP) : off ? 15 : P.top * k.rbMul + (k.drafting ? 4 : 0);
+    const m = this.handling.speedMul;
+    const top = k.boost > 0 ? (off ? 32 * m : BOOSTSP * m) : off ? 15 * m : P.top * k.rbMul + (k.drafting ? 4 : 0);
 
     if (thr) {
       if (sp < top)
         sp = Math.min(
           top,
-          sp + (k.boost > 0 ? 70 : Math.max(5, (P.acc + (k.drafting ? 6 : 0)) * (1 - Math.max(0, sp) / top))) * dt,
+          sp + (k.boost > 0 ? 70 * m : Math.max(5, (P.acc + (k.drafting ? 6 : 0)) * (1 - Math.max(0, sp) / top))) * dt,
         );
     } else if (k.spin <= 0) {
       const d = 7 * dt;
@@ -756,7 +775,7 @@ export class Game {
 
     const spAbs = Math.abs(sp),
       sf = Math.min(1, spAbs / 7);
-    let rate = 1.8 * sf * (1 - 0.3 * Math.min(1, spAbs / 40)) * P.turn;
+    let rate = this.handling.turnRate * sf * (1 - this.handling.turnFalloff * Math.min(1, spAbs / 40)) * P.turn;
     if (k.drifting) rate *= 1.3;
     if (k.spin > 0) rate = 0;
     const vx = fx * sp + rx * lat,

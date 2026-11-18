@@ -115,8 +115,8 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
     }
   }
   let target = k.P.top * k.rbMul * a.skill;
-  target = Math.min(target, Math.max(17, k.P.top - turnAng * 38 * a.corner));
-  if (k.boost > 0) target = BOOSTSP;
+  target = Math.min(target, Math.max(17 * s.handling.speedMul, k.P.top - turnAng * 38 * a.corner));
+  if (k.boost > 0) target = BOOSTSP * s.handling.speedMul;
   if (Math.abs(diff) > 1.0) target = Math.min(target, 9); // target far off the nose: slow down so the turn tightens
   inp.throttle = sp < target;
   inp.brake = sp > target + 5;

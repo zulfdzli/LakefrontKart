@@ -118,6 +118,11 @@ export class PhoneNet {
    * Called every animation frame with the held state. Sends on change, on an item press, or as a 100 ms
    * heartbeat; never more than 60 times per second.
    */
+  /** Pause or resume the race for everyone (D37). */
+  pause(paused: boolean): void {
+    this.socket.emit('player:pause', { paused });
+  }
+
   pump(st: InputState, now: number): void {
     if (!this.joined || !this.socket.connected) return;
     const key = `${st.steer.toFixed(3)}|${+st.throttle}${+st.brake}${+st.drift}`;

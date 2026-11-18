@@ -43,6 +43,8 @@ export interface Room {
   slots: (Player | null)[];
   config: LeaderConfig;
   joinCounter: number;
+  /** Who paused the race, while phase is 'paused'. */
+  pausedBy: string | null;
 }
 
 export const DEFAULT_CONFIG: LeaderConfig = {
@@ -89,6 +91,7 @@ export class RoomManager {
       slots: new Array<Player | null>(MAX_PLAYERS).fill(null),
       config: { ...DEFAULT_CONFIG, gpOrder: [...DEFAULT_CONFIG.gpOrder] },
       joinCounter: 0,
+      pausedBy: null,
     };
     this.rooms.set(room.code, room);
     return room;

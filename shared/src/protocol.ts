@@ -126,6 +126,8 @@ export interface HostStatePerPlayer {
 export interface HostState {
   phase: Phase;
   players: HostStatePerPlayer[];
+  /** Who paused the race (player name, or "the host"), while phase is 'paused'. */
+  pausedBy?: string;
 }
 
 /** Server → host: an input from a phone, tagged with its slot. */
@@ -159,6 +161,8 @@ export interface ControllerToServer {
   'player:select': (p: { characterId: string }) => void;
   'player:settings': (p: PlayerSettings) => void;
   'player:leave': () => void;
+  /** Any racer can pause or resume the race for everyone (D37). */
+  'player:pause': (p: { paused: boolean }) => void;
   'leader:config': (p: LeaderConfig) => void;
   ping: (t: number, ack: Ack<number>) => void;
   /** The phone reports its measured round-trip time so the host's debug overlay can show it. */
@@ -167,7 +171,7 @@ export interface ControllerToServer {
 
 export interface ServerToController {
   'lobby:update': (p: LobbyUpdate) => void;
-  phase: (p: { phase: Phase }) => void;
+  phase: (p: { phase: Phase; pausedBy?: string }) => void;
   hud: (p: HudUpdate) => void;
   haptic: (p: { kind: HapticKind }) => void;
   results: (p: { standings: Standing[]; isLeader: boolean }) => void;
@@ -193,6 +197,7 @@ export interface ServerToHost {
   'player:input': (p: RelayedInput) => void;
   'player:start': (p: { slot: number }) => void;
   'player:rematch': (p: { slot: number; toLobby: boolean }) => void;
+  'player:pause': (p: { slot: number; paused: boolean }) => void;
   'player:settings': (p: { slot: number; settings: PlayerSettings }) => void;
   'player:latency': (p: { slot: number; rttMs: number }) => void;
   'leader:config': (p: LeaderConfig) => void;

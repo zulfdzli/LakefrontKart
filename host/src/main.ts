@@ -84,6 +84,10 @@ const net = new HostNet({
       else startRace();
     }
   },
+  pause: (slot, paused) => {
+    const name = lobby?.players.find((p) => p.slot === slot)?.name ?? `P${slot + 1}`;
+    setPaused(paused, name);
+  },
   latency: () => {
     if (lobby && !inRace) lobbyUI.update(lobby, net.latency);
   },
@@ -215,9 +219,13 @@ function showResults(order: Kart[]): void {
   $('results').classList.remove('hidden');
 }
 
-function setPaused(p: boolean): void {
-  if (!inRace || session.stage !== 'racing') return;
+/** Pause the race for everyone. `by` names who paused (a player, or the host keyboard). */
+let pausedBy = '';
+function setPaused(p: boolean, by = 'the host'): void {
+  if (!inRace || session.stage !== 'racing' || session.paused === p) return;
   session.paused = p;
+  pausedBy = p ? by : '';
+  $('pauseBy').textContent = p ? `Paused by ${by}` : '';
   $('pause').classList.toggle('hidden', !p);
 }
 
@@ -276,6 +284,7 @@ function frame(now: number): void {
     lastPhase = phase;
     net.sendPhase({
       phase,
+      pausedBy: phase === 'paused' ? pausedBy : undefined,
       players: inRace ? session.players.map((p) => ({ slot: p.slot, hud: session.hudFor(p) })) : [],
     });
   } else if (inRace && stateT >= 0.1) {
