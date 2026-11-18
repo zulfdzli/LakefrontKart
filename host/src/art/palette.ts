@@ -10,7 +10,7 @@ export const SLOT_HEX: readonly number[] = SLOT_COLORS.map(hex);
 export const AI_HEX = hex(AI_COLOR);
 
 /** Kart body paint: slot colour for humans, orange for AI (D11). */
-export const kartPaint = (slot: number | null): number => (slot === null ? AI_HEX : SLOT_HEX[slot] ?? AI_HEX);
+export const kartPaint = (slot: number | null): number => (slot === null ? AI_HEX : (SLOT_HEX[slot] ?? AI_HEX));
 
 export const INK = 0x1d1b2e;
 export const DARK = 0x2b2d42;

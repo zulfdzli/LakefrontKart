@@ -33,9 +33,30 @@ export interface DifficultyTable {
 }
 
 export const DIFF: Record<Difficulty, DifficultyTable> = {
-  easy: { skill: [0.85, 0.835, 0.825, 0.815, 0.8], drift: [1, 0, 1, 0, 0], corner: 1.15, start: 0.1, items: 0.6, rb: [0.93, 1.03] },
-  normal: { skill: [0.96, 0.945, 0.935, 0.92, 0.905], drift: [1, 1, 1, 0, 1], corner: 1.0, start: 0.35, items: 1.0, rb: [0.95, 1.04] },
-  hard: { skill: [1.0, 0.995, 0.985, 0.975, 0.965], drift: [1, 1, 1, 1, 1], corner: 0.9, start: 0.65, items: 1.4, rb: [0.97, 1.05] },
+  easy: {
+    skill: [0.85, 0.835, 0.825, 0.815, 0.8],
+    drift: [1, 0, 1, 0, 0],
+    corner: 1.15,
+    start: 0.1,
+    items: 0.6,
+    rb: [0.93, 1.03],
+  },
+  normal: {
+    skill: [0.96, 0.945, 0.935, 0.92, 0.905],
+    drift: [1, 1, 1, 0, 1],
+    corner: 1.0,
+    start: 0.35,
+    items: 1.0,
+    rb: [0.95, 1.04],
+  },
+  hard: {
+    skill: [1.0, 0.995, 0.985, 0.975, 0.965],
+    drift: [1, 1, 1, 1, 1],
+    corner: 0.9,
+    start: 0.65,
+    items: 1.4,
+    rb: [0.97, 1.05],
+  },
 };
 
 /** The prototype player's autopilot: drives a human kart when its phone is disconnected or after it finishes. */
@@ -43,7 +64,8 @@ export const HUMAN_AUTOPILOT: Readonly<AiConfig> = { skill: 0.95, lane: 0, ph: 0
 
 /** Rubber-band reference: average progress of the humans still racing, or null when none are. */
 function humanReference(s: GameState): number | null {
-  let sum = 0, n = 0;
+  let sum = 0,
+    n = 0;
   for (const h of s.humans) {
     if (h.finished) continue;
     sum += h.prog;
@@ -55,7 +77,9 @@ function humanReference(s: GameState): number | null {
 export function aiInput(s: GameState, k: Kart, dt: number): void {
   const T = s.track;
   const { N, DS, CX, CZ, RX, RZ, ANG, RLINE } = T;
-  const inp = k.input, a = k.aiCfg, sp = k.sp;
+  const inp = k.input,
+    a = k.aiCfg,
+    sp = k.sp;
   if (k.itemWait > -20) k.itemWait -= dt;
   const look = 9 + Math.max(0, sp) * 0.45;
   const j = (k.idx + Math.round(look / DS)) % N;
@@ -67,10 +91,14 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
   for (const c of s.karts) {
     if (c === k || c.rescue > 0) continue;
     const d = c.prog - k.prog;
-    if (d > 0.3 && d < 4.5 && Math.abs(c.lat - lane) < 3 && c.sp < sp + 1) { lane = c.lat + (lane >= c.lat ? 4.5 : -4.5); break; }
+    if (d > 0.3 && d < 4.5 && Math.abs(c.lat - lane) < 3 && c.sp < sp + 1) {
+      lane = c.lat + (lane >= c.lat ? 4.5 : -4.5);
+      break;
+    }
   }
   lane = clamp(lane, -10, 10);
-  const tx = CX[j]! + RX[j]! * lane, tz = CZ[j]! + RZ[j]! * lane;
+  const tx = CX[j]! + RX[j]! * lane,
+    tz = CZ[j]! + RZ[j]! * lane;
   const diff = wrapA(Math.atan2(tx - k.x, tz - k.z) - k.h);
   inp.steer = clamp(-diff * 2.6, -1, 1);
 
@@ -78,7 +106,8 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
   const turnAng = Math.abs(wrapA(ANG[(k.idx + ahead) % N]! - ANG[k.idx]!));
   // humans never rubber-band; AI compares with the humans' average progress
   if (k.slot === null && s.humans.length) {
-    const D = DIFF[s.diff], ref = humanReference(s);
+    const D = DIFF[s.diff],
+      ref = humanReference(s);
     if (ref === null) k.rbMul = 1;
     else {
       const dd = (k.prog - ref) * DS;
@@ -95,16 +124,46 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
   else inp.drift = false;
 
   if (k.item && k.roll <= 0 && k.itemWait <= 0) {
-    let use = false, back = false;
+    let use = false,
+      back = false;
     const near = (lo: number, hi: number, latTol?: number): boolean =>
-      s.karts.some((c) => c !== k && c.rescue <= 0 && c.prog - k.prog > lo && c.prog - k.prog < hi && (latTol ? Math.abs(c.lat - k.lat) < latTol : true));
+      s.karts.some(
+        (c) =>
+          c !== k &&
+          c.rescue <= 0 &&
+          c.prog - k.prog > lo &&
+          c.prog - k.prog < hi &&
+          (latTol ? Math.abs(c.lat - k.lat) < latTol : true),
+      );
     switch (k.item) {
-      case 'turbo': case 'turbo3': use = turnAng < 0.25 || k.itemWait < -6; break;
-      case 'oil': use = near(-14, 0) || k.itemWait < -8; break;
-      case 'orb': if (near(0, 30)) use = true; else if (near(-10, 0)) { use = true; back = true; } else use = k.itemWait < -8; break;
-      case 'bolt': if (turnAng < 0.3 && near(0, 10, 4)) use = true; else if (near(-6, 0, 3)) { use = true; back = true; } else use = k.itemWait < -8; break;
-      case 'shield': use = k.shield <= 0; break;
+      case 'turbo':
+      case 'turbo3':
+        use = turnAng < 0.25 || k.itemWait < -6;
+        break;
+      case 'oil':
+        use = near(-14, 0) || k.itemWait < -8;
+        break;
+      case 'orb':
+        if (near(0, 30)) use = true;
+        else if (near(-10, 0)) {
+          use = true;
+          back = true;
+        } else use = k.itemWait < -8;
+        break;
+      case 'bolt':
+        if (turnAng < 0.3 && near(0, 10, 4)) use = true;
+        else if (near(-6, 0, 3)) {
+          use = true;
+          back = true;
+        } else use = k.itemWait < -8;
+        break;
+      case 'shield':
+        use = k.shield <= 0;
+        break;
     }
-    if (use) { inp.item = true; inp.itemBack = back; }
+    if (use) {
+      inp.item = true;
+      inp.itemBack = back;
+    }
   }
 }

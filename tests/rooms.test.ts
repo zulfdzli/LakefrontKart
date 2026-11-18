@@ -73,7 +73,8 @@ describe('rooms', () => {
     for (let i = 0; i < 5; i++) rm.join(room.code, 'P' + i, undefined, 's' + i);
     const ids = rm.players(room).map((p) => p.characterId);
     expect(new Set(ids).size).toBe(5);
-    const p0 = room.slots[0]!, p1 = room.slots[1]!;
+    const p0 = room.slots[0]!,
+      p1 = room.slots[1]!;
     expect(rm.select(room, p0, p1.characterId)).toBe('taken');
     expect(rm.select(room, p0, 'nobody')).toBe('unknown');
   });

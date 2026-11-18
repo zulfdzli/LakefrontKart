@@ -3,8 +3,16 @@ import '@fontsource/fredoka/600.css';
 import '@fontsource/fredoka/700.css';
 import './style.css';
 import {
-  buildPrototypeTrack, charIndex, SLOT_COLORS, AI_COLOR,
-  type Difficulty, type HumanSpec, type Kart, type LobbyUpdate, type Phase, type Standing,
+  buildPrototypeTrack,
+  charIndex,
+  SLOT_COLORS,
+  AI_COLOR,
+  type Difficulty,
+  type HumanSpec,
+  type Kart,
+  type LobbyUpdate,
+  type Phase,
+  type Standing,
 } from '@tk/shared';
 import { World } from './renderer';
 import { RaceSession } from './session';
@@ -45,7 +53,11 @@ const net = new HostNet({
   room: (code) => lobbyUI.setRoom(code),
   connection: (online) => {
     $('netDown').classList.toggle('hidden', online);
-    if (online) { lastPhase = null; void net.netInfo().then((i) => lobbyUI.setNet(i)); setTimeout(() => void net.netInfo().then((i) => lobbyUI.setNet(i)), 7000); }
+    if (online) {
+      lastPhase = null;
+      void net.netInfo().then((i) => lobbyUI.setNet(i));
+      setTimeout(() => void net.netInfo().then((i) => lobbyUI.setNet(i)), 7000);
+    }
   },
   lobby: (u) => {
     lobby = u;
@@ -63,16 +75,30 @@ const net = new HostNet({
     session.setInput(i.slot, { steer: i.steer, throttle: i.throttle, brake: i.brake, drift: i.drift, item: i.item });
     lastInput.set(i.slot, performance.now());
   },
-  start: () => { if (!inRace) startRace(); },
-  rematch: (_slot, toLobby) => { if (session.stage === 'podium') { if (toLobby) backToLobby(); else startRace(); } },
-  latency: () => { if (lobby && !inRace) lobbyUI.update(lobby, net.latency); },
+  start: () => {
+    if (!inRace) startRace();
+  },
+  rematch: (_slot, toLobby) => {
+    if (session.stage === 'podium') {
+      if (toLobby) backToLobby();
+      else startRace();
+    }
+  },
+  latency: () => {
+    if (lobby && !inRace) lobbyUI.update(lobby, net.latency);
+  },
   settings: () => {},
   device: () => {},
   config: () => {},
 });
 
-lobbyUI.onKick = (slot) => { if (!inRace) net.kick(slot); };
-lobbyUI.onSound = () => { audio.unlock(); lobbyUI.setSoundOn(true); };
+lobbyUI.onKick = (slot) => {
+  if (!inRace) net.kick(slot);
+};
+lobbyUI.onSound = () => {
+  audio.unlock();
+  lobbyUI.setSoundOn(true);
+};
 
 function names(humans: HumanSpec[]): Map<number, string> {
   const m = new Map<number, string>();
@@ -89,17 +115,29 @@ function layoutViews(): void {
 function preview(): void {
   session?.dispose();
   const humans: HumanSpec[] = [{ slot: 0, ci: 1, name: 'Pip' }];
-  session = new RaceSession({ seed: 1, humans, aiFill: true, laps: 2, difficulty: 'normal', itemsOn: true, track }, world, audio, $('huds'), names(humans));
+  session = new RaceSession(
+    { seed: 1, humans, aiFill: true, laps: 2, difficulty: 'normal', itemsOn: true, track },
+    world,
+    audio,
+    $('huds'),
+    names(humans),
+  );
   session.game.setHumanAi(0, true);
   for (const p of session.players) p.cam.wideOrbit = true;
   session.layout([{ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight }]);
 }
 
-function startRace(opts: { seed?: number; autopilot?: boolean; laps?: number; diff?: Difficulty; ci?: number } = {}): void {
+function startRace(
+  opts: { seed?: number; autopilot?: boolean; laps?: number; diff?: Difficulty; ci?: number } = {},
+): void {
   audio.unlock();
   lobbyUI.setSoundOn(true);
   const players = (lobby?.players ?? []).slice().sort((a, b) => a.slot - b.slot);
-  let humans: HumanSpec[] = players.map((p) => ({ slot: p.slot, ci: Math.max(0, charIndex(p.characterId ?? '')), name: p.name }));
+  let humans: HumanSpec[] = players.map((p) => ({
+    slot: p.slot,
+    ci: Math.max(0, charIndex(p.characterId ?? '')),
+    name: p.name,
+  }));
   if (humans.length === 0) {
     if (!KEYBOARD && !opts.autopilot) return; // section 6.1: at least one player
     humans = [{ slot: 0, ci: opts.ci ?? 1, name: 'You' }];
@@ -109,10 +147,18 @@ function startRace(opts: { seed?: number; autopilot?: boolean; laps?: number; di
   session.dispose();
   session = new RaceSession(
     {
-      seed: opts.seed ?? Math.floor(Math.random() * 1e9), humans, aiFill: cfg?.aiFill ?? true,
-      laps: opts.laps ?? cfg?.laps ?? 2, difficulty: opts.diff ?? cfg?.aiDifficulty ?? 'normal', itemsOn: cfg?.itemsOn ?? true, track,
+      seed: opts.seed ?? Math.floor(Math.random() * 1e9),
+      humans,
+      aiFill: cfg?.aiFill ?? true,
+      laps: opts.laps ?? cfg?.laps ?? 2,
+      difficulty: opts.diff ?? cfg?.aiDifficulty ?? 'normal',
+      itemsOn: cfg?.itemsOn ?? true,
+      track,
     },
-    world, audio, $('huds'), names(humans),
+    world,
+    audio,
+    $('huds'),
+    names(humans),
   );
   for (const p of session.players) {
     const lp = players.find((x) => x.slot === p.slot);
@@ -139,8 +185,14 @@ function backToLobby(): void {
 
 function standings(order: Kart[]): Standing[] {
   return order.map((k) => ({
-    slot: k.slot, name: session.players.find((p) => p.kart === k) ? (lobby?.players.find((p) => p.slot === k.slot)?.name ?? k.name) : k.name,
-    color: k.slot === null ? AI_COLOR : SLOT_COLORS[k.slot]!, characterId: k.ch.id, time: k.finished ? k.finishTime : null, bestLap: k.bestLap || null,
+    slot: k.slot,
+    name: session.players.find((p) => p.kart === k)
+      ? (lobby?.players.find((p) => p.slot === k.slot)?.name ?? k.name)
+      : k.name,
+    color: k.slot === null ? AI_COLOR : SLOT_COLORS[k.slot]!,
+    characterId: k.ch.id,
+    time: k.finished ? k.finishTime : null,
+    bestLap: k.bestLap || null,
   }));
 }
 
@@ -148,7 +200,8 @@ function showResults(order: Kart[]): void {
   const st = standings(order);
   net.results(st);
   const best = Math.min(...session.players.map((p) => p.kart.rank)) + 1;
-  $('resTitle').textContent = session.players.length === 1 ? (best === 1 ? '🏆 WINNER!' : `${best}${ord(best)} PLACE`) : 'RESULTS';
+  $('resTitle').textContent =
+    session.players.length === 1 ? (best === 1 ? '🏆 WINNER!' : `${best}${ord(best)} PLACE`) : 'RESULTS';
   $('standings').innerHTML = order
     .map((k, i) => {
       const s = st[i]!;
@@ -186,7 +239,9 @@ $('againBtn').addEventListener('click', () => startRace());
 $('menuBtn').addEventListener('click', backToLobby);
 $('resumeBtn').addEventListener('click', () => setPaused(false));
 $('quitBtn').addEventListener('click', backToLobby);
-document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) setPaused(true);
+});
 window.addEventListener('resize', () => {
   world.resize();
   if (inRace) layoutViews();
@@ -208,7 +263,8 @@ function frame(now: number): void {
     for (const p of session.players) {
       if (KEYBOARD && p.slot === 0) continue;
       const t = lastInput.get(p.slot);
-      if (t === undefined || now - t > INPUT_STALE_MS) session.setInput(p.slot, { steer: 0, throttle: true, brake: false, drift: false, item: null });
+      if (t === undefined || now - t > INPUT_STALE_MS)
+        session.setInput(p.slot, { steer: 0, throttle: true, brake: false, drift: false, item: null });
     }
   }
   session.frame(dt);
@@ -218,7 +274,10 @@ function frame(now: number): void {
   stateT += dt;
   if (phase !== lastPhase) {
     lastPhase = phase;
-    net.sendPhase({ phase, players: inRace ? session.players.map((p) => ({ slot: p.slot, hud: session.hudFor(p) })) : [] });
+    net.sendPhase({
+      phase,
+      players: inRace ? session.players.map((p) => ({ slot: p.slot, hud: session.hudFor(p) })) : [],
+    });
   } else if (inRace && stateT >= 0.1) {
     stateT = 0;
     net.sendState({ phase, players: session.players.map((p) => ({ slot: p.slot, hud: session.hudFor(p) })) });
@@ -243,10 +302,20 @@ declare global {
 }
 window.__tk = {
   ready: true,
-  race(opts) { startRace({ ...opts, autopilot: opts.autopilot ?? true }); },
-  advance(seconds) { session.advance(seconds); },
-  state() { return { phase: session.s.phase, raceTime: session.s.raceTime, stage: session.stage, inRace, room: net.room }; },
+  race(opts) {
+    startRace({ ...opts, autopilot: opts.autopilot ?? true });
+  },
+  advance(seconds) {
+    session.advance(seconds);
+  },
+  state() {
+    return { phase: session.s.phase, raceTime: session.s.raceTime, stage: session.stage, inRace, room: net.room };
+  },
   session: () => session,
-  info: () => ({ calls: world.renderer.info.render.calls, triangles: world.renderer.info.render.triangles, pixelRatio: world.pixelRatio }),
+  info: () => ({
+    calls: world.renderer.info.render.calls,
+    triangles: world.renderer.info.render.triangles,
+    pixelRatio: world.pixelRatio,
+  }),
   lobby: () => lobby,
 };

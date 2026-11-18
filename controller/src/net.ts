@@ -5,7 +5,13 @@
  */
 import { io, type Socket } from 'socket.io-client';
 import type {
-  ControllerToServer, ServerToController, JoinOk, JoinErrorReason, PlayerInput, PlayerSettings, LeaderConfig,
+  ControllerToServer,
+  ServerToController,
+  JoinOk,
+  JoinErrorReason,
+  PlayerInput,
+  PlayerSettings,
+  LeaderConfig,
 } from '@tk/shared';
 
 const TOKEN_KEY = 'tk_player_token';
@@ -15,7 +21,10 @@ function playerToken(): string {
   if (!t || !/^[A-Za-z0-9_-]{8,64}$/.test(t)) {
     const a = new Uint8Array(12);
     crypto.getRandomValues(a);
-    t = btoa(String.fromCharCode(...a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    t = btoa(String.fromCharCode(...a))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
     localStorage.setItem(TOKEN_KEY, t);
   }
   return t;
@@ -37,7 +46,11 @@ export class PhoneNet {
   onRejoined: ((j: JoinOk) => void) | null = null;
 
   constructor() {
-    this.socket = io('/controller', { transports: ['websocket', 'polling'], reconnectionDelay: 400, reconnectionDelayMax: 2000 });
+    this.socket = io('/controller', {
+      transports: ['websocket', 'polling'],
+      reconnectionDelay: 400,
+      reconnectionDelayMax: 2000,
+    });
     this.socket.on('connect', () => {
       // after a drop: rejoin silently with the same token, back into the same slot
       if (this.room && this.joined) {
@@ -58,7 +71,11 @@ export class PhoneNet {
     return new Promise((resolve) => {
       const send = (): void => {
         this.socket.emit('player:join', { room, name, playerToken: playerToken() }, (r) => {
-          if (r.ok) { this.joined = r.data; this.room = room; this.name = name; }
+          if (r.ok) {
+            this.joined = r.data;
+            this.room = room;
+            this.name = name;
+          }
           resolve(r);
         });
       };
@@ -73,12 +90,24 @@ export class PhoneNet {
     this.room = null;
   }
 
-  ready(ready: boolean): void { this.socket.emit('player:ready', { ready }); }
-  select(characterId: string): void { this.socket.emit('player:select', { characterId }); }
-  start(): void { this.socket.emit('player:start'); }
-  rematch(toLobby: boolean): void { this.socket.emit('player:rematch', { toLobby }); }
-  settings(s: PlayerSettings): void { this.socket.emit('player:settings', s); }
-  config(c: LeaderConfig): void { this.socket.emit('leader:config', c); }
+  ready(ready: boolean): void {
+    this.socket.emit('player:ready', { ready });
+  }
+  select(characterId: string): void {
+    this.socket.emit('player:select', { characterId });
+  }
+  start(): void {
+    this.socket.emit('player:start');
+  }
+  rematch(toLobby: boolean): void {
+    this.socket.emit('player:rematch', { toLobby });
+  }
+  settings(s: PlayerSettings): void {
+    this.socket.emit('player:settings', s);
+  }
+  config(c: LeaderConfig): void {
+    this.socket.emit('leader:config', c);
+  }
 
   /** Queue a one-shot item press; it rides on the next input message. */
   fireItem(dir: 'forward' | 'back'): void {

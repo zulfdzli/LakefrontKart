@@ -14,7 +14,12 @@ import { setMaxAnisotropy } from './art/geo';
 import { MEADOWS } from './art/palette';
 
 /** A viewport in CSS pixels, top-left origin (layout space). */
-export interface Rect { x: number; y: number; w: number; h: number }
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 export interface ViewToRender {
   camera: THREE.PerspectiveCamera;
@@ -65,7 +70,13 @@ export class World {
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     const sc = this.sun.shadow.camera;
-    sc.left = -60; sc.right = 60; sc.top = 60; sc.bottom = -60; sc.near = 10; sc.far = 420; sc.updateProjectionMatrix();
+    sc.left = -60;
+    sc.right = 60;
+    sc.top = 60;
+    sc.bottom = -60;
+    sc.near = 10;
+    sc.far = 420;
+    sc.updateProjectionMatrix();
     this.sun.shadow.bias = -0.0006;
     s.add(this.sun, this.sun.target);
     this.sky = createSky(MEADOWS.zenith, MEADOWS.horizon, this.sunDir, MEADOWS.sunGlow);
@@ -100,7 +111,10 @@ export class World {
   }
 
   private disposeKarts(): void {
-    for (const v of this.views) { this.scene.remove(v.root); v.dispose(); }
+    for (const v of this.views) {
+      this.scene.remove(v.root);
+      v.dispose();
+    }
     this.views = [];
   }
 
@@ -133,7 +147,9 @@ export class World {
   }
 
   podiumPose(order: Kart[], t: number): void {
-    const p = this.podium, s = Math.sin(p.ry), c = Math.cos(p.ry);
+    const p = this.podium,
+      s = Math.sin(p.ry),
+      c = Math.cos(p.ry);
     order.slice(0, 3).forEach((k, i) => {
       const sp = p.spots[i]!;
       this.views[k.id]!.podiumPose(i, p.x + c * sp[0] + s * sp[2], p.y + sp[1], p.z - s * sp[0] + c * sp[2], p.ry, t);
@@ -175,7 +191,8 @@ export class World {
 
   /** Render each view into its rectangle. Three.js viewports use a bottom-left origin, so flip y. */
   render(list: ViewToRender[], focus: (v: ViewToRender) => THREE.Vector3): void {
-    const r = this.renderer, H = window.innerHeight;
+    const r = this.renderer,
+      H = window.innerHeight;
     r.setScissorTest(true);
     r.setViewport(0, 0, window.innerWidth, H);
     r.setScissor(0, 0, window.innerWidth, H);
@@ -189,7 +206,8 @@ export class World {
       const f = focus(v);
       this.setSunFocus(f.x, f.y, f.z);
       this.sky.position.copy(v.camera.position);
-      for (const kv of this.views) kv.updateTag(v.camera.position.x, v.camera.position.z, kv.kartId === v.viewerKart, v.tags && kv.root.visible);
+      for (const kv of this.views)
+        kv.updateTag(v.camera.position.x, v.camera.position.z, kv.kartId === v.viewerKart, v.tags && kv.root.visible);
       r.render(this.scene, v.camera);
     }
     r.setScissorTest(false);
@@ -202,11 +220,25 @@ export class World {
   private disposeTrack(): void {
     this.disposeKarts();
     this.builtTrack = null;
-    if (this.trackWorld) { this.scene.remove(this.trackWorld.group); this.trackWorld.dispose(); this.trackWorld = null; }
-    if (this.scenery) { this.scene.remove(this.scenery.group); this.scenery.dispose(); this.scenery = null; }
-    if (this.effects) { this.scene.remove(this.effects.group); this.effects.dispose(); this.effects = null; }
-    this.assets?.dispose(); this.assets = null;
-    this.M?.dispose(); this.M = null;
+    if (this.trackWorld) {
+      this.scene.remove(this.trackWorld.group);
+      this.trackWorld.dispose();
+      this.trackWorld = null;
+    }
+    if (this.scenery) {
+      this.scene.remove(this.scenery.group);
+      this.scenery.dispose();
+      this.scenery = null;
+    }
+    if (this.effects) {
+      this.scene.remove(this.effects.group);
+      this.effects.dispose();
+      this.effects = null;
+    }
+    this.assets?.dispose();
+    this.assets = null;
+    this.M?.dispose();
+    this.M = null;
   }
 
   dispose(): void {

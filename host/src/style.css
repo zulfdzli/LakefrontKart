@@ -606,7 +606,12 @@ h1.logo span {
   justify-content: space-between;
   gap: 10px;
   padding: 18px 24px;
-  background: linear-gradient(rgba(20, 24, 70, 0.55), rgba(20, 24, 70, 0.15) 30%, rgba(20, 24, 70, 0.25) 60%, rgba(16, 18, 50, 0.85));
+  background: linear-gradient(
+    rgba(20, 24, 70, 0.55),
+    rgba(20, 24, 70, 0.15) 30%,
+    rgba(20, 24, 70, 0.25) 60%,
+    rgba(16, 18, 50, 0.85)
+  );
 }
 .lobby .logo {
   font-size: clamp(40px, 6vw, 72px);

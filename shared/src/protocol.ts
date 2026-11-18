@@ -148,7 +148,10 @@ export interface NetInfo {
 type Ack<T> = (res: T) => void;
 
 export interface ControllerToServer {
-  'player:join': (req: JoinRequest, ack: Ack<{ ok: true; data: JoinOk } | { ok: false; reason: JoinErrorReason }>) => void;
+  'player:join': (
+    req: JoinRequest,
+    ack: Ack<{ ok: true; data: JoinOk } | { ok: false; reason: JoinErrorReason }>,
+  ) => void;
   'player:ready': (p: { ready: boolean }) => void;
   'player:input': (p: PlayerInput) => void;
   'player:start': () => void;
@@ -208,7 +211,11 @@ export function isRoomCode(v: unknown): v is string {
 export function cleanName(v: unknown, fallback: string): string {
   if (typeof v !== 'string') return fallback;
   // keep letters, digits, spaces and a few symbols; strip control characters and markup
-  const s = v.replace(/[^\p{L}\p{N} _.\-!?']/gu, '').trim().slice(0, NAME_MAX_LENGTH).trim();
+  const s = v
+    .replace(/[^\p{L}\p{N} _.\-!?']/gu, '')
+    .trim()
+    .slice(0, NAME_MAX_LENGTH)
+    .trim();
   return s.length ? s : fallback;
 }
 

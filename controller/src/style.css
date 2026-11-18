@@ -113,8 +113,8 @@ input {
 /* ---------------- card: join, waiting, results ---------------- */
 .card {
   position: fixed;
-  inset: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom))
-    max(14px, env(safe-area-inset-left));
+  inset: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right))
+    max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
   margin: auto;
   max-width: 460px;
   max-height: 860px;
@@ -345,8 +345,8 @@ input {
   inset: 0;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  padding: max(6px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom))
-    max(10px, env(safe-area-inset-left));
+  padding: max(6px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+    max(6px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   gap: 6px;
   --dh: calc(100dvh - 104px);
 }

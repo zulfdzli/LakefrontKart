@@ -8,7 +8,8 @@ export interface LanCandidate {
 }
 
 /** Adapter names that are never the Wi-Fi/Ethernet a phone can reach. */
-const VIRTUAL = /(vEthernet|WSL|Docker|Hyper-V|VirtualBox|VMware|vmnet|Hamachi|ZeroTier|Tailscale|\bTAP\b|\bTUN\b|VPN|Loopback|Bluetooth|utun|bridge|Npcap|Local Area Connection\*)/i;
+const VIRTUAL =
+  /(vEthernet|WSL|Docker|Hyper-V|VirtualBox|VMware|vmnet|Hamachi|ZeroTier|Tailscale|\bTAP\b|\bTUN\b|VPN|Loopback|Bluetooth|utun|bridge|Npcap|Local Area Connection\*)/i;
 
 function privateRank(ip: string): number {
   const [a, b] = ip.split('.').map(Number) as [number, number];
@@ -56,15 +57,29 @@ export function windowsPublicProfile(adapterNames: string[]): Promise<boolean> {
   return new Promise((resolve) => {
     execFile(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Command', 'Get-NetConnectionProfile | Select-Object InterfaceAlias,NetworkCategory | ConvertTo-Json -Compress'],
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        'Get-NetConnectionProfile | Select-Object InterfaceAlias,NetworkCategory | ConvertTo-Json -Compress',
+      ],
       { timeout: 6000, windowsHide: true },
       (err, stdout) => {
         if (err || !stdout.trim()) return resolve(false);
         try {
           const parsed: unknown = JSON.parse(stdout);
-          const rows = (Array.isArray(parsed) ? parsed : [parsed]) as { InterfaceAlias?: string; NetworkCategory?: number | string }[];
+          const rows = (Array.isArray(parsed) ? parsed : [parsed]) as {
+            InterfaceAlias?: string;
+            NetworkCategory?: number | string;
+          }[];
           // NetworkCategory: 0 = Public, 1 = Private, 2 = DomainAuthenticated
-          resolve(rows.some((r) => adapterNames.includes(r.InterfaceAlias ?? '') && (r.NetworkCategory === 0 || r.NetworkCategory === 'Public')));
+          resolve(
+            rows.some(
+              (r) =>
+                adapterNames.includes(r.InterfaceAlias ?? '') &&
+                (r.NetworkCategory === 0 || r.NetworkCategory === 'Public'),
+            ),
+          );
         } catch {
           resolve(false);
         }

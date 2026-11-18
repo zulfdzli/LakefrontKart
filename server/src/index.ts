@@ -11,7 +11,12 @@ import express from 'express';
 import { Server, type Namespace, type Socket } from 'socket.io';
 import {
   sanitizeInput,
-  type ControllerToServer, type ServerToController, type HostToServer, type ServerToHost, type NetInfo, type PlayerSettings,
+  type ControllerToServer,
+  type ServerToController,
+  type HostToServer,
+  type ServerToHost,
+  type NetInfo,
+  type PlayerSettings,
 } from '@tk/shared';
 import { lanCandidates, publicUrlFromEnv, windowsPublicProfile } from './lan';
 import { RoomManager, type Room } from './rooms';
@@ -85,8 +90,12 @@ hostNs.on('connection', (socket) => {
     if (r) attach(r);
     ack({ ok: !!r });
   });
-  socket.on('net:info', (ack) => { if (isFn(ack)) ack(netInfo()); });
-  socket.on('ping', (t, ack) => { if (isFn(ack)) ack(typeof t === 'number' ? t : 0); });
+  socket.on('net:info', (ack) => {
+    if (isFn(ack)) ack(netInfo());
+  });
+  socket.on('ping', (t, ack) => {
+    if (isFn(ack)) ack(typeof t === 'number' ? t : 0);
+  });
 
   socket.on('host:state', (st) => {
     if (!room || typeof st !== 'object' || st === null) return;
@@ -106,7 +115,9 @@ hostNs.on('connection', (socket) => {
   });
   socket.on('host:results', (r) => {
     if (!room || !Array.isArray(r?.standings)) return;
-    for (const p of rooms.players(room)) if (p.socketId) ctrlNs.to(p.socketId).emit('results', { standings: r.standings, isLeader: rooms.isLeader(room, p) });
+    for (const p of rooms.players(room))
+      if (p.socketId)
+        ctrlNs.to(p.socketId).emit('results', { standings: r.standings, isLeader: rooms.isLeader(room, p) });
   });
   socket.on('host:kick', (k) => {
     if (!room || typeof k?.slot !== 'number') return;
@@ -131,8 +142,9 @@ hostNs.on('connection', (socket) => {
 ctrlNs.on('connection', (socket) => {
   let room: Room | null = null;
   let slot = -1;
-  let windowStart = 0, inWindow = 0;
-  const me = () => (room && slot >= 0 ? room.slots[slot] ?? null : null);
+  let windowStart = 0,
+    inWindow = 0;
+  const me = () => (room && slot >= 0 ? (room.slots[slot] ?? null) : null);
   const hostSocket = (): string | null => room?.hostSocketId ?? null;
   const toHost = (): ReturnType<typeof hostNs.to> | null => (room ? hostNs.to(hostRoom(room.code)) : null);
 
@@ -170,14 +182,20 @@ ctrlNs.on('connection', (socket) => {
     const settings: PlayerSettings = {
       steering: s.steering === 'slider' ? 'slider' : 'buttons',
       assist: s.assist === true,
-      sensitivity: typeof s.sensitivity === 'number' && Number.isFinite(s.sensitivity) ? Math.max(0.6, Math.min(1.4, s.sensitivity)) : 1,
+      sensitivity:
+        typeof s.sensitivity === 'number' && Number.isFinite(s.sensitivity)
+          ? Math.max(0.6, Math.min(1.4, s.sensitivity))
+          : 1,
     };
     toHost()?.emit('player:settings', { slot, settings });
   });
   socket.on('leader:config', (c) => {
     const pl = me();
     if (!room || !pl || !rooms.isLeader(room, pl)) return;
-    if (rooms.setConfig(room, c)) { toHost()?.emit('leader:config', room.config); broadcastLobby(room); }
+    if (rooms.setConfig(room, c)) {
+      toHost()?.emit('leader:config', room.config);
+      broadcastLobby(room);
+    }
   });
   socket.on('player:start', () => {
     const pl = me();
@@ -194,19 +212,25 @@ ctrlNs.on('connection', (socket) => {
     rooms.remove(room, slot);
     void socket.leave(ctrlRoom(room.code));
     broadcastLobby(room);
-    room = null; slot = -1;
+    room = null;
+    slot = -1;
   });
   socket.on('player:input', (raw) => {
     if (!room || slot < 0 || !me()) return;
     // rate limit (section 5.4): drop anything beyond the cap within a one-second window
     const t = Date.now();
-    if (t - windowStart >= 1000) { windowStart = t; inWindow = 0; }
+    if (t - windowStart >= 1000) {
+      windowStart = t;
+      inWindow = 0;
+    }
     if (++inWindow > INPUT_CAP_PER_S) return;
     const inp = sanitizeInput(raw);
     if (!inp) return;
     toHost()?.volatile.emit('player:input', { ...inp, slot });
   });
-  socket.on('ping', (t, ack) => { if (isFn(ack)) ack(typeof t === 'number' ? t : 0); });
+  socket.on('ping', (t, ack) => {
+    if (isFn(ack)) ack(typeof t === 'number' ? t : 0);
+  });
   socket.on('net:rtt', (rtt) => {
     if (!room || slot < 0 || typeof rtt !== 'number' || !Number.isFinite(rtt)) return;
     toHost()?.volatile.emit('player:latency', { slot, rttMs: Math.max(0, Math.min(10000, Math.round(rtt))) });

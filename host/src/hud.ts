@@ -11,9 +11,11 @@ import type { Rect } from './renderer';
 const ICON: Record<string, string> = { turbo: '⚡', turbo3: '⚡', oil: '🛢️', orb: '🎯', bolt: '🥏', shield: '🛡️' };
 const ROUL = ['⚡', '🛢️', '🎯', '🥏', '🛡️'];
 
-export const ord = (n: number): string => (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
+export const ord = (n: number): string =>
+  n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
 export const fmtT = (t: number): string => {
-  const m = Math.floor(t / 60), s = t - m * 60;
+  const m = Math.floor(t / 60),
+    s = t - m * 60;
   return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2);
 };
 
@@ -51,17 +53,45 @@ export class MinimapBase {
   readonly mz: (z: number) => number;
   constructor(T: Track, size = 236) {
     const c = this.canvas;
-    c.width = size; c.height = size;
-    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
-    for (let i = 0; i < T.N; i++) { x0 = Math.min(x0, T.CX[i]!); x1 = Math.max(x1, T.CX[i]!); z0 = Math.min(z0, T.CZ[i]!); z1 = Math.max(z1, T.CZ[i]!); }
+    c.width = size;
+    c.height = size;
+    let x0 = 1e9,
+      x1 = -1e9,
+      z0 = 1e9,
+      z1 = -1e9;
+    for (let i = 0; i < T.N; i++) {
+      x0 = Math.min(x0, T.CX[i]!);
+      x1 = Math.max(x1, T.CX[i]!);
+      z0 = Math.min(z0, T.CZ[i]!);
+      z1 = Math.max(z1, T.CZ[i]!);
+    }
     const sc = (size - 34) / Math.max(x1 - x0, z1 - z0);
     this.mx = (x) => 17 + (x - x0) * sc + (size - 34 - (x1 - x0) * sc) / 2;
     this.mz = (z) => 17 + (z - z0) * sc + (size - 34 - (z1 - z0) * sc) / 2;
     const g = c.getContext('2d')!;
-    g.lineJoin = 'round'; g.lineCap = 'round'; g.beginPath();
-    for (let i = 0; i <= T.N; i++) { const j = i % T.N; if (i) g.lineTo(this.mx(T.CX[j]!), this.mz(T.CZ[j]!)); else g.moveTo(this.mx(T.CX[j]!), this.mz(T.CZ[j]!)); }
-    g.strokeStyle = '#1d1b2e'; g.lineWidth = 14; g.stroke(); g.strokeStyle = '#fff'; g.lineWidth = 9; g.stroke(); g.strokeStyle = '#6c7086'; g.lineWidth = 5; g.stroke();
-    g.save(); g.translate(this.mx(T.CX[0]!), this.mz(T.CZ[0]!)); g.rotate(Math.atan2(T.TZ[0]!, T.TX[0]!) + Math.PI / 2); g.fillStyle = '#fff'; g.fillRect(-8, -2.5, 16, 5); g.restore();
+    g.lineJoin = 'round';
+    g.lineCap = 'round';
+    g.beginPath();
+    for (let i = 0; i <= T.N; i++) {
+      const j = i % T.N;
+      if (i) g.lineTo(this.mx(T.CX[j]!), this.mz(T.CZ[j]!));
+      else g.moveTo(this.mx(T.CX[j]!), this.mz(T.CZ[j]!));
+    }
+    g.strokeStyle = '#1d1b2e';
+    g.lineWidth = 14;
+    g.stroke();
+    g.strokeStyle = '#fff';
+    g.lineWidth = 9;
+    g.stroke();
+    g.strokeStyle = '#6c7086';
+    g.lineWidth = 5;
+    g.stroke();
+    g.save();
+    g.translate(this.mx(T.CX[0]!), this.mz(T.CZ[0]!));
+    g.rotate(Math.atan2(T.TZ[0]!, T.TX[0]!) + Math.PI / 2);
+    g.fillStyle = '#fff';
+    g.fillRect(-8, -2.5, 16, 5);
+    g.restore();
   }
 
   /** Draw karts on a target canvas. `me` is drawn as an arrow on top. */
@@ -70,14 +100,30 @@ export class MinimapBase {
     g.drawImage(this.canvas, 0, 0);
     for (const k of karts) {
       if (k === me) continue;
-      g.fillStyle = hexStr(colorOf(k)); g.strokeStyle = '#1d1b2e'; g.lineWidth = 2.5;
-      g.beginPath(); g.arc(this.mx(k.x), this.mz(k.z), 6.5, 0, Math.PI * 2); g.fill(); g.stroke();
+      g.fillStyle = hexStr(colorOf(k));
+      g.strokeStyle = '#1d1b2e';
+      g.lineWidth = 2.5;
+      g.beginPath();
+      g.arc(this.mx(k.x), this.mz(k.z), 6.5, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
     }
     if (me) {
       const a = Math.atan2(Math.cos(me.h), Math.sin(me.h));
-      g.save(); g.translate(this.mx(me.x), this.mz(me.z)); g.rotate(a);
-      g.fillStyle = hexStr(colorOf(me)); g.strokeStyle = '#fff'; g.lineWidth = 3;
-      g.beginPath(); g.moveTo(12, 0); g.lineTo(-8, 8); g.lineTo(-4, 0); g.lineTo(-8, -8); g.closePath(); g.fill(); g.stroke();
+      g.save();
+      g.translate(this.mx(me.x), this.mz(me.z));
+      g.rotate(a);
+      g.fillStyle = hexStr(colorOf(me));
+      g.strokeStyle = '#fff';
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(12, 0);
+      g.lineTo(-8, 8);
+      g.lineTo(-4, 0);
+      g.lineTo(-8, -8);
+      g.closePath();
+      g.fill();
+      g.stroke();
       g.restore();
     }
   }
@@ -92,7 +138,12 @@ export class PlayerHud {
   private lastRank = -1;
   private msgTimer = 0;
 
-  constructor(parent: HTMLElement, private readonly minimap: MinimapBase, private readonly colorOf: (k: Kart) => number, accent: string) {
+  constructor(
+    parent: HTMLElement,
+    private readonly minimap: MinimapBase,
+    private readonly colorOf: (k: Kart) => number,
+    accent: string,
+  ) {
     this.root.className = 'phud';
     this.root.innerHTML = TEMPLATE;
     this.root.style.setProperty('--accent', accent);
@@ -103,8 +154,12 @@ export class PlayerHud {
 
   place(r: Rect): void {
     const st = this.root.style;
-    st.left = r.x + 'px'; st.top = r.y + 'px'; st.width = r.w + 'px'; st.height = r.h + 'px';
-    this.fx.width = Math.round(r.w); this.fx.height = Math.round(r.h);
+    st.left = r.x + 'px';
+    st.top = r.y + 'px';
+    st.width = r.w + 'px';
+    st.height = r.h + 'px';
+    this.fx.width = Math.round(r.w);
+    this.fx.height = Math.round(r.h);
     // scale the HUD down in small viewports so it stays readable without covering the road
     const scale = clamp(Math.min(r.w / 900, r.h / 560), 0.55, 1);
     st.setProperty('--s', String(scale));
@@ -132,7 +187,9 @@ export class PlayerHud {
     const m = this.q('msg');
     m.textContent = text;
     m.className = 'msg show' + (extra ? ' ' + extra : '');
-    m.style.animation = 'none'; void m.offsetWidth; m.style.animation = '';
+    m.style.animation = 'none';
+    void m.offsetWidth;
+    m.style.animation = '';
     clearTimeout(this.msgTimer);
     if (ms) this.msgTimer = window.setTimeout(() => (m.className = 'msg'), ms);
   }
@@ -144,7 +201,9 @@ export class PlayerHud {
   flash(kind: 'boost' | 'hit'): void {
     const f = this.q('flash');
     f.className = 'flash ' + (kind === 'boost' ? 'boost ' : '') + 'on';
-    requestAnimationFrame(() => requestAnimationFrame(() => (f.className = 'flash' + (kind === 'boost' ? ' boost' : ''))));
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => (f.className = 'flash' + (kind === 'boost' ? ' boost' : ''))),
+    );
   }
 
   setLastLap(t: number | null): void {
@@ -163,11 +222,17 @@ export class PlayerHud {
     this.txt('placeOf', '/' + s.karts.length);
     if (this.txt('placeN', String(rk))) {
       this.q('placeS').textContent = ord(rk);
-      const el = this.q('place'); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+      const el = this.q('place');
+      el.classList.remove('pop');
+      void el.offsetWidth;
+      el.classList.add('pop');
     }
     if (this.lastRank >= 0 && rk !== this.lastRank && s.phase === 'race' && s.raceTime > 1.5) {
-      const d = this.q('delta'); d.className = 'delta outl'; void d.offsetWidth;
-      d.className = 'delta outl ' + (rk < this.lastRank ? 'up' : 'down'); d.textContent = rk < this.lastRank ? '▲' : '▼';
+      const d = this.q('delta');
+      d.className = 'delta outl';
+      void d.offsetWidth;
+      d.className = 'delta outl ' + (rk < this.lastRank ? 'up' : 'down');
+      d.textContent = rk < this.lastRank ? '▲' : '▼';
     }
     this.lastRank = rk;
     this.txt('lap', 'LAP ' + clamp(p.lap, 1, s.laps) + '/' + s.laps);
@@ -188,11 +253,16 @@ export class PlayerHud {
     this.cls('wrong', 'on', p.wrongT > 1 && !p.finished);
     this.cls('draftTag', 'on', p.drafting && p.boost <= 0);
     // countdown lights
-    const L = this.q('lights'), cd = s.phase === 'countdown' ? s.cd : -1, li = L.children;
+    const L = this.q('lights'),
+      cd = s.phase === 'countdown' ? s.cd : -1,
+      li = L.children;
     const n = cd > 3 ? 0 : cd > 2 ? 1 : cd > 1 ? 2 : cd > 0 ? 3 : 0;
     const goOn = s.phase === 'race' && s.raceTime < 1.2;
     this.cls('lights', 'on', s.phase === 'countdown' || goOn);
-    for (let i = 0; i < 3; i++) { const c = goOn ? 'g' : i < n ? 'r' : ''; if (li[i]!.className !== c) li[i]!.className = c; }
+    for (let i = 0; i < 3; i++) {
+      const c = goOn ? 'g' : i < n ? 'r' : '';
+      if (li[i]!.className !== c) li[i]!.className = c;
+    }
     this.cls('hint', 'on', s.phase === 'countdown');
     this.minimap.draw(this.mini, s.karts, this.colorOf, p);
   }

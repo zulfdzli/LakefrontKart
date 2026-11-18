@@ -18,7 +18,8 @@ const PATTERNS: Record<HapticKind | 'tap', number[]> = {
 
 let label: HTMLLabelElement | null = null;
 const canVibrate = typeof navigator.vibrate === 'function';
-const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isIOS =
+  /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 function iosSwitch(): HTMLLabelElement | null {
   if (!isIOS) return null;
@@ -31,7 +32,16 @@ function iosSwitch(): HTMLLabelElement | null {
   input.setAttribute('aria-hidden', 'true');
   label = document.createElement('label');
   label.htmlFor = input.id;
-  for (const el of [input, label]) Object.assign(el.style, { position: 'fixed', left: '-100px', top: '0', width: '1px', height: '1px', opacity: '0', pointerEvents: 'none' });
+  for (const el of [input, label])
+    Object.assign(el.style, {
+      position: 'fixed',
+      left: '-100px',
+      top: '0',
+      width: '1px',
+      height: '1px',
+      opacity: '0',
+      pointerEvents: 'none',
+    });
   document.body.append(input, label);
   return label;
 }

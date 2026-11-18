@@ -24,7 +24,14 @@
       <section id="join" class="screen">
         <label class="field" id="codeField">
           <span>Room code</span>
-          <input id="code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" />
+          <input
+            id="code"
+            maxlength="4"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            inputmode="text"
+          />
         </label>
         <div class="roomTag" id="roomTag" hidden>Room <b></b></div>
         <label class="field">
@@ -71,47 +78,98 @@
       <div class="deck">
         <div class="zone steer" id="steerZone">
           <div class="dpad" id="dpad">
-            <span class="arm l"><i>◀</i></span><span class="arm r"><i>▶</i></span><span class="arm u"><i>▲</i></span><span class="arm d"><i>▼</i></span><span class="hub"></span>
+            <span class="arm l"><i>◀</i></span
+            ><span class="arm r"><i>▶</i></span
+            ><span class="arm u"><i>▲</i></span
+            ><span class="arm d"><i>▼</i></span
+            ><span class="hub"></span>
           </div>
           <div class="slider" id="slider" hidden><span class="track"></span><span class="knob" id="knob"></span></div>
         </div>
         <div class="zone a">
-          <div class="ring"><button class="rbtn big" id="brakeBtn" type="button" aria-label="Brake"><span class="ic"><svg class="svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l6 6 6-6M6 12l6 6 6-6"/></svg></span><small>BRAKE</small></button></div>
+          <div class="ring">
+            <button class="rbtn big" id="brakeBtn" type="button" aria-label="Brake">
+              <span class="ic"
+                ><svg class="svg" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 6l6 6 6-6M6 12l6 6 6-6" /></svg></span
+              ><small>BRAKE</small>
+            </button>
+          </div>
         </div>
         <div class="zone mid">
           <div class="pill v">
-            <button class="rbtn sm" id="minusBtn" type="button" aria-label="Gentler steering"><svg class="svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16c4-1 7-3 9-6s5-4 9-4"/><path d="M17 3l4 3-4 3"/></svg></button>
-            <button class="rbtn sm glow" id="menuBtn" type="button" aria-label="Controller settings"><svg class="svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></button>
-            <button class="rbtn sm" id="plusBtn" type="button" aria-label="Sharper steering"><svg class="svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10c0-4 3-6 7-6h6"/><path d="M14 1l4 3-4 3"/></svg></button>
+            <button class="rbtn sm" id="minusBtn" type="button" aria-label="Gentler steering">
+              <svg class="svg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 16c4-1 7-3 9-6s5-4 9-4" />
+                <path d="M17 3l4 3-4 3" />
+              </svg>
+            </button>
+            <button class="rbtn sm glow" id="menuBtn" type="button" aria-label="Controller settings">
+              <svg class="svg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+                <circle cx="16" cy="7" r="2.2" />
+                <circle cx="10" cy="17" r="2.2" />
+              </svg>
+            </button>
+            <button class="rbtn sm" id="plusBtn" type="button" aria-label="Sharper steering">
+              <svg class="svg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 20V10c0-4 3-6 7-6h6" />
+                <path d="M14 1l4 3-4 3" />
+              </svg>
+            </button>
           </div>
           <small class="lbl">SETTINGS</small>
         </div>
         <div class="zone grille" id="grille"></div>
         <div class="zone pair">
           <div class="pill h">
-            <button class="rbtn item" id="itemBtn" type="button" aria-label="Use item"><span class="ic" id="itemIc"><svg class="svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M10 10a2 2 0 1 1 2.5 1.9c-.5.2-.5.6-.5 1.1M12 16v.2"/></svg></span><small>ITEM</small></button>
-            <button class="rbtn drift" id="driftBtn" type="button" aria-label="Drift"><span class="ic"><svg class="svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17c2-7 8-11 15-11"/><path d="M15 3l4 3-4 3"/><path d="M5 21l1.5-2M9 21l1-2.2"/></svg></span><small>DRIFT</small></button>
+            <button class="rbtn item" id="itemBtn" type="button" aria-label="Use item">
+              <span class="ic" id="itemIc"
+                ><svg class="svg" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="5" y="5" width="14" height="14" rx="3" />
+                  <path d="M10 10a2 2 0 1 1 2.5 1.9c-.5.2-.5.6-.5 1.1M12 16v.2" /></svg></span
+              ><small>ITEM</small>
+            </button>
+            <button class="rbtn drift" id="driftBtn" type="button" aria-label="Drift">
+              <span class="ic"
+                ><svg class="svg" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 17c2-7 8-11 15-11" />
+                  <path d="M15 3l4 3-4 3" />
+                  <path d="M5 21l1.5-2M9 21l1-2.2" /></svg></span
+              ><small>DRIFT</small>
+            </button>
           </div>
           <small class="lbl">swipe ITEM down to throw back</small>
         </div>
         <div class="zone leds side"><i></i><i></i><i></i><i></i><i></i></div>
       </div>
 
-      <div class="trigger bottom"><div class="charge"><i id="chargeFill"></i></div></div>
+      <div class="trigger bottom">
+        <div class="charge"><i id="chargeFill"></i></div>
+      </div>
       <button class="power" id="powerBtn" type="button" aria-label="Leave the race">✕</button>
       <div class="edge" id="edge"></div>
       <div class="toast" id="toast"></div>
     </main>
 
     <!-- overlays -->
-    <div id="rotate" class="ov rotate" hidden><div class="phoneIc">📱</div><b>Rotate your phone</b><span>Hold it sideways, like a remote.</span></div>
-    <div id="busy" class="ov" hidden><div class="spinner"></div><b id="busyText">Reconnecting…</b></div>
+    <div id="rotate" class="ov rotate" hidden>
+      <div class="phoneIc">📱</div>
+      <b>Rotate your phone</b><span>Hold it sideways, like a remote.</span>
+    </div>
+    <div id="busy" class="ov" hidden>
+      <div class="spinner"></div>
+      <b id="busyText">Reconnecting…</b>
+    </div>
     <div id="sheet" class="sheet" hidden>
       <div class="sheetCard">
         <h2>Controls</h2>
         <div class="opt">
           <span>Steering</span>
-          <div class="seg" id="steerSeg"><button data-v="buttons" type="button">◀ ▶ Buttons</button><button data-v="slider" type="button">Slider</button></div>
+          <div class="seg" id="steerSeg">
+            <button data-v="buttons" type="button">◀ ▶ Buttons</button
+            ><button data-v="slider" type="button">Slider</button>
+          </div>
         </div>
         <div class="opt"><span>Steering assist</span><button class="tog" id="assistTog" type="button"></button></div>
         <div class="opt"><span>Vibration</span><button class="tog" id="hapticTog" type="button"></button></div>
@@ -123,7 +181,10 @@
       <div class="sheetCard">
         <h2>Leave the race?</h2>
         <p class="note">Your kart is driven by the computer until you rejoin.</p>
-        <div class="row"><button class="pbtn" id="stayBtn" type="button">STAY</button><button class="pbtn danger" id="quitBtn" type="button">LEAVE</button></div>
+        <div class="row">
+          <button class="pbtn" id="stayBtn" type="button">STAY</button
+          ><button class="pbtn danger" id="quitBtn" type="button">LEAVE</button>
+        </div>
       </div>
     </div>
     <div id="tip" class="tip" hidden><span id="tipText"></span><button id="tipClose" type="button">OK</button></div>

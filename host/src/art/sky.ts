@@ -1,7 +1,12 @@
 /** Gradient sky dome with a sun disc and glow (prototype), with correct colour-space output. */
 import * as THREE from 'three';
 
-export function createSky(zenith: number, horizon: number, sunDir: THREE.Vector3, glow: readonly [number, number, number]): THREE.Mesh {
+export function createSky(
+  zenith: number,
+  horizon: number,
+  sunDir: THREE.Vector3,
+  glow: readonly [number, number, number],
+): THREE.Mesh {
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       top: { value: new THREE.Color(zenith) },

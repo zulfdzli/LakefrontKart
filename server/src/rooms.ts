@@ -4,8 +4,19 @@
  */
 import { randomBytes, randomInt } from 'node:crypto';
 import {
-  CHARS, MAX_PLAYERS, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH, SLOT_COLORS, cleanName, isRoomCode,
-  type JoinErrorReason, type JoinOk, type LeaderConfig, type LobbyPlayer, type LobbyUpdate, type Phase,
+  CHARS,
+  MAX_PLAYERS,
+  ROOM_CODE_ALPHABET,
+  ROOM_CODE_LENGTH,
+  SLOT_COLORS,
+  cleanName,
+  isRoomCode,
+  type JoinErrorReason,
+  type JoinOk,
+  type LeaderConfig,
+  type LobbyPlayer,
+  type LobbyUpdate,
+  type Phase,
 } from '@tk/shared';
 
 export interface Player {
@@ -35,7 +46,13 @@ export interface Room {
 }
 
 export const DEFAULT_CONFIG: LeaderConfig = {
-  mode: 'single', trackId: 'meadows', gpOrder: ['meadows', 'canyon', 'frosty'], laps: 2, aiFill: true, aiDifficulty: 'normal', itemsOn: true,
+  mode: 'single',
+  trackId: 'meadows',
+  gpOrder: ['meadows', 'canyon', 'frosty'],
+  laps: 2,
+  aiFill: true,
+  aiDifficulty: 'normal',
+  itemsOn: true,
 };
 
 /** A phone that drops in the lobby keeps its slot this long before it is freed. */
@@ -43,7 +60,8 @@ export const LOBBY_GRACE_MS = 30_000;
 /** A room is deleted this long after its host disconnects (section 5.2). */
 export const HOST_GONE_MS = 10 * 60_000;
 
-export type JoinResult = { ok: true; data: JoinOk; player: Player; resumed: boolean } | { ok: false; reason: JoinErrorReason };
+export type JoinResult =
+  { ok: true; data: JoinOk; player: Player; resumed: boolean } | { ok: false; reason: JoinErrorReason };
 
 const token = (): string => randomBytes(12).toString('base64url');
 
@@ -63,8 +81,14 @@ export class RoomManager {
 
   createRoom(hostSocketId: string): Room {
     const room: Room = {
-      code: this.newCode(), hostToken: token(), hostSocketId, hostDroppedAt: null, phase: 'lobby',
-      slots: new Array<Player | null>(MAX_PLAYERS).fill(null), config: { ...DEFAULT_CONFIG, gpOrder: [...DEFAULT_CONFIG.gpOrder] }, joinCounter: 0,
+      code: this.newCode(),
+      hostToken: token(),
+      hostSocketId,
+      hostDroppedAt: null,
+      phase: 'lobby',
+      slots: new Array<Player | null>(MAX_PLAYERS).fill(null),
+      config: { ...DEFAULT_CONFIG, gpOrder: [...DEFAULT_CONFIG.gpOrder] },
+      joinCounter: 0,
     };
     this.rooms.set(room.code, room);
     return room;
@@ -99,7 +123,8 @@ export class RoomManager {
   }
 
   findBySocket(socketId: string): { room: Room; player: Player } | null {
-    for (const room of this.rooms.values()) for (const p of this.players(room)) if (p.socketId === socketId) return { room, player: p };
+    for (const room of this.rooms.values())
+      for (const p of this.players(room)) if (p.socketId === socketId) return { room, player: p };
     return null;
   }
 
@@ -132,18 +157,33 @@ export class RoomManager {
     const slot = room.slots.findIndex((s) => s === null);
     if (slot < 0) return { ok: false, reason: 'room-full' };
     const name = cleanName(nameRaw, `Player ${slot + 1}`);
-    if (this.players(room).some((p) => p.name.toLowerCase() === name.toLowerCase())) return { ok: false, reason: 'name-taken' };
+    if (this.players(room).some((p) => p.name.toLowerCase() === name.toLowerCase()))
+      return { ok: false, reason: 'name-taken' };
     const p: Player = {
-      id: token(), token: typeof playerToken === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(playerToken) ? playerToken : token(),
-      slot, name, ready: false, connected: true, socketId, characterId: this.freeCharacter(room, slot + 1),
-      joinedAt: room.joinCounter++, droppedAt: null,
+      id: token(),
+      token: typeof playerToken === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(playerToken) ? playerToken : token(),
+      slot,
+      name,
+      ready: false,
+      connected: true,
+      socketId,
+      characterId: this.freeCharacter(room, slot + 1),
+      joinedAt: room.joinCounter++,
+      droppedAt: null,
     };
     room.slots[slot] = p;
     return { ok: true, data: this.joinOk(room, p), player: p, resumed: false };
   }
 
   joinOk(room: Room, p: Player): JoinOk {
-    return { playerId: p.id, playerToken: p.token, slot: p.slot, color: SLOT_COLORS[p.slot]!, name: p.name, isLeader: this.isLeader(room, p) };
+    return {
+      playerId: p.id,
+      playerToken: p.token,
+      slot: p.slot,
+      color: SLOT_COLORS[p.slot]!,
+      name: p.name,
+      isLeader: this.isLeader(room, p),
+    };
   }
 
   /** The phone's socket closed. In the lobby the slot is held for LOBBY_GRACE_MS; during a race until it ends. */
@@ -182,21 +222,32 @@ export class RoomManager {
     const c = room.config;
     if (o.mode === 'single' || o.mode === 'gp') c.mode = o.mode;
     if (typeof o.trackId === 'string' && tracks.includes(o.trackId)) c.trackId = o.trackId;
-    if (Array.isArray(o.gpOrder) && o.gpOrder.length === 3 && o.gpOrder.every((t) => tracks.includes(t)) && new Set(o.gpOrder).size === 3) c.gpOrder = [...o.gpOrder];
+    if (
+      Array.isArray(o.gpOrder) &&
+      o.gpOrder.length === 3 &&
+      o.gpOrder.every((t) => tracks.includes(t)) &&
+      new Set(o.gpOrder).size === 3
+    )
+      c.gpOrder = [...o.gpOrder];
     if (o.laps === 1 || o.laps === 2 || o.laps === 3) c.laps = o.laps;
     if (typeof o.aiFill === 'boolean') c.aiFill = o.aiFill;
-    if (o.aiDifficulty === 'easy' || o.aiDifficulty === 'normal' || o.aiDifficulty === 'hard') c.aiDifficulty = o.aiDifficulty;
+    if (o.aiDifficulty === 'easy' || o.aiDifficulty === 'normal' || o.aiDifficulty === 'hard')
+      c.aiDifficulty = o.aiDifficulty;
     if (typeof o.itemsOn === 'boolean') c.itemsOn = o.itemsOn;
     return true;
   }
 
   setPhase(room: Room, phase: unknown): boolean {
-    const ok = phase === 'lobby' || phase === 'countdown' || phase === 'race' || phase === 'paused' || phase === 'results';
+    const ok =
+      phase === 'lobby' || phase === 'countdown' || phase === 'race' || phase === 'paused' || phase === 'results';
     if (!ok || room.phase === phase) return false;
     room.phase = phase;
     if (phase === 'lobby') {
       // back in the lobby: anyone still disconnected loses their slot after the normal grace period
-      for (const p of this.players(room)) { p.ready = false; if (!p.connected) p.droppedAt = this.now(); }
+      for (const p of this.players(room)) {
+        p.ready = false;
+        if (!p.connected) p.droppedAt = this.now();
+      }
     }
     return true;
   }
@@ -204,7 +255,13 @@ export class RoomManager {
   lobbyUpdate(room: Room): LobbyUpdate {
     const leader = this.leader(room);
     const players: LobbyPlayer[] = this.players(room).map((p) => ({
-      slot: p.slot, name: p.name, color: SLOT_COLORS[p.slot]!, ready: p.ready, connected: p.connected, characterId: p.characterId, isLeader: p === leader,
+      slot: p.slot,
+      name: p.name,
+      color: SLOT_COLORS[p.slot]!,
+      ready: p.ready,
+      connected: p.connected,
+      characterId: p.characterId,
+      isLeader: p === leader,
     }));
     return { room: room.code, players, config: room.config };
   }
@@ -214,7 +271,9 @@ export class RoomManager {
    * Returns the rooms whose lobby changed and the codes of deleted rooms.
    */
   sweep(): { changed: Room[]; deleted: string[] } {
-    const t = this.now(), changed: Room[] = [], deleted: string[] = [];
+    const t = this.now(),
+      changed: Room[] = [],
+      deleted: string[] = [];
     for (const room of this.rooms.values()) {
       if (room.hostSocketId === null && room.hostDroppedAt !== null && t - room.hostDroppedAt >= HOST_GONE_MS) {
         this.rooms.delete(room.code);
@@ -224,7 +283,10 @@ export class RoomManager {
       if (room.phase !== 'lobby') continue;
       let any = false;
       for (const p of this.players(room)) {
-        if (!p.connected && p.droppedAt !== null && t - p.droppedAt >= LOBBY_GRACE_MS) { room.slots[p.slot] = null; any = true; }
+        if (!p.connected && p.droppedAt !== null && t - p.droppedAt >= LOBBY_GRACE_MS) {
+          room.slots[p.slot] = null;
+          any = true;
+        }
       }
       if (any) changed.push(room);
     }

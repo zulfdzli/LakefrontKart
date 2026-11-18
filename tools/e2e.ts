@@ -13,29 +13,56 @@ import { fileURLToPath } from 'node:url';
 import './tk-hook';
 import { chromium, devices, type Browser, type BrowserContext, type Page } from 'playwright-core';
 
-
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const args = process.argv.slice(2);
-const arg = (n: string, d: string): string => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1]! : d; };
+const arg = (n: string, d: string): string => {
+  const i = args.indexOf(`--${n}`);
+  return i >= 0 && args[i + 1] ? args[i + 1]! : d;
+};
 const PHASE = arg('phase', 'latest');
 const PORT = Number(arg('port', '3101'));
 const OUT = path.join(ROOT, 'docs', 'screens', PHASE);
-const lan = Object.values(networkInterfaces()).flat().find((a) => a && a.family === 'IPv4' && !a.internal && /^(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))/.test(a.address))?.address ?? 'localhost';
+const lan =
+  Object.values(networkInterfaces())
+    .flat()
+    .find((a) => a && a.family === 'IPv4' && !a.internal && /^(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))/.test(a.address))
+    ?.address ?? 'localhost';
 const PHONE_BASE = `http://${lan}:${PORT}`;
 
 const results: { check: string; ok: boolean; note?: string }[] = [];
-const check = (name: string, ok: boolean, note?: string): void => { results.push({ check: name, ok, note }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${note ? ' — ' + note : ''}`); };
+const check = (name: string, ok: boolean, note?: string): void => {
+  results.push({ check: name, ok, note });
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${note ? ' — ' + note : ''}`);
+};
 
 function startServer(): Promise<ChildProcess> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'server/src/index.ts'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT) }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(
+      process.execPath,
+      [path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'server/src/index.ts'],
+      { cwd: ROOT, env: { ...process.env, PORT: String(PORT) }, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
     const timer = setTimeout(() => reject(new Error('server did not start')), 30000);
-    child.stdout!.on('data', (d: Buffer) => { if (d.toString().includes('Host screen:')) { clearTimeout(timer); resolve(child); } });
-    child.stderr!.on('data', (d: Buffer) => { const t = d.toString(); if (!t.includes('Wi-Fi') && !t.includes('Fix:')) process.stderr.write(t); });
+    child.stdout!.on('data', (d: Buffer) => {
+      if (d.toString().includes('Host screen:')) {
+        clearTimeout(timer);
+        resolve(child);
+      }
+    });
+    child.stderr!.on('data', (d: Buffer) => {
+      const t = d.toString();
+      if (!t.includes('Wi-Fi') && !t.includes('Fix:')) process.stderr.write(t);
+    });
   });
 }
 
-async function phone(browser: Browser, model: string, room: string, name: string | null, ctx?: BrowserContext): Promise<Page> {
+async function phone(
+  browser: Browser,
+  model: string,
+  room: string,
+  name: string | null,
+  ctx?: BrowserContext,
+): Promise<Page> {
   const c = ctx ?? (await browser.newContext({ ...devices[model]! }));
   const p = await c.newPage();
   await p.addInitScript('window.__name = (f) => f;');
@@ -60,7 +87,11 @@ async function hold(p: Page, sel: string, ms: number, dx = 0): Promise<void> {
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
   const server = await startServer();
-  const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+  const browser = await chromium.launch({
+    channel: 'chrome',
+    headless: true,
+    args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'],
+  });
   try {
     const host = await browser.newPage({ viewport: { width: 1600, height: 900 } });
     await host.addInitScript('window.__name = (f) => f;');
@@ -117,15 +148,25 @@ async function main(): Promise<void> {
     await b.screenshot({ path: path.join(OUT, 'phone-drive-pixel.png') });
 
     // input routing: phone 1 steers right, phone 2 brakes + drifts; each must only affect its own kart
-    const kartIn = (i: number) => host.evaluate((n) => { const k = window.__tk.session()!.s.humans[n]!; return { ...k.input, ai: k.ai, slot: k.slot }; }, i);
+    const kartIn = (i: number) =>
+      host.evaluate((n) => {
+        const k = window.__tk.session()!.s.humans[n]!;
+        return { ...k.input, ai: k.ai, slot: k.slot };
+      }, i);
     const steerA = hold(aPortrait, '#dpad', 700, 1);
     await aPortrait.waitForTimeout(350);
-    const a1 = await kartIn(0), b1 = await kartIn(1);
+    const a1 = await kartIn(0),
+      b1 = await kartIn(1);
     await steerA;
-    check('phone 1 RIGHT steers kart P1 only', a1.steer > 0.5 && Math.abs(b1.steer) < 0.01, `P1 steer ${a1.steer.toFixed(2)}, P2 steer ${b1.steer.toFixed(2)}`);
+    check(
+      'phone 1 RIGHT steers kart P1 only',
+      a1.steer > 0.5 && Math.abs(b1.steer) < 0.01,
+      `P1 steer ${a1.steer.toFixed(2)}, P2 steer ${b1.steer.toFixed(2)}`,
+    );
     const brakeB = hold(b, '#brakeBtn', 700);
     await b.waitForTimeout(350);
-    const b2 = await kartIn(1), a2 = await kartIn(0);
+    const b2 = await kartIn(1),
+      a2 = await kartIn(0);
     await brakeB;
     check('phone 2 BRAKE reaches kart P2 only', b2.brake && !a2.brake);
     await aPortrait.screenshot({ path: path.join(OUT, 'phone-drive-iphone-race.png') });
@@ -133,10 +174,21 @@ async function main(): Promise<void> {
     // multi-touch: steer and drift at the same time on one phone (two pointers via touchscreen events)
     const ms = await aPortrait.evaluate(async () => {
       const fire = (el: Element, type: string, id: number, x: number, y: number): void => {
-        el.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: id === 1 }));
+        el.dispatchEvent(
+          new PointerEvent(type, {
+            pointerId: id,
+            pointerType: 'touch',
+            clientX: x,
+            clientY: y,
+            bubbles: true,
+            isPrimary: id === 1,
+          }),
+        );
       };
-      const dp = document.getElementById('dpad')!.getBoundingClientRect(), dz = document.getElementById('steerZone')!;
-      const dr = document.getElementById('driftBtn')!, rr = dr.getBoundingClientRect();
+      const dp = document.getElementById('dpad')!.getBoundingClientRect(),
+        dz = document.getElementById('steerZone')!;
+      const dr = document.getElementById('driftBtn')!,
+        rr = dr.getBoundingClientRect();
       fire(dz, 'pointerdown', 1, dp.right - 10, dp.top + dp.height / 2);
       fire(dr, 'pointerdown', 2, rr.left + rr.width / 2, rr.top + rr.height / 2);
       await new Promise((r) => setTimeout(r, 300));
@@ -160,7 +212,9 @@ async function main(): Promise<void> {
 
     // host refresh keeps the room and the players
     await host.reload();
-    await host.waitForFunction(() => window.__tk?.state().room && window.__tk.lobby()?.players.length === 5, null, { timeout: 20000 });
+    await host.waitForFunction(() => window.__tk?.state().room && window.__tk.lobby()?.players.length === 5, null, {
+      timeout: 20000,
+    });
     const room2 = await host.evaluate(() => window.__tk.state().room);
     check('refreshing the host keeps the room and the players', room2 === room, `${room} → ${room2}`);
     await aPortrait.waitForSelector('#wait:not([hidden])', { timeout: 10000 });
@@ -195,4 +249,7 @@ async function main(): Promise<void> {
   process.exit(failed ? 1 : 0);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

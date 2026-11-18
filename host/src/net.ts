@@ -4,7 +4,16 @@
  */
 import { io, type Socket } from 'socket.io-client';
 import type {
-  HostToServer, ServerToHost, LobbyUpdate, NetInfo, RelayedInput, HostState, HapticKind, Standing, LeaderConfig, PlayerSettings,
+  HostToServer,
+  ServerToHost,
+  LobbyUpdate,
+  NetInfo,
+  RelayedInput,
+  HostState,
+  HapticKind,
+  Standing,
+  LeaderConfig,
+  PlayerSettings,
 } from '@tk/shared';
 
 const KEY = 'tk_host';
@@ -36,13 +45,22 @@ export class HostNet {
       this.claimRoom();
     });
     s.on('disconnect', () => on.connection(false));
-    s.on('lobby:update', (u) => { this.lobby = u; on.lobby(u); });
+    s.on('lobby:update', (u) => {
+      this.lobby = u;
+      on.lobby(u);
+    });
     s.on('player:input', (i) => on.input(i));
     s.on('player:start', (p) => on.start(p.slot));
     s.on('player:rematch', (p) => on.rematch(p.slot, p.toLobby));
-    s.on('player:latency', (p) => { this.latency.set(p.slot, p.rttMs); on.latency(p.slot, p.rttMs); });
+    s.on('player:latency', (p) => {
+      this.latency.set(p.slot, p.rttMs);
+      on.latency(p.slot, p.rttMs);
+    });
     s.on('player:settings', (p) => on.settings(p.slot, p.settings));
-    s.on('player:device', (p) => { this.devices.set(p.slot, p.device); on.device(p.slot, p.device); });
+    s.on('player:device', (p) => {
+      this.devices.set(p.slot, p.device);
+      on.device(p.slot, p.device);
+    });
     s.on('leader:config', (c) => on.config(c));
   }
 
@@ -50,19 +68,29 @@ export class HostNet {
   private claimRoom(): void {
     type Saved = { room: string; hostToken: string } | null;
     let saved: Saved;
-    try { saved = JSON.parse(sessionStorage.getItem(KEY) ?? 'null') as Saved; } catch { saved = null; }
+    try {
+      saved = JSON.parse(sessionStorage.getItem(KEY) ?? 'null') as Saved;
+    } catch {
+      saved = null;
+    }
     const create = (): void => {
       this.socket.emit('host:create', (r) => {
         this.room = r.room;
-        try { sessionStorage.setItem(KEY, JSON.stringify(r)); } catch { /* private mode */ }
+        try {
+          sessionStorage.setItem(KEY, JSON.stringify(r));
+        } catch {
+          /* private mode */
+        }
         this.on.room(r.room);
       });
     };
     if (saved) {
       const resume = saved;
       this.socket.emit('host:resume', resume, (r) => {
-        if (r.ok) { this.room = resume.room; this.on.room(resume.room); }
-        else create();
+        if (r.ok) {
+          this.room = resume.room;
+          this.on.room(resume.room);
+        } else create();
       });
     } else create();
   }

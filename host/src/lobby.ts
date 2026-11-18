@@ -5,7 +5,11 @@
 import QRCode from 'qrcode';
 import { CHARS, MAX_PLAYERS, SLOT_COLORS, type LobbyUpdate, type NetInfo } from '@tk/shared';
 
-const TRACK_NAMES: Record<string, string> = { meadows: 'Sunny Meadows', canyon: 'Dusty Canyon', frosty: 'Frosty Peaks' };
+const TRACK_NAMES: Record<string, string> = {
+  meadows: 'Sunny Meadows',
+  canyon: 'Dusty Canyon',
+  frosty: 'Frosty Peaks',
+};
 const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 export class Lobby {
@@ -72,13 +76,17 @@ export class Lobby {
     sel.innerHTML = '';
     for (const o of options) sel.add(new Option(`${o.name} — ${o.url}`, o.url));
     this.q('.netPick').hidden = options.length < 2;
-    sel.onchange = () => { this.base = sel.value; void this.renderQr(); };
+    sel.onchange = () => {
+      this.base = sel.value;
+      void this.renderQr();
+    };
     this.base = options[0]?.url ?? `${location.protocol}//${location.host}`;
     const warn = this.q('.warn');
     warn.hidden = !info.publicNetworkProfile && options.length > 0;
-    warn.textContent = options.length === 0
-      ? 'No Wi-Fi address found. Connect this computer to Wi-Fi, or set PUBLIC_URL.'
-      : 'Your Wi-Fi is set to Public, so Windows Firewall blocks phones. Set it to Private in Settings → Network & internet → Wi-Fi.';
+    warn.textContent =
+      options.length === 0
+        ? 'No Wi-Fi address found. Connect this computer to Wi-Fi, or set PUBLIC_URL.'
+        : 'Your Wi-Fi is set to Public, so Windows Firewall blocks phones. Set it to Private in Settings → Network & internet → Wi-Fi.';
     void this.renderQr();
   }
 
@@ -88,7 +96,12 @@ export class Lobby {
     if (url === this.lastQr) return;
     this.lastQr = url;
     this.q('.url').textContent = url.replace(/^https?:\/\//, '');
-    this.q('.qr').innerHTML = await QRCode.toString(url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M', color: { dark: '#1d1b2e', light: '#ffffff' } });
+    this.q('.qr').innerHTML = await QRCode.toString(url, {
+      type: 'svg',
+      margin: 1,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#1d1b2e', light: '#ffffff' },
+    });
   }
 
   update(u: LobbyUpdate, latency: Map<number, number>): void {
@@ -101,22 +114,34 @@ export class Lobby {
       c.classList.toggle('offline', !!p && !p.connected);
       const ch = p ? CHARS.find((x) => x.id === p.characterId) : undefined;
       (c.querySelector('.face') as HTMLElement).textContent = ch ? ch.emoji : '📱';
-      (c.querySelector('.name') as HTMLElement).innerHTML = p ? esc(p.name) + (p.isLeader ? ' <span class="crown" title="Party leader">👑</span>' : '') : 'Scan to join';
+      (c.querySelector('.name') as HTMLElement).innerHTML = p
+        ? esc(p.name) + (p.isLeader ? ' <span class="crown" title="Party leader">👑</span>' : '')
+        : 'Scan to join';
       const ms = latency.get(i);
-      (c.querySelector('.meta') as HTMLElement).textContent = p ? `${ch?.name ?? ''}${p.connected ? (ms !== undefined ? ` · ${ms} ms` : '') : ' · reconnecting…'}` : '';
+      (c.querySelector('.meta') as HTMLElement).textContent = p
+        ? `${ch?.name ?? ''}${p.connected ? (ms !== undefined ? ` · ${ms} ms` : '') : ' · reconnecting…'}`
+        : '';
       (c.querySelector('.state') as HTMLElement).textContent = p ? (p.ready ? 'READY' : p.connected ? '…' : '') : '';
     }
     const cfg = u.config;
     const diff = cfg.aiDifficulty[0]!.toUpperCase() + cfg.aiDifficulty.slice(1);
     this.q('.cfg').innerHTML = [
       cfg.mode === 'gp' ? 'Grand Prix' : 'Single race',
-      cfg.mode === 'gp' ? cfg.gpOrder.map((t) => TRACK_NAMES[t] ?? t).join(' → ') : TRACK_NAMES[cfg.trackId] ?? cfg.trackId,
-      `${cfg.laps} lap${cfg.laps > 1 ? 's' : ''}`, diff, `AI fill ${cfg.aiFill ? 'on' : 'off'}`, `Items ${cfg.itemsOn ? 'on' : 'off'}`,
-    ].map((s) => `<span>${esc(s)}</span>`).join('');
+      cfg.mode === 'gp'
+        ? cfg.gpOrder.map((t) => TRACK_NAMES[t] ?? t).join(' → ')
+        : (TRACK_NAMES[cfg.trackId] ?? cfg.trackId),
+      `${cfg.laps} lap${cfg.laps > 1 ? 's' : ''}`,
+      diff,
+      `AI fill ${cfg.aiFill ? 'on' : 'off'}`,
+      `Items ${cfg.itemsOn ? 'on' : 'off'}`,
+    ]
+      .map((s) => `<span>${esc(s)}</span>`)
+      .join('');
     const n = u.players.length;
     const leader = u.players.find((p) => p.isLeader);
-    this.q('.status').textContent = n === 0
-      ? 'Waiting for players…'
-      : `${n} player${n > 1 ? 's' : ''} in · ${leader ? leader.name : 'The leader'} presses START on their phone, or press Enter`;
+    this.q('.status').textContent =
+      n === 0
+        ? 'Waiting for players…'
+        : `${n} player${n > 1 ? 's' : ''} in · ${leader ? leader.name : 'The leader'} presses START on their phone, or press Enter`;
   }
 }

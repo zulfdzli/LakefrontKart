@@ -55,18 +55,23 @@ export class ChaseCam {
   }
 
   update(dt: number, s: Readonly<GameState>, k: Kart, v: KartView, podium: Podium | null): void {
-    const cam = this.camera, ix = v.ix, iy = v.iy, iz = v.iz;
+    const cam = this.camera,
+      ix = v.ix,
+      iy = v.iy,
+      iz = v.iz;
     if (this.mode === 'orbit') {
       this.spin += dt * 0.3;
       if (this.wideOrbit) {
-        const a = k.h + 2.2 + this.spin * 0.25, d = 34;
+        const a = k.h + 2.2 + this.spin * 0.25,
+          d = 34;
         cam.position.set(ix + Math.sin(a) * d, iy + 13, iz + Math.cos(a) * d);
         cam.lookAt(ix + Math.sin(k.h) * 6, iy + 1, iz + Math.cos(k.h) * 6);
         this.setFov(this.baseFov - 8, dt);
         this.focus.set(ix, iy, iz);
         return;
       }
-      const a = k.h + 0.9 + Math.sin(this.spin) * 0.9, d = cam.aspect < 1 ? 10.5 : 8.2;
+      const a = k.h + 0.9 + Math.sin(this.spin) * 0.9,
+        d = cam.aspect < 1 ? 10.5 : 8.2;
       cam.position.set(ix + Math.sin(a) * d, iy + 2.8, iz + Math.cos(a) * d);
       cam.lookAt(ix, iy + (cam.aspect < 1 ? -0.8 : 0.2), iz);
       this.setFov(this.baseFov - 18, dt);
@@ -75,10 +80,17 @@ export class ChaseCam {
     }
     if (this.mode === 'podium' && podium) {
       this.podT += dt;
-      const sn = Math.sin(podium.ry), cs = Math.cos(podium.ry), d = 17 + Math.sin(this.podT * 0.4) * 1.5, side = Math.sin(this.podT * 0.25) * 4;
+      const sn = Math.sin(podium.ry),
+        cs = Math.cos(podium.ry),
+        d = 17 + Math.sin(this.podT * 0.4) * 1.5,
+        side = Math.sin(this.podT * 0.25) * 4;
       // wide screens: frame the podium left of centre, so the results panel on the right does not cover it
       const shift = cam.aspect > 4 / 3 ? 5.5 : 0;
-      cam.position.set(podium.x + sn * d + cs * (side + shift), podium.y + 5.6, podium.z + cs * d - sn * (side + shift));
+      cam.position.set(
+        podium.x + sn * d + cs * (side + shift),
+        podium.y + 5.6,
+        podium.z + cs * d - sn * (side + shift),
+      );
       cam.lookAt(podium.x + cs * shift, podium.y + (cam.aspect < 1 ? 4.6 : 3.2), podium.z - sn * shift);
       this.setFov(cam.aspect < 1 ? 70 : 52, dt);
       this.focus.set(podium.x, podium.y, podium.z);
@@ -91,14 +103,19 @@ export class ChaseCam {
     const dist = 9.4 + Math.max(0, k.sp) * 0.035 + this.fovKick * 1.6 + (1 - intro) * 3;
     const hgt = 4.2 + (1 - intro) * 2.5;
     this.target.set(ix - Math.sin(a) * dist, iy + hgt, iz - Math.cos(a) * dist);
-    if (!this.init) { cam.position.copy(this.target); this.init = true; }
-    else cam.position.lerp(this.target, 1 - Math.exp(-12 * dt));
+    if (!this.init) {
+      cam.position.copy(this.target);
+      this.init = true;
+    } else cam.position.lerp(this.target, 1 - Math.exp(-12 * dt));
     this.look.set(ix + Math.sin(this.camH) * 8 * intro, iy + 1.6, iz + Math.cos(this.camH) * 8 * intro);
     cam.lookAt(this.look);
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt * 2.2);
-      const sk = this.shake * this.shake * 0.9, t = s.time;
-      cam.position.x += Math.sin(t * 53) * sk; cam.position.y += Math.sin(t * 61 + 1) * sk * 0.6; cam.position.z += Math.cos(t * 47) * sk;
+      const sk = this.shake * this.shake * 0.9,
+        t = s.time;
+      cam.position.x += Math.sin(t * 53) * sk;
+      cam.position.y += Math.sin(t * 61 + 1) * sk * 0.6;
+      cam.position.z += Math.cos(t * 47) * sk;
     }
     this.setFov(this.baseFov + Math.max(0, k.sp) * 0.22 + this.fovKick * 9, dt);
     this.focus.set(ix, iy, iz);

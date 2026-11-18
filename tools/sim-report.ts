@@ -36,12 +36,21 @@ interface RaceStats {
 }
 
 function race(seed: number, diff: Difficulty, itemsOn: boolean, ci: number): RaceStats {
-  const g: Game = createGame({ seed, humans: [{ slot: 0, ci }], aiFill: true, laps: LAPS, difficulty: diff, itemsOn, raceEndGrace: 1e9 });
+  const g: Game = createGame({
+    seed,
+    humans: [{ slot: 0, ci }],
+    aiFill: true,
+    laps: LAPS,
+    difficulty: diff,
+    itemsOn,
+    raceEndGrace: 1e9,
+  });
   g.setHumanAi(0, true);
   const s = g.getSnapshot();
   s.humans[0]!.aiCfg.skill = DRIVER_SKILL;
   g.startCountdown();
-  let rescues = 0, itemsUsed = 0;
+  let rescues = 0,
+    itemsUsed = 0;
   const stuck = new Map<number, number>();
   let maxStuck = 0;
   const stepMs: number[] = [];
@@ -76,9 +85,23 @@ function race(seed: number, diff: Difficulty, itemsOn: boolean, ci: number): Rac
   };
 }
 
-const track = createGame({ seed: 1, humans: [], aiFill: true, laps: 1, difficulty: 'normal', itemsOn: false }).getSnapshot().track;
-const out: Record<string, unknown> = { trackLengthM: Math.round(track.LEN), samples: track.N, races: RACES, laps: LAPS };
-console.log(`\nTrack: ${Math.round(track.LEN)} m, ${track.N} samples · ${RACES} races per row · ${LAPS} laps · test driver skill ${DRIVER_SKILL}\n`);
+const track = createGame({
+  seed: 1,
+  humans: [],
+  aiFill: true,
+  laps: 1,
+  difficulty: 'normal',
+  itemsOn: false,
+}).getSnapshot().track;
+const out: Record<string, unknown> = {
+  trackLengthM: Math.round(track.LEN),
+  samples: track.N,
+  races: RACES,
+  laps: LAPS,
+};
+console.log(
+  `\nTrack: ${Math.round(track.LEN)} m, ${track.N} samples · ${RACES} races per row · ${LAPS} laps · test driver skill ${DRIVER_SKILL}\n`,
+);
 
 const rows: Record<string, unknown>[] = [];
 const aiMedian: Record<string, number> = {};
@@ -89,7 +112,8 @@ for (const itemsOn of [false, true]) {
     const R: RaceStats[] = [];
     for (let seed = 1; seed <= RACES; seed++) R.push(race(seed, diff, itemsOn, 1));
     const row = {
-      items: itemsOn, diff,
+      items: itemsOn,
+      diff,
       driverLap: median(R.flatMap((r) => r.driverLaps)),
       aiLap: median(R.flatMap((r) => r.aiLaps)),
       driverPlace: mean(R.map((r) => r.driverPlace)),
@@ -110,25 +134,34 @@ out.rows = rows;
 
 const gapEN = (aiMedian.easy! - aiMedian.normal!) / aiMedian.normal!;
 const gapNH = (aiMedian.normal! - aiMedian.hard!) / aiMedian.hard!;
-console.log(`\nAI gaps (items off): Easy→Normal ${pct(aiMedian.easy!, aiMedian.normal!)}, Normal→Hard ${pct(aiMedian.normal!, aiMedian.hard!)}  (target ≥ 3% each)`);
+console.log(
+  `\nAI gaps (items off): Easy→Normal ${pct(aiMedian.easy!, aiMedian.normal!)}, Normal→Hard ${pct(aiMedian.normal!, aiMedian.hard!)}  (target ≥ 3% each)`,
+);
 out.aiGaps = { easyNormal: gapEN, normalHard: gapNH };
 
 const perChar: Record<string, number> = {};
 for (let ci = 0; ci < CHARS.length; ci++) {
   const laps: number[] = [];
-  for (let seed = 1; seed <= Math.max(6, Math.round(RACES / 2)); seed++) laps.push(...race(seed, 'normal', false, ci).driverLaps);
+  for (let seed = 1; seed <= Math.max(6, Math.round(RACES / 2)); seed++)
+    laps.push(...race(seed, 'normal', false, ci).driverLaps);
   perChar[CHARS[ci]!.id] = median(laps);
 }
 const pv = Object.values(perChar);
 const spread = Math.max(...pv) / Math.min(...pv) - 1;
-console.log(`\nCharacter medians (test driver, Normal, items off): ${Object.entries(perChar).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(' · ')}`);
+console.log(
+  `\nCharacter medians (test driver, Normal, items off): ${Object.entries(perChar)
+    .map(([k, v]) => `${k} ${v.toFixed(2)}`)
+    .join(' · ')}`,
+);
 console.log(`Character spread: ${(spread * 100).toFixed(2)}%  (target ≤ 4%)`);
 out.perCharacter = perChar;
 out.characterSpread = spread;
 
 allStep.sort((a, b) => a - b);
 const simCost = { meanMs: mean(allStep), p99Ms: allStep[Math.floor(allStep.length * 0.99)]! };
-console.log(`\nSimulation cost per step (6 karts): mean ${simCost.meanMs.toFixed(3)} ms, p99 ${simCost.p99Ms.toFixed(3)} ms  (budget 2 ms)\n`);
+console.log(
+  `\nSimulation cost per step (6 karts): mean ${simCost.meanMs.toFixed(3)} ms, p99 ${simCost.p99Ms.toFixed(3)} ms  (budget 2 ms)\n`,
+);
 out.simCost = simCost;
 
 if (JSON_OUT) {

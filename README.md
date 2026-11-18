@@ -42,18 +42,18 @@ Open the host screen on the computer (or press **F5** in VS Code), then scan the
 
 ## Scripts
 
-| Command | What it does |
-|---|---|
-| `npm run dev` | Dev server with hot reload; host and controller on one port |
-| `npm run build` | Builds the host and controller into `dist/` |
-| `npm start` | Serves the production build |
-| `npm test` | Runs the Vitest tests (including the prototype parity test) |
-| `npm run sim-report` | Headless lap times, balance, rescues and simulation cost |
+| Command                             | What it does                                                        |
+| ----------------------------------- | ------------------------------------------------------------------- |
+| `npm run dev`                       | Dev server with hot reload; host and controller on one port         |
+| `npm run build`                     | Builds the host and controller into `dist/`                         |
+| `npm start`                         | Serves the production build                                         |
+| `npm test`                          | Runs the Vitest tests (including the prototype parity test)         |
+| `npm run sim-report`                | Headless lap times, balance, rescues and simulation cost            |
 | `npm run capture -- --phase <name>` | Polish-loop screenshots and frame stats into `docs/screens/<name>/` |
-| `npm run e2e -- --phase <name>` | End-to-end multiplayer check with emulated phones |
-| `npm run bots -- --room ABCD --n 3` | Adds simulated phones to your room (testing without 5 phones) |
-| `npm run typecheck` | Type-checks every workspace |
-| `npm run lint` / `npm run format` | ESLint / Prettier |
+| `npm run e2e -- --phase <name>`     | End-to-end multiplayer check with emulated phones                   |
+| `npm run bots -- --room ABCD --n 3` | Adds simulated phones to your room (testing without 5 phones)       |
+| `npm run typecheck`                 | Type-checks every workspace                                         |
+| `npm run lint` / `npm run format`   | ESLint / Prettier                                                   |
 
 ## Project layout
 

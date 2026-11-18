@@ -7,8 +7,17 @@ import { SLOT_COLORS, type HudUpdate, type SteeringScheme } from '@tk/shared';
 import { haptic } from './haptics';
 import type { InputState } from './net';
 
-const ICON: Record<string, string> = { turbo: '⚡', turbo3: '⚡', oil: '🛢️', orb: '🎯', bolt: '🥏', shield: '🛡️', roll: '🎲' };
-const ord = (n: number): string => (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
+const ICON: Record<string, string> = {
+  turbo: '⚡',
+  turbo3: '⚡',
+  oil: '🛢️',
+  orb: '🎯',
+  bolt: '🥏',
+  shield: '🛡️',
+  roll: '🎲',
+};
+const ord = (n: number): string =>
+  n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
 const DRIFT_COL = ['#fff3b0', '#4fc3f7', '#ffa726', '#e040fb'];
 /** Swipe distance (CSS px) on ITEM that fires it backwards. */
 const SWIPE_BACK_PX = 26;
@@ -32,8 +41,13 @@ export class Remote {
   constructor() {
     this.buildGrille();
     this.bindSteer();
-    this.bindHold('brakeBtn', (on) => { this.state.brake = on; this.state.throttle = !on; });
-    this.bindHold('driftBtn', (on) => { this.state.drift = on; });
+    this.bindHold('brakeBtn', (on) => {
+      this.state.brake = on;
+      this.state.throttle = !on;
+    });
+    this.bindHold('driftBtn', (on) => {
+      this.state.drift = on;
+    });
     this.bindItem();
     this.bindTap('minusBtn', () => this.nudgeSensitivity(-0.1));
     this.bindTap('plusBtn', () => this.nudgeSensitivity(0.1));
@@ -41,7 +55,9 @@ export class Remote {
     this.bindTap('powerBtn', () => this.onLeave?.());
     const releaseAll = (): void => this.releaseAll();
     window.addEventListener('blur', releaseAll);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) releaseAll();
+    });
     this.applyScheme();
   }
 
@@ -72,7 +88,9 @@ export class Remote {
   private nudgeSensitivity(d: number): void {
     this.sensitivity = Math.round(Math.max(0.6, Math.min(1.4, this.sensitivity + d)) * 10) / 10;
     localStorage.setItem('tk_sens', String(this.sensitivity));
-    this.toast(`Steering ${this.sensitivity < 1 ? 'gentler' : this.sensitivity > 1 ? 'sharper' : 'normal'} · ${this.sensitivity.toFixed(1)}`);
+    this.toast(
+      `Steering ${this.sensitivity < 1 ? 'gentler' : this.sensitivity > 1 ? 'sharper' : 'normal'} · ${this.sensitivity.toFixed(1)}`,
+    );
     this.setSteer(this.steerRaw);
     this.onSchemeChange?.();
   }
@@ -83,7 +101,8 @@ export class Remote {
     let v: number;
     if (this.scheme === 'buttons') v = Math.sign(raw) * Math.min(1, 0.6 + 0.4 * this.sensitivity);
     else {
-      const dz = 0.08, a = Math.abs(raw);
+      const dz = 0.08,
+        a = Math.abs(raw);
       v = a <= dz ? 0 : Math.sign(raw) * Math.pow((a - dz) / (1 - dz), 1.5) * this.sensitivity;
     }
     this.state.steer = Math.max(-1, Math.min(1, v));
@@ -99,7 +118,8 @@ export class Remote {
     const read = (e: PointerEvent): void => {
       const target = this.scheme === 'buttons' ? $('dpad') : $('slider');
       const r = target.getBoundingClientRect();
-      const cx = r.left + r.width / 2, half = r.width / 2;
+      const cx = r.left + r.width / 2,
+        half = r.width / 2;
       const x = (e.clientX - cx) / half;
       if (this.scheme === 'buttons') {
         const dz = 0.12;
@@ -110,7 +130,11 @@ export class Remote {
       e.preventDefault();
       if (pid !== null) return;
       pid = e.pointerId;
-      try { zone.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      try {
+        zone.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
       read(e);
       haptic('tap');
     });
@@ -126,7 +150,10 @@ export class Remote {
       this.setSteer(0);
     };
     for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) zone.addEventListener(ev, end);
-    this.releasers.push(() => { pid = null; this.setSteer(0); });
+    this.releasers.push(() => {
+      pid = null;
+      this.setSteer(0);
+    });
   }
 
   private bindHold(id: string, set: (on: boolean) => void): void {
@@ -136,7 +163,11 @@ export class Remote {
       e.preventDefault();
       if (pid !== null) return;
       pid = e.pointerId;
-      try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
       el.classList.add('on');
       set(true);
       haptic('tap');
@@ -148,7 +179,11 @@ export class Remote {
       set(false);
     };
     for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) el.addEventListener(ev, end);
-    this.releasers.push(() => { pid = null; el.classList.remove('on'); set(false); });
+    this.releasers.push(() => {
+      pid = null;
+      el.classList.remove('on');
+      set(false);
+    });
   }
 
   private bindTap(id: string, fn: () => void): void {
@@ -159,7 +194,13 @@ export class Remote {
       haptic('tap');
     });
     const up = (): void => el.classList.remove('on');
-    el.addEventListener('pointerup', (e) => { if (el.classList.contains('on')) { up(); e.preventDefault(); fn(); } });
+    el.addEventListener('pointerup', (e) => {
+      if (el.classList.contains('on')) {
+        up();
+        e.preventDefault();
+        fn();
+      }
+    });
     el.addEventListener('pointercancel', up);
     el.addEventListener('pointerleave', up);
   }
@@ -167,18 +208,30 @@ export class Remote {
   /** ITEM: tap fires forward (backward while BRAKE is held); swiping down on it fires backward (section 12.3). */
   private bindItem(): void {
     const el = $('itemBtn');
-    let pid: number | null = null, y0 = 0, used = false;
+    let pid: number | null = null,
+      y0 = 0,
+      used = false;
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       if (pid !== null) return;
-      pid = e.pointerId; y0 = e.clientY; used = false;
-      try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      pid = e.pointerId;
+      y0 = e.clientY;
+      used = false;
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
       el.classList.add('on');
       haptic('tap');
     });
     el.addEventListener('pointermove', (e) => {
       if (e.pointerId !== pid || used) return;
-      if (e.clientY - y0 > SWIPE_BACK_PX) { used = true; el.classList.add('back'); this.onItem?.('back'); }
+      if (e.clientY - y0 > SWIPE_BACK_PX) {
+        used = true;
+        el.classList.add('back');
+        this.onItem?.('back');
+      }
     });
     const end = (e: PointerEvent, fire: boolean): void => {
       if (e.pointerId !== pid) return;
@@ -188,7 +241,10 @@ export class Remote {
     };
     el.addEventListener('pointerup', (e) => end(e, true));
     el.addEventListener('pointercancel', (e) => end(e, false));
-    this.releasers.push(() => { pid = null; el.classList.remove('on', 'back'); });
+    this.releasers.push(() => {
+      pid = null;
+      el.classList.remove('on', 'back');
+    });
   }
 
   releaseAll(): void {
@@ -218,7 +274,7 @@ export class Remote {
   setHud(h: HudUpdate): void {
     $('sPlace').innerHTML = `${h.place}<sup>${ord(h.place)}</sup><small>/${h.totalRacers}</small>`;
     $('sLap').textContent = h.finished ? 'FINISHED' : `LAP ${h.lap}/${h.laps}`;
-    const ic = h.item ? ICON[h.item] ?? '🎁' : '';
+    const ic = h.item ? (ICON[h.item] ?? '🎁') : '';
     $('sItem').textContent = ic + (h.item === 'turbo3' && h.itemUses > 1 ? `×${h.itemUses}` : '');
     const itemIc = $('itemIc');
     if (ic) itemIc.textContent = ic;
@@ -239,7 +295,9 @@ export class Remote {
     void e.offsetWidth;
     e.className = 'edge ' + kind + ' on';
     const g = $('grille');
-    g.classList.remove('pulse'); void g.offsetWidth; g.classList.add('pulse');
+    g.classList.remove('pulse');
+    void g.offsetWidth;
+    g.classList.add('pulse');
   }
 
   toast(text: string): void {

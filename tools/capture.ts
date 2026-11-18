@@ -12,23 +12,37 @@ import path from 'node:path';
 import './tk-hook';
 import { chromium, type Page } from 'playwright-core';
 
-
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const args = process.argv.slice(2);
-const arg = (n: string, d: string): string => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1]! : d; };
+const arg = (n: string, d: string): string => {
+  const i = args.indexOf(`--${n}`);
+  return i >= 0 && args[i + 1] ? args[i + 1]! : d;
+};
 const PHASE = arg('phase', 'latest');
 const PORT = Number(arg('port', '3100'));
 const OUT = path.join(ROOT, 'docs', 'screens', PHASE);
 const SEED = Number(arg('seed', '7'));
-const W = Number(arg('w', '1600')), H = Number(arg('h', '900'));
+const W = Number(arg('w', '1600')),
+  H = Number(arg('h', '900'));
 
 function startServer(): Promise<ChildProcess> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'server/src/index.ts'], {
-      cwd: ROOT, env: { ...process.env, PORT: String(PORT) }, stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const child = spawn(
+      process.execPath,
+      [path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'server/src/index.ts'],
+      {
+        cwd: ROOT,
+        env: { ...process.env, PORT: String(PORT) },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
     const timer = setTimeout(() => reject(new Error('server did not start')), 30000);
-    child.stdout!.on('data', (d: Buffer) => { if (d.toString().includes('Host screen:')) { clearTimeout(timer); resolve(child); } });
+    child.stdout!.on('data', (d: Buffer) => {
+      if (d.toString().includes('Host screen:')) {
+        clearTimeout(timer);
+        resolve(child);
+      }
+    });
     child.stderr!.on('data', (d: Buffer) => process.stderr.write(d));
     child.on('exit', (c) => reject(new Error('server exited ' + c)));
   });
@@ -39,30 +53,53 @@ async function frames(page: Page, ms: number): Promise<void> {
 }
 
 async function stats(page: Page, seconds: number): Promise<Record<string, number>> {
-  return page.evaluate((sec) => new Promise<Record<string, number>>((res) => {
-    const ft: number[] = []; let last = performance.now(); const t0 = last;
-    const f = (now: number): void => {
-      ft.push(now - last); last = now;
-      if (now - t0 < sec * 1000) requestAnimationFrame(f);
-      else { ft.sort((a, b) => a - b); res({ fps: Math.round(1000 / (ft.reduce((a, b) => a + b, 0) / ft.length)), p50: +ft[ft.length >> 1]!.toFixed(2), p95: +ft[Math.floor(ft.length * 0.95)]!.toFixed(2) }); }
-    };
-    requestAnimationFrame(f);
-  }), seconds);
+  return page.evaluate(
+    (sec) =>
+      new Promise<Record<string, number>>((res) => {
+        const ft: number[] = [];
+        let last = performance.now();
+        const t0 = last;
+        const f = (now: number): void => {
+          ft.push(now - last);
+          last = now;
+          if (now - t0 < sec * 1000) requestAnimationFrame(f);
+          else {
+            ft.sort((a, b) => a - b);
+            res({
+              fps: Math.round(1000 / (ft.reduce((a, b) => a + b, 0) / ft.length)),
+              p50: +ft[ft.length >> 1]!.toFixed(2),
+              p95: +ft[Math.floor(ft.length * 0.95)]!.toFixed(2),
+            });
+          }
+        };
+        requestAnimationFrame(f);
+      }),
+    seconds,
+  );
 }
 
 async function main(): Promise<void> {
   mkdirSync(OUT, { recursive: true });
   const server = await startServer();
   const browser = await chromium.launch({
-    channel: 'chrome', headless: !args.includes('--headed'),
-    args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist', '--force_high_performance_gpu', ...(args.includes('--uncapped') ? ['--disable-gpu-vsync', '--disable-frame-rate-limit'] : [])],
+    channel: 'chrome',
+    headless: !args.includes('--headed'),
+    args: [
+      '--use-angle=d3d11',
+      '--enable-gpu',
+      '--ignore-gpu-blocklist',
+      '--force_high_performance_gpu',
+      ...(args.includes('--uncapped') ? ['--disable-gpu-vsync', '--disable-frame-rate-limit'] : []),
+    ],
   });
   const errors: string[] = [];
   try {
     const page = await browser.newPage({ viewport: { width: W, height: H } });
     // tsx/esbuild wraps named functions in __name(); functions sent to page.evaluate need it to exist there
     await page.addInitScript('window.__name = (f) => f;');
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    page.on('console', (m) => {
+      if (m.type() === 'error') errors.push(m.text());
+    });
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(`http://localhost:${PORT}/?noadapt=1`);
     await page.waitForFunction(() => window.__tk?.ready, null, { timeout: 30000 });
@@ -70,43 +107,65 @@ async function main(): Promise<void> {
     const gpu = await page.evaluate(() => {
       const gl = document.createElement('canvas').getContext('webgl2')!;
       const e = gl.getExtension('WEBGL_debug_renderer_info');
-      return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) as string : 'unknown';
+      return e ? (gl.getParameter(e.UNMASKED_RENDERER_WEBGL) as string) : 'unknown';
     });
     console.log('GPU:', gpu);
-    const shot = async (name: string): Promise<void> => { await page.screenshot({ path: path.join(OUT, name + '.png') }); console.log('  ' + name); };
+    const shot = async (name: string): Promise<void> => {
+      await page.screenshot({ path: path.join(OUT, name + '.png') });
+      console.log('  ' + name);
+    };
 
     await shot('01-title');
     await page.evaluate((seed) => window.__tk.race({ seed, ci: 1, laps: 2, autopilot: true }), SEED);
-    await frames(page, 1300); await shot('02-countdown');
-    await page.waitForFunction(() => (window.__tk.state() as { raceTime: number }).raceTime > 1.5, null, { timeout: 20000 });
+    await frames(page, 1300);
+    await shot('02-countdown');
+    await page.waitForFunction(() => (window.__tk.state() as { raceTime: number }).raceTime > 1.5, null, {
+      timeout: 20000,
+    });
     await shot('03-race-start');
     const perf = await stats(page, 5);
     const info = await page.evaluate(() => window.__tk.info());
 
     // fast-forward the simulation to fixed race times, then let the camera settle in real time
     const at = async (t: number, name: string): Promise<void> => {
-      await page.evaluate((target) => { const st = window.__tk.state() as { raceTime: number }; if (st.raceTime < target) window.__tk.advance(target - st.raceTime); }, t);
-      await frames(page, 700); await shot(name);
+      await page.evaluate((target) => {
+        const st = window.__tk.state() as { raceTime: number };
+        if (st.raceTime < target) window.__tk.advance(target - st.raceTime);
+      }, t);
+      await frames(page, 700);
+      await shot(name);
     };
     // wait for a drift, then a boost, on the player's kart
     const until = async (cond: string, name: string): Promise<void> => {
       const ok = await page.evaluate((c) => {
-        const s = window.__tk.session()!; const k = s.players[0]!.kart;
+        const s = window.__tk.session()!;
+        const k = s.players[0]!.kart;
         let seen = 0;
-        for (let i = 0; i < 60 * 40; i++) { if (k.drifting) seen++; if ((c === 'drift' && k.drifting && k.driftLevel >= 1) || (c === 'boost' && k.boost > 0.5)) return 'ok'; window.__tk.advance(1 / 60); }
+        for (let i = 0; i < 60 * 40; i++) {
+          if (k.drifting) seen++;
+          if ((c === 'drift' && k.drifting && k.driftLevel >= 1) || (c === 'boost' && k.boost > 0.5)) return 'ok';
+          window.__tk.advance(1 / 60);
+        }
         return 'no ' + c + ' (drifting steps ' + seen + ', phase ' + s.s.phase + ')';
       }, cond);
       await frames(page, 120);
-      if (ok === 'ok') await shot(name); else console.log('  skipped', name, ok);
+      if (ok === 'ok') await shot(name);
+      else console.log('  skipped', name, ok);
     };
     await until('drift', '04-mid-drift');
     await until('boost', '05-mid-boost');
     await at(40, '06-race-40s');
     await at(75, '07-race-75s');
     // finish and show the podium
-    await page.evaluate(() => { const s = window.__tk.session()!; for (let i = 0; i < 60 * 200 && s.s.phase !== 'finished'; i++) window.__tk.advance(1 / 60); });
-    await page.waitForFunction(() => (window.__tk.state() as { stage: string }).stage === 'podium', null, { timeout: 15000 });
-    await frames(page, 2500); await shot('08-podium');
+    await page.evaluate(() => {
+      const s = window.__tk.session()!;
+      for (let i = 0; i < 60 * 200 && s.s.phase !== 'finished'; i++) window.__tk.advance(1 / 60);
+    });
+    await page.waitForFunction(() => (window.__tk.state() as { stage: string }).stage === 'podium', null, {
+      timeout: 15000,
+    });
+    await frames(page, 2500);
+    await shot('08-podium');
 
     const report = { phase: PHASE, gpu, viewport: `${W}x${H}`, seed: SEED, racePerf: perf, render: info, errors };
     writeFileSync(path.join(OUT, 'capture.json'), JSON.stringify(report, null, 2));
@@ -118,4 +177,7 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

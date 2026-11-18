@@ -6,7 +6,8 @@ const KMAP: Record<string, 'left' | 'right' | 'up' | 'down' | 'drift'> = {
   ArrowRight: 'right',
   ArrowUp: 'up',
   ArrowDown: 'down',
-  ' ': 'drift', Shift: 'drift',
+  ' ': 'drift',
+  Shift: 'drift',
 };
 
 export class Keyboard {
@@ -16,8 +17,14 @@ export class Keyboard {
   constructor() {
     window.addEventListener('keydown', (e) => {
       const m = KMAP[e.key];
-      if (m) { this.keys[m] = true; e.preventDefault(); }
-      if (['e', 'E', 'x', 'X', 'Control'].includes(e.key) && !e.repeat) { this.itemPressed = true; e.preventDefault(); }
+      if (m) {
+        this.keys[m] = true;
+        e.preventDefault();
+      }
+      if (['e', 'E', 'x', 'X', 'Control'].includes(e.key) && !e.repeat) {
+        this.itemPressed = true;
+        e.preventDefault();
+      }
     });
     window.addEventListener('keyup', (e) => {
       const m = KMAP[e.key];

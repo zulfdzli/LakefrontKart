@@ -123,8 +123,20 @@ export function buildTrack(ctrl: readonly (readonly [number, number])[], count: 
 export const PROTO_TRACK_SCALE = 0.8;
 export const PROTO_CTRL: readonly (readonly [number, number])[] = (
   [
-    [0, -220], [140, -210], [230, -120], [210, 0], [120, 60], [150, 150], [60, 230],
-    [-60, 200], [-120, 110], [-220, 130], [-270, 20], [-200, -90], [-90, -110], [-60, -190],
+    [0, -220],
+    [140, -210],
+    [230, -120],
+    [210, 0],
+    [120, 60],
+    [150, 150],
+    [60, 230],
+    [-60, 200],
+    [-120, 110],
+    [-220, 130],
+    [-270, 20],
+    [-200, -90],
+    [-90, -110],
+    [-60, -190],
   ] as const
 ).map((p) => [p[0] * PROTO_TRACK_SCALE, p[1] * PROTO_TRACK_SCALE] as const);
 
