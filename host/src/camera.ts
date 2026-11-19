@@ -27,6 +27,7 @@ export class ChaseCam {
   shake = 0;
   private spin = 0;
   private podT = 0;
+  private spinBack = 0;
   introT = 0;
   private readonly fly = { x: 0, y: 0, z: 0 };
   private readonly flyLook = { x: 0, y: 0, z: 0 };
@@ -153,17 +154,22 @@ export class ChaseCam {
     this.fovKick += ((k.boost > 0 ? 1 : 0) - this.fovKick) * (1 - Math.exp(-6 * dt));
     // D54: a low, tight broadcast-style chase view (your reference): about 3.5 m behind the rear wing, just above
     // the roofline, so the car's rear fills the lower middle of the screen and the horizon sits about 40% down
-    const dist = 7.9 + Math.max(0, k.sp) * 0.015 + this.fovKick * 0.8 + (1 - intro) * 4;
-    const hgt = 2.55 + (1 - intro) * 3;
+    // in a drift the car swings sideways and slides at the camera: ease back about 1.8 m (travelW 0.35 to 0.8)
+    // and while spinning out (oil, hits) the body whips round: ease back up to 3.2 m (quickly in, slowly out)
+    this.spinBack += ((k.spin > 0 ? 3.2 : 0) - this.spinBack) * (1 - Math.exp(-(k.spin > 0 ? 10 : 3) * dt));
+    const driftBack = Math.max(0, this.travelW - 0.35) * 4 + this.spinBack;
+    const dist = 6.5 + Math.max(0, k.sp) * 0.012 + this.fovKick * 0.8 + driftBack + (1 - intro) * 4;
+    // D55: higher (3.3 m), looking down onto the roof and wing as in your second reference
+    const hgt = 3.3 + (1 - intro) * 2.5;
     // the follow below trails the car by about speed / 8 m; lead the target by most of that, so the framing stays
     // the same at any speed (a little trail is kept for the sense of speed)
-    const lead = intro * 0.65 * (1 / 8);
+    const lead = intro * 0.82 * (1 / 8);
     this.target.set(ix - Math.sin(a) * dist + k.vx * lead, iy + hgt, iz - Math.cos(a) * dist + k.vz * lead);
     if (!this.init) {
       cam.position.copy(this.target);
       this.init = true;
     } else cam.position.lerp(this.target, 1 - Math.exp(-8 * dt));
-    this.look.set(ix + Math.sin(this.camH) * 16 * intro, iy + 1.25, iz + Math.cos(this.camH) * 16 * intro);
+    this.look.set(ix + Math.sin(this.camH) * 12 * intro, iy + 0.9, iz + Math.cos(this.camH) * 12 * intro);
     cam.lookAt(this.look);
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt * 2.2);

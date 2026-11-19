@@ -161,7 +161,7 @@ async function main(): Promise<void> {
         }
         return 'no ' + c + ' (drifting steps ' + seen + ', phase ' + s.s.phase + ')';
       }, cond);
-      await frames(page, 120);
+      await frames(page, Number(arg('settle', '600')));
       if (ok === 'ok') await shot(name);
       else console.log('  skipped', name, ok);
     };

@@ -698,6 +698,23 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - The countdown swing-in and the drift framing are kept. Tested in 1 to 5 player split-screen at 60 FPS.
 - **Why**: Your request.
 
+### D55 · Higher chase view from the second reference; softer sun (2026-11-19, your request; refines D54)
+- **Q**: Match the second reference (a sports-car chase view from slightly above), make the view a little higher, and tone the sun down a little.
+- **A**:
+  - **Camera** (`host/src/camera.ts`):
+    - **Position**: 3.3 m high (was 2.55 m) and 6.5 m behind the car's centre, plus about 0.5 m at top speed. It aims 12 m ahead at 0.9 m, so it looks down onto the roof and wing, and the horizon sits about a third of the way down.
+    - **Speed trailing**: it leads by 82% of the trailing, so at speed the car keeps the reference framing: its rear in the lower middle, its bottom about 85% down the screen, and about 27% of the screen width.
+    - **Drifts**: the camera eases back up to 1.8 m, because the car swings sideways.
+    - **Spin-outs** (oil or hits): it eases back up to 3.2 m, quickly in and slowly out.
+  - **Sun** (`host/src/renderer.ts`, `SUN_SOFT`, all tracks):
+    - the disc and its glow in the sky at 70%;
+    - the sun haze at 75%;
+    - the lens flare at 55%;
+    - the in-scattered sun colour at 88%.
+  - **Capture tool**: shots taken right after a fast-forward now wait 0.6 s (`--settle`), so the camera has caught up. The old 0.12 s caught the camera mid-move and made drift shots look too close.
+  - **Results**: tested in 1 to 5 player split-screen at 60 FPS, with no errors. Screens: `docs/screens/validation/race-view-v3/`.
+- **Why**: Your request.
+
 ---
 
 ## Gate 0 status

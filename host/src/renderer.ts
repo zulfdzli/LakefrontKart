@@ -46,6 +46,8 @@ const LEGACY_LIGHT_SCALE = Math.PI;
  */
 const NEAR_HIDE_M = 4.6;
 const NEAR_HIDE_SHARE = 0.7;
+/** D55: how much softer the sun is than the themes' original values. */
+const SUN_SOFT = { glow: 0.7, scatter: 0.75, flare: 0.55, color: 0.88 } as const;
 /** Draw distance and fog per view count (section 6.3: shorter with more than 3 viewports). */
 const VIEW_RANGE = { near: { fog: [300, 1500], far: 3200 }, many: { fog: [240, 1050], far: 1500 } } as const;
 
@@ -162,7 +164,9 @@ export class World {
     this.sky.geometry.dispose();
     (this.sky.material as THREE.Material).dispose();
     const scale = this.sky.scale.x;
-    this.sky = createSky(th.zenith, th.horizon, this.sunDir, th.sunGlow);
+    // D55: a softer sun everywhere: the disc and its glow at 70%, the haze at 75%, the lens flare at 55%
+    const glow = th.sunGlow.map((v) => v * SUN_SOFT.glow) as unknown as Theme['sunGlow'];
+    this.sky = createSky(th.zenith, th.horizon, this.sunDir, glow);
     this.sky.scale.setScalar(scale);
     s.add(this.sky);
     this.makeEnvironment();
@@ -173,8 +177,10 @@ export class World {
         c = (h: number): THREE.Color => new THREE.Color(h);
       const look: PostLook = {
         ...L,
+        scatter: L.scatter * SUN_SOFT.scatter,
+        flare: L.flare * SUN_SOFT.flare,
         fogColor: c(L.fogColor),
-        sunColor: c(L.sunColor).multiplyScalar(1.3),
+        sunColor: c(L.sunColor).multiplyScalar(1.3 * SUN_SOFT.color),
         lift: new THREE.Vector3(...L.lift),
         gamma: new THREE.Vector3(...L.gamma),
         gain: new THREE.Vector3(...L.gain),
