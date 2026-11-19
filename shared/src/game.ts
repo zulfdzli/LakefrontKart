@@ -126,6 +126,8 @@ export interface Kart {
   air: boolean;
   alt: number;
   vy: number;
+  /** Seconds in the air on the current jump (D64: bigger air, bigger landing boost). */
+  airT: number;
   /** Next checkpoint gate to pass (index into track.gates); a lap counts only when all are passed. */
   gate: number;
   /** Inside a shortcut corridor, off the road. */
@@ -345,9 +347,9 @@ export const PROTOTYPE_HANDLING: Readonly<Handling> = {
   driftBonus: 0,
 };
 export const DEFAULT_HANDLING: Readonly<Handling> = {
-  driftLatGrip: 2.4,
+  driftLatGrip: 3.1, // D64: was 2.4 (drifts slid out too far)
   driftDrag: 0.22,
-  driftKick: 3.2,
+  driftKick: 2.5, // D64: was 3.2
   driftHop: 0.16,
   speedMul: 1.45, // D62: was 1.3
   turnRate: 2.15,
@@ -355,8 +357,8 @@ export const DEFAULT_HANDLING: Readonly<Handling> = {
   aiDriftIn: 0.32,
   aiDriftHold: 0.14,
   v2: true,
-  tyrePeak: 34,
-  tyreFall: 0.72,
+  tyrePeak: 52, // D64: was 34; grip to match the D62 speed (sliding too much)
+  tyreFall: 0.88, // D64: was 0.72
   statSpeed: 0.45,
   driftBonus: 0.35,
 };
@@ -489,6 +491,7 @@ function makeKart(T: Track, i: number, gridPos: number, ci: number, slot: number
     air: false,
     alt: 0,
     vy: 0,
+    airT: 0,
     gate: T.gates.length,
     inSc: false,
     offT: 0,
@@ -770,30 +773,43 @@ export class Game {
     this.emit({ type: 'sector', kart: k.id, n, t });
   }
 
-  /** Jump ramps (section 11.2): launch off the lip, fly ballistically, land; landing straight gives a small boost. */
+  /**
+   * Jump ramps (section 11.2, D64 kinds): launch off the lip, fly ballistically, land. Landing straight gives a
+   * boost that grows with the time in the air (0.6 s for a hop, up to 1.4 s for big air).
+   */
   private stepAir(k: Kart, dt: number, sp: number): void {
     const T = this.s.track;
     if (k.air) {
       k.vy -= 30 * dt;
       k.alt += k.vy * dt;
+      k.airT += dt;
       if (k.alt <= 0) {
         k.air = false;
         k.alt = 0;
         k.vy = 0;
         const slip = Math.abs(wrapA(Math.atan2(k.vx, k.vz) - k.h));
         const straight = slip < 0.22 && k.spin <= 0;
-        if (straight) this.giveBoost(k, 0.6, 'jump');
-        this.emit({ type: 'land', kart: k.id, power: straight ? 1 : 0 });
+        if (straight) this.giveBoost(k, 0.6 + clamp((k.airT - 0.45) * 1.1, 0, 0.8), 'jump');
+        this.emit({ type: 'land', kart: k.id, power: straight ? 1 : 0, t: k.airT });
+        k.airT = 0;
       }
     } else if (T.ramps.length && sp > 10) {
       for (const r of T.ramps) {
         const before = (r.i1 - k.lastIdx + T.N) % T.N,
           after = (k.idx - r.i1 + T.N) % T.N;
-        if (before <= 3 && after >= 1 && after <= 4 && Math.abs(k.lat) <= T.HW[r.i1]! + KERB_W) {
+        if (
+          before <= 3 &&
+          after >= 1 &&
+          after <= 4 &&
+          Math.abs(k.lat) <= T.HW[r.i1]! + KERB_W &&
+          k.lat >= r.latMin &&
+          k.lat <= r.latMax
+        ) {
           k.air = true;
           k.alt = r.lift;
-          k.vy = sp * 0.17 + 1.5;
-          this.emit({ type: 'jump', kart: k.id });
+          k.vy = sp * r.pop + 1.5;
+          k.airT = 0;
+          this.emit({ type: 'jump', kart: k.id, lvl: r.kind === 'launch' || r.kind === 'table' ? 2 : 1 });
           break;
         }
       }
@@ -807,6 +823,7 @@ export class Game {
     k.air = false;
     k.alt = 0;
     k.vy = 0;
+    k.airT = 0;
     k.offT = 0;
     k.inSc = false;
     k.drifting = false;

@@ -8,8 +8,9 @@
  */
 import type { TrackDef, TrackPoint } from './def';
 
-/** Metres per map pixel: chosen so the Normal AI laps in about 2 minutes (section 11.1). */
-const S = 0.98;
+/** Metres per map pixel: chosen so the Normal AI laps in about 2 minutes (section 11.1); D64: 0.98 to 1.01, since
+ * the new jumps' landing boosts made it the quickest track. */
+const S = 1.01;
 const OX = 945,
   OY = 576;
 /** Road half-width (m): a little narrower than the other tracks, so the tight Turns 1, 2 and 9 keep their shape. */
@@ -125,7 +126,14 @@ export const SEPANG_DEF: TrackDef = {
   ],
   gates: [0.13, 0.4, 0.62, 0.88],
   pads: [{ at: 0.04 }, { at: 0.83 }, { at: 0.58 }],
-  ramps: [],
+  // D64: the layout stays traced, but its long straights get jumps: whoops into Turn 7, a tabletop before Turn 9,
+  // a launch off the back-straight boost pad and a lane kicker on the main straight
+  ramps: [
+    { at: 0.395, kind: 'whoops', count: 3, gap: 28 },
+    { at: 0.5, kind: 'table' },
+    { at: 0.84, kind: 'launch' },
+    { at: 0.95, kind: 'lane', lat: [-12, -1.5] },
+  ],
   zones: [],
   shortcuts: [],
   landmarks: [

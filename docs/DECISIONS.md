@@ -873,5 +873,36 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 
 ---
 
+### D64 · No V8, more grip, fewer straights, more jumps (2026-11-19, phase 14)
+- **Q**: the user asked for four changes:
+  1. remove the V8 sound;
+  2. make the car grippier, because it slides too much;
+  3. fewer long straights, because they feel empty;
+  4. more ramps and jumps, with more variety.
+- **A1, sound**: the F1 V8 (D60–D62) is removed, along with its drivetrain model, tests, render tool and demo WAV. Player 1's kart has the original kart engine sound again (section 6.5), so the race is not silent. Kept from D60: the master limiter, auto-unlock on the first gesture, and the engine fade and context suspend when the tab is hidden or unfocused.
+- **A2, grip** (`DEFAULT_HANDLING`):
+  - **Tyres**: tyrePeak 34 to 52 m/s² and tyreFall 0.72 to 0.88. The D62 speed raised the grip a full-lock turn needs to about 84 m/s² while the tyres still gave 34.
+  - **Drifts**: driftLatGrip 2.4 to 3.1 and driftKick 3.2 to 2.5.
+  - **Measured** (slip angle outside drifts, 3 races × 6 karts per track): the worst 1% of slides fell from 11–32° to 9–19° and the average slide from 1.2–2.3° to 1.2–1.6°, with laps the same.
+- **A3, straights**: long, nearly straight stretches (over 150 m) became esses and S-bends. Every lap-fraction feature was re-anchored to the same world position from a snapshot of the old layouts: sectors, gates, pads, zones, shortcuts and landmarks, all within 0.008 of a lap.
+  - **Meadows**: esses after the start and an S-bend on the lakeside run. Longest straight 621 to 321 m; share of the lap in long straights 33% to 16%.
+  - **Canyon**: the 924 m mesa straight became esses under the arches; the sector is renamed "Mesa Esses". Longest straight 315 m, which includes the grid; share 32% to 20%.
+  - **Frosty**: esses down from the start and a kink before the grid. Longest straight 819 to 228 m; share 16% to 5%.
+  - **Sepang**: traced from the real circuit (D42), so its corners are kept. Its straights get jumps instead, and the map scale goes from 0.98 to 1.01 because the jumps made it the quickest track.
+- **A4, jumps** (`RampKind` in `track.ts`, `RampDef` in `tracks/def.ts`):
+  - **Five kinds**, each with its own default size and launch speed: kicker, launch (2.4 m, big air), table (ramp, flat top, lip), whoops (a rhythm run of small bumps) and lane (a kicker on one side of the road only, which is a risk/reward line).
+  - **Lane ramps**: they are not part of the road height. `laneLift` adds their height in `locate()`, and they only launch karts inside their lateral range.
+  - **Landing**: a straight landing boosts for 0.6 s plus up to 0.8 s more for long air. Over about 0.9 s in the air shows "BIG AIR! BOOST!" with a bigger thud and camera shake; launch and tabletop ramps whoosh longer.
+  - **Art**: chevrons in each kind's colours (kicker orange, launch red/white, table blue, whoops yellow/black, lane purple), skirts and lip faces. Lane ramps are wedges on their lane.
+  - **Placement**: 18 jumps on 4 tracks (Canyon keeps its ravine jump unchanged), each on a straight with a straight landing. Two launches and a tabletop sit just after boost pads. Ramps were kept off item-box rows. The Canyon whoops end 165 m before the switchback hairpin.
+- **Lap length**: Normal-AI laps are now Meadows 114.8 s, Canyon 111.9 s, Frosty 109.8 s and Sepang 106.5 s. The esses bring Meadows back to the original 115 s. The lap-length test's lower bound stays the D62 speed-scaled 103 s and its upper bound is the spec's 125 s again.
+- **Checked**:
+  - **sim-report, 20 races per row**: no unfinished karts, at most 0.05 rescues per race, every difficulty gap at least 3.9%, and the character spread at most 1.5%.
+  - **Robustness**: 40 seeded races per track with items (`ROBUST_RACES=40`).
+  - **Screenshots** of every jump from its run-up and the big ones in the air: `docs/screens/phase14/jumps-*/`. Layout maps are in `docs/screens/tracks/`.
+  - **Tests**: Vitest 69/69 (the 10 V8 tests went with the V8), e2e 20/20; typecheck, lint and the build pass.
+
+---
+
 ## Gate 0 status
 All decisions are settled (D1 to D16). **You confirmed a shared understanding on 2026-11-16. Gate 0 is closed.**

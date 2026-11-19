@@ -19,8 +19,10 @@ export const FROSTY_DEF: TrackDef = {
   theme: 'frosty',
   points: [
     P(0, -350, 20, 0, 14), // start line
-    P(220, -350, 19, 0, 14),
-    P(420, -330, 17),
+    P(170, -352, 19.5, 0, 14),
+    P(265, -388, 18.5, 3), // D64: esses down from the start
+    P(365, -338, 17.5, -3),
+    P(455, -322, 16),
     P(560, -250, 14, -6), // avalanche sweepers
     P(620, -120, 10, -5),
     P(600, 20, 6),
@@ -51,29 +53,37 @@ export const FROSTY_DEF: TrackDef = {
     P(-280, -240, 21),
     P(-380, -300, 21, -5),
     P(-330, -380, 20, -6),
-    P(-180, -370, 20, -2, 14),
+    P(-215, -398, 20, -3, 14), // D64: a kink before the grid
+    P(-100, -362, 20, 0, 14),
   ],
   offroad: 'snow',
   sectors: [
     { at: 0, name: 'Avalanche Sweepers', feature: 'fast downhill sweepers' },
-    { at: 0.32, name: 'Frozen Lake', feature: 'icy patches' },
-    { at: 0.52, name: 'Hairpin Pass', feature: 'double hairpin climb and snow-trail shortcut' },
+    { at: 0.323, name: 'Frozen Lake', feature: 'icy patches' },
+    { at: 0.522, name: 'Hairpin Pass', feature: 'double hairpin climb and snow-trail shortcut' },
     { at: 0.77, name: 'Village Run', feature: 'village straight' },
   ],
-  gates: [0.15, 0.42, 0.66, 0.88],
-  pads: [{ at: 0.05 }, { at: 0.22 }, { at: 0.7 }, { at: 0.82 }],
-  ramps: [],
-  zones: [
-    { from: 0.37, to: 0.385, latMin: -13, latMax: -2, surface: 'ice' },
-    { from: 0.405, to: 0.42, latMin: 1, latMax: 13, surface: 'ice' },
-    { from: 0.44, to: 0.455, latMin: -8, latMax: 6, surface: 'ice' },
-    { from: 0.1, to: 0.14, latMin: -26, latMax: -15.2, surface: 'gravel' },
+  gates: [0.155, 0.423, 0.661, 0.879],
+  pads: [{ at: 0.049 }, { at: 0.224 }, { at: 0.701 }, { at: 0.82 }],
+  // D64 jumps: a lane kicker after the start, snow moguls by the lake, a launch off the pass's boost pad and a
+  // village tabletop off its boost pad
+  ramps: [
+    { at: 0.02, kind: 'lane', lat: [1.5, 13] },
+    { at: 0.391, kind: 'whoops', count: 3, gap: 24 },
+    { at: 0.712, kind: 'launch' },
+    { at: 0.832, kind: 'table' },
   ],
-  shortcuts: [{ from: 0.556, to: 0.603, via: [], half: 6, surface: 'snow' }],
+  zones: [
+    { from: 0.373, to: 0.388, latMin: -13, latMax: -2, surface: 'ice' },
+    { from: 0.408, to: 0.423, latMin: 1, latMax: 13, surface: 'ice' },
+    { from: 0.442, to: 0.457, latMin: -8, latMax: 6, surface: 'ice' },
+    { from: 0.105, to: 0.144, latMin: -26, latMax: -15.2, surface: 'gravel' },
+  ],
+  shortcuts: [{ from: 0.558, to: 0.604, via: [], half: 6, surface: 'snow' }],
   landmarks: [
-    { kind: 'lake', at: 0.33, side: -1, dist: 90 },
+    { kind: 'lake', at: 0.333, side: -1, dist: 90 },
     { kind: 'village', at: 0.82, side: 1, dist: 60 },
-    { kind: 'lodge', at: 0.6, side: -1, dist: 70 },
+    { kind: 'lodge', at: 0.601, side: -1, dist: 70 },
   ],
   music: 'frosty',
 };

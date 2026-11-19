@@ -185,7 +185,11 @@ async function main(): Promise<void> {
       const def = TRACKS[TRACK];
       const feats: [string, number, boolean][] = [
         ...def.landmarks.map((l) => [l.kind, l.at, false] as [string, number, boolean]),
-        ...def.ramps.map((r) => ['jump', r.at, true] as [string, number, boolean]),
+        // D64: each ramp from its run-up, and the big ones (launch, tabletop) in the air too
+        ...def.ramps.map((r) => [r.kind ?? 'kicker', r.at, false] as [string, number, boolean]),
+        ...def.ramps
+          .filter((r) => r.kind === 'launch' || r.kind === 'table')
+          .map((r) => [`${r.kind}-air`, r.at, true] as [string, number, boolean]),
         ...def.shortcuts.map((c) => ['shortcut', c.from, false] as [string, number, boolean]),
         ...def.zones
           .filter((z) => z.surface === 'ice')
@@ -208,14 +212,16 @@ async function main(): Promise<void> {
             const target = (((f - 0.012) % 1) + 1) % 1;
             for (let i = 0; i < 60 * 200; i++) {
               const fr = k.idx / N;
-              if (wantAir ? k.air && k.lap >= 1 : k.lap >= 1 && fr >= target && fr < target + 0.006) return true;
+              const past = (((fr - f) % 1) + 1) % 1;
+              if (wantAir ? k.air && k.lap >= 1 && past < 0.02 : k.lap >= 1 && fr >= target && fr < target + 0.006)
+                return true;
               window.__tk.advance(1 / 60);
             }
             return false;
           },
           [at, air] as const,
         );
-        await frames(page, air ? 120 : 700);
+        await frames(page, air ? 60 : 700);
         if (ok) await shot(`feat-${kind}-${at.toFixed(2)}`);
         else console.log('  skipped feature', kind, at);
       }

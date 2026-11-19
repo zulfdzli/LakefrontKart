@@ -6,7 +6,7 @@
  * centreline along (RX, RZ), which is the driver's right.
  */
 import { clamp, wrapA } from '../constants';
-import type { LatZone, Ramp, Shortcut, SurfaceId, Track } from '../track';
+import { rampRise, type LatZone, type Ramp, type RampKind, type Shortcut, type SurfaceId, type Track } from '../track';
 
 export type TrackId = 'meadows' | 'canyon' | 'frosty' | 'sepang';
 export type ThemeId = 'meadows' | 'canyon' | 'frosty' | 'tropical';
@@ -55,7 +55,7 @@ export interface TrackDef {
   gates?: number[];
   pads: { at: number; lat?: number }[];
   /** Jump ramps: the lip is at `at`; the road rises over `len` metres by `lift` metres before it. */
-  ramps: { at: number; len: number; lift: number }[];
+  ramps: RampDef[];
   /** Item box rows (lap fractions). Default: about every 400 m. */
   itemRows?: number[];
   /** Surface patches: [from, to] lap fractions, lateral range. */
@@ -67,6 +67,29 @@ export interface TrackDef {
   /** Traced from a real circuit's layout (D42): no invented shortcut, and its tight corners are kept. */
   traced?: boolean;
 }
+
+/**
+ * A jump (D64). Kind defaults: len (m), lift (m), pop (launch vertical speed per m/s of speed). `whoops` makes a
+ * rhythm run of `count` small bumps `gap` metres apart, the first lip at `at`. `lat` is a lane ramp's lateral
+ * range (m, the driver's right is positive).
+ */
+export interface RampDef {
+  at: number;
+  kind?: RampKind | 'whoops';
+  len?: number;
+  lift?: number;
+  pop?: number;
+  lat?: [number, number];
+  count?: number;
+  gap?: number;
+}
+export const RAMP_KINDS: Readonly<Record<RampKind, { len: number; lift: number; pop: number }>> = {
+  kicker: { len: 9, lift: 1.1, pop: 0.13 },
+  launch: { len: 20, lift: 2.4, pop: 0.21 },
+  table: { len: 26, lift: 1.9, pop: 0.16 },
+  whoop: { len: 6, lift: 0.7, pop: 0.075 },
+  lane: { len: 10, lift: 1.3, pop: 0.16 },
+};
 
 const DEFAULT_HW = 13;
 /** Walls stand this far beyond the road edge. */
@@ -147,16 +170,29 @@ export function buildTrackFromDef(def: TrackDef): Track {
   }
   const idxOf = (f: number): number => ((Math.round(f * N) % N) + N) % N;
 
-  // jump ramps raise the road before the lip; the road after the lip stays at its base height
-  const ramps: Ramp[] = def.ramps.map((r) => {
-    const i1 = idxOf(r.at),
-      len = Math.max(2, Math.round(r.len / DS)),
-      i0 = (i1 - len + N) % N;
-    for (let k = 0; k <= len; k++) {
-      const p = k / len;
-      H[(i0 + k) % N]! += r.lift * Math.pow(p, 1.6);
-    }
-    return { i0, i1, lift: r.lift };
+  // jump ramps raise the road before the lip; the road after the lip stays at its base height (a lane ramp only
+  // covers its lane, so it is not part of the road height: see laneLift)
+  const ramps: Ramp[] = def.ramps.flatMap((r) => {
+    const kind: RampKind = r.kind === 'whoops' ? 'whoop' : (r.kind ?? 'kicker');
+    const d = RAMP_KINDS[kind];
+    const n = r.kind === 'whoops' ? (r.count ?? 3) : 1;
+    return Array.from({ length: n }, (_, w): Ramp => {
+      const i1 = idxOf(r.at + (w * (r.gap ?? 28)) / LEN),
+        lift = r.lift ?? d.lift,
+        len = Math.max(2, Math.round((r.len ?? d.len) / DS)),
+        i0 = (i1 - len + N) % N;
+      const lane = kind === 'lane';
+      if (!lane) for (let k = 0; k <= len; k++) H[(i0 + k) % N]! += lift * rampRise(kind, k / len);
+      return {
+        i0,
+        i1,
+        lift,
+        kind,
+        pop: r.pop ?? d.pop,
+        latMin: lane ? (r.lat?.[0] ?? 2) : -1e9,
+        latMax: lane ? (r.lat?.[1] ?? 12) : 1e9,
+      };
+    });
   });
 
   const SL: number[] = [],

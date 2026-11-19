@@ -44,11 +44,46 @@ export interface LatZone {
   surface: SurfaceId;
 }
 
-/** A jump ramp: the road rises over samples [i0, i1] by `lift` metres, then drops back; crossing i1 launches. */
+/**
+ * Jump ramp kinds (D64):
+ *   kicker  a short, quick hop
+ *   launch  a long, tall ramp for big air (usually with a boost pad on the run-up)
+ *   table   a tabletop: a ramp up, a flat top, then the lip
+ *   whoop   one of a rhythm run of small bumps in a row
+ *   lane    a kicker on one side of the road only (risk/reward: take the line over it or stay flat)
+ */
+export type RampKind = 'kicker' | 'launch' | 'table' | 'whoop' | 'lane';
+
+/**
+ * A jump ramp: the road rises over samples [i0, i1] by `lift` metres, then drops back; crossing i1 launches with a
+ * vertical speed of `pop` × speed + 1.5 m/s. Full-width ramps are part of the road height (H); a lane ramp only
+ * covers [latMin, latMax] and adds its height in locate().
+ */
 export interface Ramp {
   i0: number;
   i1: number;
   lift: number;
+  kind: RampKind;
+  pop: number;
+  latMin: number;
+  latMax: number;
+}
+
+/** A ramp's surface height as a share of its lift, `p` (0..1) along its run-up. */
+export function rampRise(kind: RampKind, p: number): number {
+  if (kind === 'table') return p < 0.45 ? Math.pow(p / 0.45, 1.3) : 1;
+  return Math.pow(p, 1.6);
+}
+
+/** Height a lane ramp adds at a sample and lateral position (0 off the lane ramps). */
+export function laneLift(T: Track, idx: number, lat: number): number {
+  for (const r of T.ramps) {
+    if (r.kind !== 'lane' || lat < r.latMin || lat > r.latMax) continue;
+    const len = (r.i1 - r.i0 + T.N) % T.N,
+      k = (idx - r.i0 + T.N) % T.N;
+    if (k <= len) return r.lift * rampRise(r.kind, k / len);
+  }
+  return 0;
 }
 
 /**
@@ -333,6 +368,7 @@ export function locate(T: Track, k: Locatable, glob: boolean): void {
   k.frac = clamp((dx * TX[best]! + dz * TZ[best]!) / DS, -0.5, 0.5);
   const j = k.frac >= 0 ? (best + 1) % N : (best - 1 + N) % N;
   k.y = H[best]! + (H[j]! - H[best]!) * Math.abs(k.frac) + k.lat * T.BT[best]!;
+  if (T.ramps.length) k.y += laneLift(T, best, k.lat);
   k.slope = SL[best]!;
 }
 

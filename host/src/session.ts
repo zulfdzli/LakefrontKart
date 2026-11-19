@@ -149,7 +149,6 @@ export class RaceSession {
     this.panel.reset();
     for (const v of this.world.views) v.resetMotion();
     this.audio.tempo = 1;
-    this.audio.resetEngine();
     this.slowMo = 0;
     this.lastFinish = null;
     if (intro) {
@@ -238,22 +237,12 @@ export class RaceSession {
     }
     const lead = this.players[0];
     if (lead) {
-      // D60: the virtual V8 reads the kart (speed, gas, jumps, grid revs); it never changes the driving
-      const k = lead.kart,
-        grid = s.phase === 'grid' || s.phase === 'countdown';
+      const k = lead.kart;
       this.audio.engine(
         this.stage === 'racing' && !this.paused,
-        {
-          speed: k.sp,
-          throttle: k.input.throttle && !k.input.brake && k.stall <= 0 && k.spin <= 0 && k.rescue <= 0,
-          boost: k.boost > 0,
-          air: k.air,
-          grid,
-          launch: grid && k.input.drift,
-          scale: s.handling.speedMul,
-        },
+        k.sp,
+        k.boost > 0,
         k.drifting || (k.wall && Math.abs(k.sp) > 10),
-        dt,
       );
     }
   }
@@ -454,13 +443,15 @@ export class RaceSession {
           }
           break;
         case 'jump':
-          if (me) a.tone(420, 0.25, 'triangle', 0.07, 760);
+          // D64: the big ramps (launch, tabletop) whoosh longer and higher
+          if (me) a.tone(420, e.lvl === 2 ? 0.45 : 0.25, 'triangle', 0.07, e.lvl === 2 ? 980 : 760);
           break;
         case 'land':
           if (me) {
-            a.noiseHit(0.18, 0.2, 380);
-            me.cam.shake = Math.max(me.cam.shake, 0.35);
-            if (e.power) me.hud.say('NICE LANDING!', 900, 'small blue');
+            const big = (e.t ?? 0) > 0.9;
+            a.noiseHit(big ? 0.28 : 0.18, big ? 0.3 : 0.2, big ? 300 : 380);
+            me.cam.shake = Math.max(me.cam.shake, big ? 0.55 : 0.35);
+            if (e.power) me.hud.say(big ? 'BIG AIR! BOOST!' : 'NICE LANDING!', 900, big ? 'small gold' : 'small blue');
           }
           break;
         case 'missedgate':

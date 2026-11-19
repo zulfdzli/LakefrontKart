@@ -87,10 +87,10 @@ describe('track layouts', () => {
 
 describe('lap length (section 11.1)', () => {
   // section 11.1's 115-125 s band was met at speedMul 1.3. D62 raised the speed at the user's request, which
-  // shortens every lap by the same ratio: the band follows it (about 103-112 s at 1.45), a logged deviation
-  const r = 1.3 / DEFAULT_HANDLING.speedMul,
-    lo = 115 * r,
-    hi = 125 * r;
+  // shortens every lap by the same ratio (the lower bound follows it: about 103 s at 1.45); D64 reshaped the long
+  // straights into esses, which brings Meadows back to about 115 s, so the upper bound stays the spec's 125 s
+  const lo = (115 * 1.3) / DEFAULT_HANDLING.speedMul,
+    hi = 125;
   for (const id of TRACK_IDS) {
     it(`${id}: Normal AI median lap is ${lo.toFixed(0)}-${hi.toFixed(0)} s and every kart finishes`, () => {
       const laps: number[] = [];

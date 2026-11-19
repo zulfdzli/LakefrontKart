@@ -5,7 +5,19 @@
  * barn, village, mesas). Phase 9 replaces the surfaces with texture sets.
  */
 import * as THREE from 'three';
-import { KERB_W, TWO_PI, clamp, smooth01, wrapA, Rng, type Track, type GameState, type TrackDef } from '@tk/shared';
+import {
+  KERB_W,
+  TWO_PI,
+  clamp,
+  rampRise,
+  smooth01,
+  wrapA,
+  Rng,
+  type GameState,
+  type RampKind,
+  type Track,
+  type TrackDef,
+} from '@tk/shared';
 import { P_, inFrame, merge, jitter, canvasTex, box, cyl, ico, cone, octa, type Part } from './geo';
 import { MEADOWS, type Theme } from './palette';
 import type { Materials } from './materials';
@@ -1252,58 +1264,74 @@ export function buildTrackWorld(
     m.receiveShadow = true;
     if (fence.length) addStatic(fence);
   }
-  // jump ramps: chevrons on the kicker and skirts under its raised sides
+  // jump ramps (D64): chevrons in each kind's colours on the run-up, skirts under the raised sides and a lip face;
+  // a lane ramp is a wedge on its own lane (it is not part of the road surface)
+  const RAMP_COL: Record<RampKind, [string, string, number]> = {
+    kicker: ['#ff9800', '#fff3e0', 0x6d4c41],
+    launch: ['#e53935', '#ffffff', 0x5d4037],
+    table: ['#1e88e5', '#e3f2fd', 0x455a64],
+    whoop: ['#fdd835', '#212121', 0x5d4037],
+    lane: ['#8e24aa', '#f3e5f5', 0x4a148c],
+  };
+  const chevTex = new Map<RampKind, THREE.Texture>();
+  const chevron = (kind: RampKind): THREE.Texture => {
+    let t = chevTex.get(kind);
+    if (!t) {
+      const [bg, fg] = RAMP_COL[kind];
+      t = track(
+        canvasTex(64, 64, (g, w, h) => {
+          g.fillStyle = bg;
+          g.fillRect(0, 0, w, h);
+          g.fillStyle = fg;
+          g.beginPath();
+          g.moveTo(0, h * 0.75);
+          g.lineTo(w / 2, h * 0.25);
+          g.lineTo(w, h * 0.75);
+          g.lineTo(w, h);
+          g.lineTo(w / 2, h * 0.5);
+          g.lineTo(0, h);
+          g.closePath();
+          g.fill();
+        }),
+      );
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      chevTex.set(kind, t);
+    }
+    return t;
+  };
   for (const r of T.ramps) {
     const len = (r.i1 - r.i0 + N) % N;
     const raise = (i: number): number => {
       const k = (i - r.i0 + N) % N;
-      return k <= len ? r.lift * Math.pow(k / len, 1.6) : 0;
+      return k <= len ? r.lift * rampRise(r.kind, k / len) : 0;
     };
-    const chev = track(
-      canvasTex(64, 64, (g, w, h) => {
-        g.fillStyle = '#ff9800';
-        g.fillRect(0, 0, w, h);
-        g.fillStyle = '#fff3e0';
-        g.beginPath();
-        g.moveTo(0, h * 0.75);
-        g.lineTo(w / 2, h * 0.25);
-        g.lineTo(w, h * 0.75);
-        g.lineTo(w, h);
-        g.lineTo(w / 2, h * 0.5);
-        g.lineTo(0, h);
-        g.closePath();
-        g.fill();
-      }),
-    );
-    chev.wrapS = chev.wrapT = THREE.RepeatWrapping;
-    strip(
-      (i) => -HW[i]!,
-      0.075,
-      (i) => HW[i]!,
-      0.075,
-      8,
-      lambert({ map: chev, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-      true,
-      undefined,
-      [r.i0, r.i1],
-    );
-    for (const sd of [1, -1])
-      strip(
-        (i) => sd * (HW[i]! + KERB_W),
-        0.08,
-        (i) => sd * (HW[i]! + KERB_W),
-        (i) => -raise(i) - 0.3,
-        6,
-        solid(0x8d6e63),
-        true,
-        undefined,
-        [r.i0, r.i1],
-      );
+    const lane = r.kind === 'lane';
+    const lo = (i: number): number => (lane ? Math.max(r.latMin, -HW[i]!) : -HW[i]!),
+      hi = (i: number): number => (lane ? Math.min(r.latMax, HW[i]! + KERB_W) : HW[i]!);
+    const top = (i: number): number => (lane ? raise(i) : 0) + 0.075;
+    const mat = lambert({ map: chevron(r.kind), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    strip(lo, top, hi, top, lane ? 6 : 8, mat, true, undefined, [r.i0, r.i1]);
+    const skirt = solid(RAMP_COL[r.kind][2]);
+    const edges: PerSample[] = lane ? [lo, hi] : [(i) => HW[i]! + KERB_W, (i) => -(HW[i]! + KERB_W)];
+    for (const e of edges)
+      strip(e, lane ? top : 0.08, e, lane ? 0 : (i) => -raise(i) - 0.3, 6, skirt, true, undefined, [r.i0, r.i1]);
     // the lip face
     const i1 = r.i1;
+    const l0 = lo(i1),
+      l1 = hi(i1);
+    const w = lane ? l1 - l0 : (HW[i1]! + KERB_W) * 2;
+    const y0 = lane ? (r.lift + 0.075) / 2 : -(r.lift + 0.3) / 2 + 0.08;
     addStatic(
       inFrame(
-        [P_(box((HW[i1]! + KERB_W) * 2, r.lift + 0.3, 0.5), 0x6d4c41, 0, -(r.lift + 0.3) / 2 + 0.08, 0.25)],
+        [
+          P_(
+            box(w, r.lift + (lane ? 0.075 : 0.3), 0.5),
+            RAMP_COL[r.kind][2],
+            lane ? -(l0 + l1) / 2 : 0,
+            y0 + (lane ? ((l0 + l1) / 2) * BT[i1]! : 0),
+            0.25,
+          ),
+        ],
         CX[i1]!,
         H[i1]!,
         CZ[i1]!,

@@ -1,6 +1,7 @@
 /**
- * Dusty Canyon: a long mesa straight, rock arches, a tunnel through a ridge, a jump over a ravine and a run of
- * switchbacks down into a dry riverbed. Clockwise.
+ * Dusty Canyon: esses along the mesa under rock arches (a long straight until D64), a tunnel through a ridge, a
+ * jump over a ravine and a run of switchbacks down into a dry riverbed, with whoops, a tabletop and a lane kicker
+ * (D64). Clockwise.
  */
 import type { TrackDef, TrackPoint } from './def';
 
@@ -19,9 +20,12 @@ export const CANYON_DEF: TrackDef = {
   theme: 'canyon',
   points: [
     P(-300, -200, 10, 0, 14), // start line
-    P(-50, -210, 10, 0, 14),
-    P(200, -220, 10),
-    P(400, -230, 10), // mesa straight
+    P(-120, -205, 10, 0, 14),
+    P(-10, -190, 10, -3), // D64: mesa esses instead of a 900 m straight
+    P(90, -236, 10, 4),
+    P(200, -194, 10, -4),
+    P(300, -240, 10, 3),
+    P(420, -224, 10),
     P(560, -190, 9, -5),
     P(640, -80, 7, -6),
     P(620, 40, 5),
@@ -53,25 +57,31 @@ export const CANYON_DEF: TrackDef = {
   ],
   offroad: 'sand',
   sectors: [
-    { at: 0, name: 'Mesa Straight', feature: 'long straight and rock arches' },
-    { at: 0.3, name: 'Ridge Tunnel', feature: 'tunnel' },
-    { at: 0.46, name: 'Ravine Jump', feature: 'jump ramp' },
-    { at: 0.57, name: 'Switchbacks', feature: 'hairpin complex and riverbed shortcut' },
+    { at: 0, name: 'Mesa Esses', feature: 'esses under the rock arches' },
+    { at: 0.306, name: 'Ridge Tunnel', feature: 'tunnel' },
+    { at: 0.464, name: 'Ravine Jump', feature: 'jump ramp' },
+    { at: 0.574, name: 'Switchbacks', feature: 'hairpin complex and riverbed shortcut' },
   ],
-  gates: [0.15, 0.38, 0.53, 0.66, 0.8],
-  pads: [{ at: 0.06 }, { at: 0.16 }, { at: 0.42 }, { at: 0.88 }],
-  ramps: [{ at: 0.49, len: 14, lift: 1.8 }],
+  gates: [0.156, 0.385, 0.534, 0.663, 0.802],
+  pads: [{ at: 0.059 }, { at: 0.167 }, { at: 0.424 }, { at: 0.881 }],
+  // the ravine jump; D64 adds whoops after switchback 1, a riverbed tabletop and a lane kicker on the west run
+  ramps: [
+    { at: 0.494, kind: 'launch', len: 14, lift: 1.8, pop: 0.17 },
+    { at: 0.649, kind: 'whoops', count: 3, gap: 24 },
+    { at: 0.762, kind: 'table' },
+    { at: 0.872, kind: 'lane', lat: [-13, -1.5] },
+  ],
   zones: [
-    { from: 0.22, to: 0.25, latMin: -26, latMax: -15.2, surface: 'gravel' },
-    { from: 0.575, to: 0.61, latMin: 15.2, latMax: 26, surface: 'gravel' },
+    { from: 0.227, to: 0.256, latMin: -26, latMax: -15.2, surface: 'gravel' },
+    { from: 0.578, to: 0.613, latMin: 15.2, latMax: 26, surface: 'gravel' },
   ],
-  shortcuts: [{ from: 0.678, to: 0.729, via: [], half: 6, surface: 'sand' }],
+  shortcuts: [{ from: 0.681, to: 0.731, via: [], half: 6, surface: 'sand' }],
   landmarks: [
     { kind: 'arch', at: 0.05, side: 0, dist: 0 },
-    { kind: 'arch', at: 0.12, side: 0, dist: 0 },
-    { kind: 'tunnel', at: 0.385, side: 0, dist: 0, len: 0.035 },
-    { kind: 'ravine', at: 0.5, side: 0, dist: 0 },
-    { kind: 'mesa', at: 0.2, side: 1, dist: 160 },
+    { kind: 'arch', at: 0.122, side: 0, dist: 0 },
+    { kind: 'tunnel', at: 0.39, side: 0, dist: 0, len: 0.034 },
+    { kind: 'ravine', at: 0.504, side: 0, dist: 0 },
+    { kind: 'mesa', at: 0.207, side: 1, dist: 160 },
   ],
   music: 'canyon',
 };

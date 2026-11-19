@@ -1,0 +1,91 @@
+{
+  "phase": "phase14/jumps-canyon",
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 (0x00001F9D) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "viewport": "1600x900",
+  "seed": 7,
+  "racePerf": {
+    "fps": 60,
+    "p50": 16.7,
+    "p95": 16.8
+  },
+  "render": {
+    "calls": 171,
+    "triangles": 523672,
+    "views": 1,
+    "pixelRatio": 1,
+    "simMs": 0.16112815177505307,
+    "tier": "high",
+    "memory": {
+      "geometries": 124,
+      "textures": 67,
+      "programs": 57
+    }
+  },
+  "split": {
+    "2": {
+      "fps": 60,
+      "p50": 16.7,
+      "p95": 16.7,
+      "calls": 262,
+      "triangles": 1002818,
+      "views": 2,
+      "pixelRatio": 1,
+      "simMs": 0.09090056301768455,
+      "tier": "high",
+      "memory": {
+        "geometries": 300,
+        "textures": 69,
+        "programs": 64
+      }
+    },
+    "3": {
+      "fps": 60,
+      "p50": 16.7,
+      "p95": 16.8,
+      "calls": 352,
+      "triangles": 1274050,
+      "views": 3,
+      "pixelRatio": 1,
+      "simMs": 0.0792134362451108,
+      "tier": "medium",
+      "memory": {
+        "geometries": 312,
+        "textures": 69,
+        "programs": 64
+      }
+    },
+    "4": {
+      "fps": 60,
+      "p50": 16.7,
+      "p95": 16.7,
+      "calls": 461,
+      "triangles": 1699334,
+      "views": 4,
+      "pixelRatio": 1,
+      "simMs": 0.0854373540415159,
+      "tier": "medium",
+      "memory": {
+        "geometries": 324,
+        "textures": 69,
+        "programs": 64
+      }
+    },
+    "5": {
+      "fps": 51,
+      "p50": 16.7,
+      "p95": 33.4,
+      "calls": 537,
+      "triangles": 2042328,
+      "views": 5,
+      "pixelRatio": 1,
+      "simMs": 0.12197877686578945,
+      "tier": "low",
+      "memory": {
+        "geometries": 336,
+        "textures": 69,
+        "programs": 64
+      }
+    }
+  },
+  "errors": []
+}
