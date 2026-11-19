@@ -678,6 +678,16 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **Phone**: Inter is wider than Fredoka, so on a landscape phone the settings labels and the one-line summary are slightly smaller. READY stays on screen.
 - **Why**: Your request.
 
+### D53 · Closer race camera (2026-11-19, your request)
+- **Q**: Make the race camera a little closer.
+- **A**: The chase camera is about 15% closer and a little lower (`host/src/camera.ts`):
+  - distance: 9.8 → 8.3 m, plus up to about 1.7 m at top speed (was about 2 m);
+  - boost pull-back: 1.4 → 1.2 m;
+  - height: 4.0 → 3.5 m.
+  - The countdown swing-in, the drift framing and the field of view are unchanged.
+  - Before and after: `docs/screens/phase14/camera/before-after.jpg`.
+- **Why**: Your request. The car fills more of the screen, and there is still enough road ahead to see corners coming.
+
 ---
 
 ## Gate 0 status

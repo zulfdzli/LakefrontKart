@@ -151,8 +151,9 @@ export class ChaseCam {
     const intro = s.phase === 'countdown' ? smooth01((COUNTDOWN_T - s.cd) / 2.4) : s.phase === 'grid' ? 0 : 1;
     const a = this.camH + Math.PI * (1 - intro);
     this.fovKick += ((k.boost > 0 ? 1 : 0) - this.fovKick) * (1 - Math.exp(-6 * dt));
-    const dist = 9.8 + Math.max(0, k.sp) * 0.03 + this.fovKick * 1.4 + (1 - intro) * 3;
-    const hgt = 4.0 + (1 - intro) * 2.5;
+    // D53: about 15% closer and a little lower than before (9.8 m, 4.0 m), so the car fills more of the view
+    const dist = 8.3 + Math.max(0, k.sp) * 0.026 + this.fovKick * 1.2 + (1 - intro) * 3;
+    const hgt = 3.5 + (1 - intro) * 2.5;
     this.target.set(ix - Math.sin(a) * dist, iy + hgt, iz - Math.cos(a) * dist);
     if (!this.init) {
       cam.position.copy(this.target);
