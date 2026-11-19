@@ -422,3 +422,35 @@ Shots: `docs/screens/p10-final/` (Meadows, all split counts), `p10-canyon/`, `p1
 |---|---|---|---|
 | Graphics | Kart and character detail | **4** (was 3) | Clear-coat metallic paint, carbon, metal rims and rubber, with sweeping reflections |
 | Graphics | UI finish | 4 | Leader settings, Grand Prix tables on the host and phones, title card, trophy |
+
+---
+
+## Phase 13: performance (2026-11-19, D49, D50)
+
+### What changed
+- **New car look (D49)**: livery and shape from `reference/kart/kart-v2.jpg`, and characters instead of cars on the podium.
+- **Performance and leak tool**: `npm run perf`.
+- **Draw calls**: car shadow detail reduced in split-screen.
+- **Leak**: the kerb texture leak is fixed.
+- **Quality**: automatic steps down through pixel ratio, post tier and shadows.
+- **Debug overlay**: per-player network rows, a simulation timer, and physics and checkpoint lines.
+
+### Budgets (GTX 1650, 1080p, vsync off, Frosty Peaks)
+| Views | Median | p95 | Calls | Simulation |
+|---|---|---|---|---|
+| 1 | 3.6 ms | 9.3 ms | 78 | 0.05 ms |
+| 5 | 6.7 ms | 10.9 ms | 384 | 0.08 ms |
+
+Leak check over 8 races: geometries ±2, textures ±2, programs 0, heap 0 MB.
+
+### Fixes this loop
+1. **Texture leak**: 2 per track change, from the kerb's canvas textures. Fixed.
+2. **Draw calls over budget** with 5 views (480): the shadow pass is cut, now 384.
+3. **Automatic quality only lowered resolution**: it now also steps the post tier and the shadows down, and back up.
+
+### Scores (compared with phase 12)
+| Area | Item | Score | Reason |
+|---|---|---|---|
+| Gameplay | Frame-time stability | **5** (was 4) | 5 views: p95 10.9 ms uncapped, a locked 60 with vsync; automatic quality fallback |
+| Gameplay | Input latency | 4 | About 35 ms estimated on your iPhone; shown live in the overlay |
+| Graphics | Kart and character detail | 4 | Neon livery car; characters on the podium |

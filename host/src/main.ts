@@ -61,6 +61,17 @@ const audio = new Audio();
 const keyboard = new Keyboard();
 const debug = new DebugOverlay(world, $('debug'));
 const lobbyUI = new Lobby($('lobby'));
+debug.onFull = (on) => world.setDebugLines(on);
+debug.extra = () =>
+  inRace
+    ? session.players.map((p) => {
+        const ping = net.latency.get(p.slot),
+          st = inputStats.get(p.slot);
+        const est = ping !== undefined && st ? ` · ~${Math.round(ping / 2 + st.wait)} ms input` : '';
+        const dev = net.devices.get(p.slot) ?? '';
+        return `P${p.slot + 1} ${dev} · ping ${ping ?? '–'} ms · ${st ? st.rate.toFixed(0) : 0} in/s${est}`;
+      })
+    : [];
 
 let lobby: LobbyUpdate | null = null;
 let session!: RaceSession;
@@ -68,6 +79,11 @@ let inRace = false;
 let lastPhase: Phase | null = null;
 let autopilot = false;
 const lastInput = new Map<number, number>();
+/**
+ * Section 12.8 input metrics per slot: messages per second, and how long a received input waits on the host
+ * before a simulation step uses it. Estimated input latency = phone ping / 2 + that wait.
+ */
+const inputStats = new Map<number, { count: number; rate: number; since: number; pending: number; wait: number }>();
 
 const net = new HostNet({
   room: (code) => lobbyUI.setRoom(code),
@@ -95,7 +111,12 @@ const net = new HostNet({
   input: (i) => {
     if (!inRace || !session.players.some((p) => p.slot === i.slot)) return;
     session.setInput(i.slot, { steer: i.steer, throttle: i.throttle, brake: i.brake, drift: i.drift, item: i.item });
-    lastInput.set(i.slot, performance.now());
+    const now = performance.now();
+    lastInput.set(i.slot, now);
+    const st = inputStats.get(i.slot) ?? { count: 0, rate: 0, since: now, pending: 0, wait: 8 };
+    st.count++;
+    if (!st.pending) st.pending = now;
+    inputStats.set(i.slot, st);
   },
   start: () => {
     if (!inRace) startRace();
@@ -412,6 +433,22 @@ function frame(now: number): void {
     }
   }
   session.frame(dt);
+  {
+    const now = performance.now();
+    for (const st of inputStats.values()) {
+      if (st.pending) {
+        st.wait += (now - st.pending - st.wait) * 0.1;
+        st.pending = 0;
+      }
+      if (now - st.since >= 1000) {
+        st.rate = (st.count * 1000) / (now - st.since);
+        st.count = 0;
+        st.since = now;
+      }
+    }
+    debug.simMs = session.simMs;
+    if (debug.isFull) world.updateDebugLines(session.s);
+  }
   world.render(session.views(), (v) => session.focusOf(v));
   // phones: phase on change (reliable), HUD at about 10 Hz (volatile)
   const phase = session.netPhase();
@@ -449,7 +486,16 @@ declare global {
       advance(seconds: number): void;
       state(): unknown;
       session(): RaceSession | null;
-      info(): { calls: number; triangles: number; views: number; pixelRatio: number };
+      info(): {
+        calls: number;
+        triangles: number;
+        views: number;
+        pixelRatio: number;
+        simMs: number;
+        tier: string;
+        memory: { geometries: number; textures: number; programs: number };
+      };
+      world(): World;
       lobby(): LobbyUpdate | null;
     };
   }
@@ -471,6 +517,10 @@ window.__tk = {
     triangles: world.frameStats.triangles,
     views: world.frameStats.views,
     pixelRatio: world.pixelRatio,
+    simMs: session.simMs,
+    tier: world.post?.tier ?? 'off',
+    memory: { ...world.renderer.info.memory, programs: world.renderer.info.programs?.length ?? 0 },
   }),
+  world: () => world,
   lobby: () => lobby,
 };

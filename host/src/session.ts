@@ -49,6 +49,8 @@ export class RaceSession {
   paused = false;
   private acc = 0;
   private hitStop = 0;
+  /** Smoothed simulation time per frame (ms). */
+  simMs = 0;
   /** Real seconds of photo-finish slow motion left (the simulation runs at 30%). */
   private slowMo = 0;
   private lastFinish: { t: number; human: boolean } | null = null;
@@ -183,12 +185,15 @@ export class RaceSession {
         if (this.slowMo > 0) this.slowMo -= dt;
         this.acc += this.slowMo > 0 ? dt * 0.3 : dt;
         let steps = 0;
+        const t0 = performance.now();
         while (this.acc >= STEP && steps < MAX_SUBSTEPS) {
           this.game.step(STEP);
           this.handleEvents(this.game.drainEvents());
           this.acc -= STEP;
           steps++;
         }
+        // section 12.8: simulation time per frame (smoothed), for the debug overlay and tools/perf.ts
+        if (steps) this.simMs += (performance.now() - t0 - this.simMs) * 0.1;
         if (steps >= MAX_SUBSTEPS) this.acc = 0;
       }
       if (s.phase === 'finished') {

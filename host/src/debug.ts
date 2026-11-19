@@ -1,7 +1,9 @@
 /**
- * FPS counter (F), debug overlay (D or ?debug=1): frame-time graph, frame ms, draw calls, triangles,
- * pixel ratio. Also runs adaptive resolution (section 6.3): if the average frame time stays above 18 ms
- * for 2 s, lower the pixel ratio in steps down to 0.75; raise it again when there is headroom.
+ * FPS counter (F), debug overlay (D or ?debug=1): frame-time graph, frame ms, simulation ms, draw calls,
+ * triangles, pixel ratio, quality tier, and per player ping, input rate and estimated input latency
+ * (section 12.8). Also runs automatic quality (section 6.3, phase 13): if the average frame time stays above
+ * 18 ms for 2 s, lower the pixel ratio in steps down to 0.75, then the post tier, then real-time shadows;
+ * raise them again (in reverse order) when there is headroom.
  */
 import type { World } from './renderer';
 
@@ -19,6 +21,14 @@ export class DebugOverlay {
   private readonly graph: HTMLCanvasElement;
   private readonly text: HTMLDivElement;
   frameMs = 0;
+  /** Extra lines (per-player network stats) and the simulation ms, supplied by main.ts. */
+  extra: (() => string[]) | null = null;
+  simMs = 0;
+  /** Called when the full overlay is toggled (physics vectors and gates in the 3D view). */
+  onFull: ((on: boolean) => void) | null = null;
+  get isFull(): boolean {
+    return this.full;
+  }
 
   constructor(
     private readonly world: World,
@@ -39,6 +49,7 @@ export class DebugOverlay {
   toggleFull(): void {
     this.full = !this.full;
     this.apply();
+    this.onFull?.(this.full);
   }
 
   private apply(): void {
@@ -72,13 +83,15 @@ export class DebugOverlay {
     this.perfAcc = 0;
     this.perfN = 0;
     const w = this.world;
-    if (avg > 18 && w.pixelRatio > 0.75) {
-      w.setPixelRatio(w.pixelRatio - 0.25);
+    if (avg > 18) {
+      if (w.pixelRatio > 0.75) w.setPixelRatio(w.pixelRatio - 0.25);
+      else w.degrade();
       this.calmFor = 0;
     } else if (avg < 13) {
       this.calmFor += 2;
-      if (this.calmFor >= 6 && w.pixelRatio < w.maxPR) {
-        w.setPixelRatio(w.pixelRatio + 0.25);
+      if (this.calmFor >= 6) {
+        // restore in reverse order: effects and shadows first, then resolution
+        if (!w.restore() && w.pixelRatio < w.maxPR) w.setPixelRatio(w.pixelRatio + 0.25);
         this.calmFor = 0;
       }
     } else this.calmFor = 0;
@@ -87,8 +100,13 @@ export class DebugOverlay {
   private draw(cpuMs: number): void {
     if (this.el.style.display === 'none') return;
     const info = this.world.frameStats; // summed over all viewports
+    const w = this.world;
     this.text.textContent = this.full
-      ? `${this.fps.toFixed(0)} fps · ${cpuMs.toFixed(1)} ms cpu · ${info.calls} calls · ${(info.triangles / 1000).toFixed(0)}k tris · pr ${this.world.pixelRatio.toFixed(2)}`
+      ? [
+          `${this.fps.toFixed(0)} fps · ${cpuMs.toFixed(1)} ms cpu · sim ${this.simMs.toFixed(2)} ms · ${info.calls} calls · ${(info.triangles / 1000).toFixed(0)}k tris`,
+          `pr ${w.pixelRatio.toFixed(2)} · tier ${w.post?.tier ?? 'off'}${w.post?.override ? ' (Q)' : ''}${w.perfLevel ? ` · auto-reduced ${w.perfLevel}` : ''}`,
+          ...(this.extra?.() ?? []),
+        ].join('\n')
       : `${this.fps.toFixed(0)} fps`;
     if (!this.full) return;
     const g = this.graph.getContext('2d')!,

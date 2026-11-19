@@ -27,7 +27,8 @@
     "e2e": "tsx tools/e2e.ts",
     "track-view": "tsx tools/track-view.ts",
     "textures": "tsx tools/gen-textures.ts",
-    "car-sheet": "tsx tools/car-sheet.ts"
+    "car-sheet": "tsx tools/car-sheet.ts",
+    "perf": "tsx tools/perf.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

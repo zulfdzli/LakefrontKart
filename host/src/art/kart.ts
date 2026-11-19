@@ -569,6 +569,13 @@ export class KartView {
   }
 
   /** Podium pose for place i (0 = winner). */
+  /** Phase 13 budget: with many views only the car body casts a shadow (wheels and the driver are too small). */
+  setShadowDetail(full: boolean): void {
+    this.rear.castShadow = full;
+    for (const w of this.fronts) w.castShadow = full;
+    this.head.traverse((o) => (o.castShadow = full));
+  }
+
   /**
    * The podium (D49): the character stands on its step instead of the car. The winner jumps with both arms
    * up; second and third bounce and wave.

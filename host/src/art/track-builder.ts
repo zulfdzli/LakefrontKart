@@ -182,6 +182,9 @@ export function buildTrackWorld(
   const TEX = textures();
   const roadMat = track(roadMaterial(th));
   const kerbMat = track(kerbMaterial(th));
+  // the kerb's own canvas textures (disposing a material does not dispose its textures; phase 13 leak check)
+  track(kerbMat.map!);
+  track(kerbMat.normalMap!);
   const groundMat = track(groundMaterial(th));
   const concreteMat = track(layerMaterial(TEX.concrete, { side: THREE.DoubleSide, roughness: 0.88 }));
   const stripeMat = track(new THREE.MeshStandardMaterial({ map: wallTex, side: THREE.DoubleSide, roughness: 0.6 }));

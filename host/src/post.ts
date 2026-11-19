@@ -301,12 +301,26 @@ export class Post {
   }
 
   /** Pick the quality tier from the number of views (section 10.2), unless overridden with Q. */
+  /** Automatic quality (phase 13): tiers below this are forced when the frame rate cannot be held. */
+  perfFloor: Tier | null = null;
+  private viewTier: Tier = 'high';
+
   setViewCount(n: number): void {
     const auto: Tier = n <= 2 ? 'high' : n <= 4 ? 'medium' : 'low';
-    const t = this.override ?? auto;
+    this.viewTier = auto;
+    const rank = { high: 0, medium: 1, low: 2 } as const;
+    const floor = this.perfFloor && rank[this.perfFloor] > rank[auto] ? this.perfFloor : auto;
+    const t = this.override ?? floor;
     if (t === this.tier) return;
     this.tier = t;
     this.applyTier();
+  }
+
+  /** Re-apply the tier after the performance floor changed. */
+  refreshTier(): void {
+    const n = this.viewTier === 'high' ? 1 : this.viewTier === 'medium' ? 3 : 5;
+    this.tier = this.tier === 'high' ? 'medium' : 'high'; // force a change so applyTier runs
+    this.setViewCount(n);
   }
 
   cycleOverride(): Tier {
@@ -320,6 +334,8 @@ export class Post {
   private applyTier(): void {
     const l = this.look;
     this.bloom.strength = (l?.bloom ?? 0.5) * (this.tier === 'low' ? 0.8 : 1);
+    // the Low tier drops bloom entirely (section 10.2: everything can be disabled on Low)
+    this.bloom.enabled = this.tier !== 'low' || this.override === 'low';
     this.finish.uniforms.uGrain!.value = this.tier === 'low' ? 0 : (l?.grain ?? 0.02);
   }
 

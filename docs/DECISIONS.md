@@ -611,6 +611,28 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **Comparison**: `npm run car-sheet` now compares with `kart-v2.jpg`.
 - **Why**: Your request.
 
+### D50 · Performance pass (2026-11-19, phase 13)
+- **Q**: Do we meet section 12.8's budgets, and how is that checked?
+- **A**:
+  - **`npm run perf`** (`tools/perf.ts`): runs the host in Chrome on the GPU with vsync off at 1920 × 1080 on Frosty Peaks (the heaviest track). It records frame time, draw calls, triangles and simulation ms for 1, 3 and 5 views, plus the shadow-pass share, then runs a leak check: 8 races over all four tracks, with GPU geometries, textures and shader programs and the JS heap after a forced GC.
+  - **Results** (GTX 1650):
+
+    | Views | Median frame | p95 | Draw calls | Simulation |
+    |---|---|---|---|---|
+    | 1 | 3.6 ms | 9.3 ms | 78 | 0.05 ms |
+    | 3 | 5.0 ms | 11.8 ms | 275 | 0.06 ms |
+    | 5 | 6.7 ms | 10.9 ms | 384 | 0.08 ms |
+
+    Section 12.8 budgets: rendering at most 12 ms with 5 views and simulation at most 2 ms. Draw calls stay under 400 (D39's target).
+  - **Draw-call cut**: with 3 or more views only the car body casts a shadow (the wheels and driver are too small to matter): 480 → 384 calls with 5 views.
+  - **Leak fixed**: the kerb material's two canvas textures were never freed when the track changed (freeing a material does not free its textures). Textures now hold at 61 to 65 across 8 races; geometries, programs and the 51 MB heap are flat.
+  - **Automatic quality** (section 6.3): if frames average over 18 ms for 2 s, the pixel ratio drops in steps to 0.75. If it is still slow, the post tier is forced to Low (bloom and grain off), and then real-time shadows go off (the cars keep their blob shadows). With headroom it restores in reverse order. Q still overrides the tier.
+  - **Debug overlay** (D or `?debug=1`):
+    - **Stats**: FPS, CPU ms, simulation ms, draw calls, triangles, pixel ratio, quality tier and any automatic reduction.
+    - **Per player**: phone type, ping, inputs per second, and estimated input latency (ping / 2 plus the measured wait until a simulation step uses the input). Your iPhone's 54 ms ping gives about 35 ms, within the 50 ms target.
+    - **In the 3D view**: velocity vectors, headings, the checkpoint gates and the start line.
+- **Why**: Section 12.8.
+
 ---
 
 ## Gate 0 status

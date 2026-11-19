@@ -352,6 +352,110 @@ export class World {
     this.post?.setSize(window.innerWidth, window.innerHeight, this.pixelRatio);
   }
 
+  /**
+   * Automatic quality (phase 13): when even the lowest pixel ratio cannot hold the frame rate, step down:
+   * 1 = Low post tier (no bloom, no grain), 2 = also no real-time shadows (the cars keep their blob shadows).
+   */
+  perfLevel = 0;
+  degrade(): boolean {
+    if (this.perfLevel >= 2) return false;
+    this.perfLevel++;
+    this.applyPerf();
+    return true;
+  }
+  restore(): boolean {
+    if (this.perfLevel <= 0) return false;
+    this.perfLevel--;
+    this.applyPerf();
+    return true;
+  }
+  private applyPerf(): void {
+    if (this.post) {
+      this.post.perfFloor = this.perfLevel >= 1 ? 'low' : null;
+      this.post.refreshTier();
+    }
+    this.setShadows(this.perfLevel < 2);
+  }
+
+  /* ---- section 12.8 debug view: velocity vectors and checkpoint gates ---- */
+  private dbg: THREE.LineSegments | null = null;
+  private readonly dbgPos = new Float32Array(4096 * 3);
+  private readonly dbgCol = new Float32Array(4096 * 3);
+  setDebugLines(on: boolean): void {
+    if (on && !this.dbg) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(this.dbgPos, 3).setUsage(THREE.DynamicDrawUsage));
+      g.setAttribute('color', new THREE.BufferAttribute(this.dbgCol, 3).setUsage(THREE.DynamicDrawUsage));
+      this.dbg = new THREE.LineSegments(
+        g,
+        new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, transparent: true }),
+      );
+      this.dbg.frustumCulled = false;
+      this.dbg.renderOrder = 10;
+      this.scene.add(this.dbg);
+    }
+    if (this.dbg) this.dbg.visible = on;
+  }
+  updateDebugLines(s: Readonly<GameState>): void {
+    if (!this.dbg?.visible) return;
+    const P = this.dbgPos,
+      C = this.dbgCol,
+      T = s.track;
+    let n = 0;
+    const seg = (
+      ax: number,
+      ay: number,
+      az: number,
+      bx: number,
+      by: number,
+      bz: number,
+      r: number,
+      g: number,
+      b: number,
+    ): void => {
+      if (n >= 2046) return;
+      P.set([ax, ay, az, bx, by, bz], n * 6);
+      C.set([r, g, b, r, g, b], n * 6);
+      n++;
+    };
+    for (const k of s.karts) {
+      const y = k.y + 1.2;
+      // velocity (cyan), heading (white), and the next checkpoint for this car (yellow)
+      seg(k.x, y, k.z, k.x + k.vx * 0.4, y, k.z + k.vz * 0.4, 0.2, 0.9, 1);
+      seg(k.x, y, k.z, k.x + Math.sin(k.h) * 4, y, k.z + Math.cos(k.h) * 4, 1, 1, 1);
+    }
+    T.gates.forEach((g) => {
+      const w = T.WALLD[g]!;
+      seg(
+        T.CX[g]! - T.RX[g]! * w,
+        T.H[g]! + 0.5,
+        T.CZ[g]! - T.RZ[g]! * w,
+        T.CX[g]! + T.RX[g]! * w,
+        T.H[g]! + 0.5,
+        T.CZ[g]! + T.RZ[g]! * w,
+        1,
+        0.85,
+        0.1,
+      );
+    });
+    const w0 = T.WALLD[0]!;
+    seg(
+      T.CX[0]! - T.RX[0]! * w0,
+      T.H[0]! + 0.5,
+      T.CZ[0]! - T.RZ[0]! * w0,
+      T.CX[0]! + T.RX[0]! * w0,
+      T.H[0]! + 0.5,
+      T.CZ[0]! + T.RZ[0]! * w0,
+      1,
+      0.2,
+      0.2,
+    );
+    const g = this.dbg.geometry;
+    g.setDrawRange(0, n * 2);
+    g.attributes.position!.needsUpdate = true;
+    g.attributes.color!.needsUpdate = true;
+  }
+
   /** Q: cycle the quality tier override (auto, High, Medium, Low). */
   cycleTier(): Tier | null {
     if (!this.post) return null;
@@ -378,6 +482,7 @@ export class World {
     // budgets per tier: fewer grass tufts, no tree shadows and a smaller shadow map when many views draw it all
     this.nature?.setDetail(n <= 2 ? 1 : n <= 4 ? 0.4 : 0.22);
     this.scenery?.setCastShadows(n <= 2);
+    for (const v of this.views) v.setShadowDetail(n <= 2);
     const ms = n <= 3 ? 2048 : 1024;
     if (this.sun.shadow.mapSize.x !== ms) {
       this.sun.shadow.mapSize.set(ms, ms);

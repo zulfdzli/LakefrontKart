@@ -1419,3 +1419,9 @@ h1.logo span {
     transform: translate(-50%, -10px);
   }
 }
+
+/* phase 13: the multi-line debug overlay */
+.debug > div {
+  white-space: pre;
+  line-height: 1.35;
+}
