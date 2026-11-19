@@ -218,7 +218,9 @@ export function buildTrackWorld(
   const fenceMat = track(
     new THREE.MeshStandardMaterial({
       map: fenceTex,
-      alphaTest: 0.4,
+      // phase 14 shimmer fix: a hard alpha test made the thin wires pop in and out at a distance. With the
+      // multisampled scene target the texture's alpha becomes coverage instead, so far mesh fades smoothly
+      alphaToCoverage: true,
       transparent: false,
       side: THREE.DoubleSide,
       metalness: 0.5,
@@ -1317,11 +1319,13 @@ export function buildTrackWorld(
       const rock = solid(th.rock[0]!),
         inner = solid(0x4e4a52);
       const hgt = 8.5;
+      // phase 14: 0.3 m outside the barrier line, so the barriers' faces do not z-fight with the tunnel wall
+      const TW = (i: number): number => WV(i) + 0.3;
       for (const sd of [1, -1]) {
         strip(
-          (i) => sd * WV(i),
+          (i) => sd * TW(i),
           0,
-          (i) => sd * WV(i),
+          (i) => sd * TW(i),
           hgt,
           8,
           inner,
@@ -1330,9 +1334,9 @@ export function buildTrackWorld(
           [i0, i1],
         );
         strip(
-          (i) => sd * WV(i),
+          (i) => sd * TW(i),
           hgt,
-          (i) => sd * (WV(i) + 34),
+          (i) => sd * (TW(i) + 34),
           -1.5,
           14,
           rock,
@@ -1342,9 +1346,9 @@ export function buildTrackWorld(
         );
       }
       strip(
-        (i) => -WV(i),
+        (i) => -TW(i),
         hgt,
-        (i) => WV(i),
+        (i) => TW(i),
         hgt,
         8,
         inner,
@@ -1353,9 +1357,9 @@ export function buildTrackWorld(
         [i0, i1],
       ).castShadow = true;
       strip(
-        (i) => -WV(i),
+        (i) => -TW(i),
         hgt + 3,
-        (i) => WV(i),
+        (i) => TW(i),
         hgt + 3,
         8,
         rock,

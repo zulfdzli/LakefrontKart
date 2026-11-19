@@ -715,6 +715,27 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **Results**: tested in 1 to 5 player split-screen at 60 FPS, with no errors. Screens: `docs/screens/validation/race-view-v3/`.
 - **Why**: Your request.
 
+### D56 · Shimmer fix: multisampling, far grass, fence coverage, road mip bias, tunnel z-fighting (2026-11-19, phase 14)
+- **Q**: "Aliasing and shimmer" was the only scorecard item below 4 (3 since phase 1). What causes it, and how is it fixed without losing the look or 60 FPS?
+- **Measurement**: a new tool, `tools/shimmer.ts`, freezes a race and renders it five times, turning the camera a quarter of a pixel each time. A clean picture slides smoothly; a shimmering one flickers. It reports the share of pixels that flicker (second difference above 24 of 255), skips pixels that change with no camera movement (flames, smoke), and saves a heat map. It runs on 4 tracks at 2 race moments each, at 1920 × 1080.
+- **Causes** found in the heat maps:
+  - **No real anti-aliasing in races.** Since D45 the scene renders into an HDR target that was not multisampled, so only SMAA smoothed the edges. SMAA cannot fix details thinner than a pixel.
+  - **Far grass blades** (9 cm wide) are thinner than a pixel past about 60 m.
+  - **The catch-fence wires** were cut out with a hard alpha test, so at a distance they popped in and out.
+  - **The asphalt's stones** sparkled in the mid-distance.
+  - **Z-fighting in tunnels**: the tunnel walls sat exactly on the barrier line (Canyon).
+- **A**:
+  - **MSAA on the scene target** (`host/src/post.ts`): 4× on High, 2× on Medium and Low. Three.js resolves after each view's render call, and the resolve obeys the scissor, so split-screen views survive. SMAA stays on for edges inside textures. `?msaa=N` overrides it for testing (`0` is a debug switch only, because the fence then needs multisampling).
+  - **Grass** (`host/src/art/nature.ts`): past 22 m the blade roots widen with distance, keeping them about a pixel wide. From 55 to 90 m the tufts sink into the ground, where the terrain's grass texture carries the colour.
+  - **Catch fence**: alpha-to-coverage instead of the alpha test, so far wire fades smoothly.
+  - **Road**: a 0.6 mip bias on the asphalt colour and normal maps. The stones still read close up.
+  - **Tunnels**: the walls and ceiling sit 0.3 m outside the barrier line.
+- **Results** (`docs/screens/phase14/shimmer/`):
+  - **Flicker pixels**: 2.32% → **1.01%** (−56%). The mean second difference went from 2.00 to 1.18. The Canyon tunnel went from 3.06% to 0.67%.
+  - **Frame time** (`docs/screens/phase14/perf.json`, uncapped): 1 view p50 3.6 → 4.3 ms; 5 views p50 6.7 → 7.7 ms and p95 10.9 → 15.3 ms. Still under 16.7 ms, so a locked 60 with vsync. The automatic quality steps still apply.
+  - No leaks, and no errors.
+- **Why**: Section 13 target (every item at 4 or higher) and acceptance check 14 (no jaggies or shimmer).
+
 ---
 
 ## Gate 0 status

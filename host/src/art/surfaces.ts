@@ -40,6 +40,20 @@ function worldVaryings(shader: Shader, attrs: string[]): void {
 
 /* ---------------- road ---------------- */
 
+/**
+ * Phase 14 shimmer fix: the asphalt's aggregate is one or two pixels per stone in the mid-distance, and sampled at
+ * full detail it sparkles as the camera moves. A small mip bias on the asphalt's colour and normal maps picks a
+ * slightly softer level; close up the stones still read.
+ */
+const ROAD_LOD_BIAS = 0.6;
+const biased = (chunk: string): string =>
+  chunk
+    .replace('texture2D( map, vMapUv )', `texture2D( map, vMapUv, ${ROAD_LOD_BIAS.toFixed(2)} )`)
+    .replaceAll(
+      'texture2D( normalMap, vNormalMapUv )',
+      `texture2D( normalMap, vNormalMapUv, ${ROAD_LOD_BIAS.toFixed(2)} )`,
+    );
+
 export function roadMaterial(th: Theme): THREE.MeshStandardMaterial {
   const T = textures();
   const m = new THREE.MeshStandardMaterial({
@@ -68,7 +82,7 @@ export function roadMaterial(th: Theme): THREE.MeshStandardMaterial {
       )
       .replace(
         '#include <map_fragment>',
-        `#include <map_fragment>
+        `${biased(THREE.ShaderChunk.map_fragment)}
         vec2 wp = vWP.xz;
         float mac = texture2D(tMacro, wp / 160.0).r;
         float mac2 = texture2D(tMacro, wp / 23.0 + 0.37).r;
@@ -100,7 +114,7 @@ export function roadMaterial(th: Theme): THREE.MeshStandardMaterial {
       )
       .replace(
         '#include <normal_fragment_maps>',
-        `#include <normal_fragment_maps>
+        `${biased(THREE.ShaderChunk.normal_fragment_maps)}
         normal = normalize(mix(normal, normalize(vNormal), max(paint * 0.6, smoothstep(0.0, 0.5, pud))));`,
       );
   };

@@ -1,0 +1,55 @@
+{
+  "q": "",
+  "rows": [
+    {
+      "track": "meadows",
+      "t": 22,
+      "mean": 2.962,
+      "flicker": 3.02
+    },
+    {
+      "track": "meadows",
+      "t": 48,
+      "mean": 1.435,
+      "flicker": 1.49
+    },
+    {
+      "track": "canyon",
+      "t": 22,
+      "mean": 1.295,
+      "flicker": 0.95
+    },
+    {
+      "track": "canyon",
+      "t": 48,
+      "mean": 2.576,
+      "flicker": 3.47
+    },
+    {
+      "track": "frosty",
+      "t": 22,
+      "mean": 0.979,
+      "flicker": 0.56
+    },
+    {
+      "track": "frosty",
+      "t": 48,
+      "mean": 1.103,
+      "flicker": 0.98
+    },
+    {
+      "track": "sepang",
+      "t": 22,
+      "mean": 1.297,
+      "flicker": 1.88
+    },
+    {
+      "track": "sepang",
+      "t": 48,
+      "mean": 1.432,
+      "flicker": 1.35
+    }
+  ],
+  "mean": 1.635,
+  "flicker": 1.713
+}

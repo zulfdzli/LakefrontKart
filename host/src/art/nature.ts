@@ -196,6 +196,7 @@ export function buildNature(T: Track, terrain: TerrainInfo, th: Theme, lite: boo
     // one tuft: 7 tapered blades fanned around the centre, darker at the root
     const pos: number[] = [],
       col: number[] = [],
+      perp: number[] = [],
       idx: number[] = [];
     const base = new THREE.Color(dry ? 0x7d6a3a : 0x2f6a24),
       tip = new THREE.Color(dry ? 0xd9c27a : 0x9fd65a);
@@ -211,6 +212,8 @@ export function buildNature(T: Track, terrain: TerrainInfo, th: Theme, lite: boo
       pos.push(root[0]! - dz * w, 0, root[2]! + dx * w);
       pos.push(root[0]! + dz * w, 0, root[2]! - dx * w);
       pos.push(dx * lean, h, dz * lean);
+      // the root's sideways offset, so the shader can widen far blades (phase 14 shimmer fix)
+      perp.push(-dz * w, dx * w, dz * w, -dx * w, 0, 0);
       for (let k = 0; k < 2; k++) col.push(base.r, base.g, base.b);
       col.push(tip.r, tip.g, tip.b);
       idx.push(o, o + 1, o + 2);
@@ -218,6 +221,7 @@ export function buildNature(T: Track, terrain: TerrainInfo, th: Theme, lite: boo
     const geo = keep(new THREE.BufferGeometry());
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    geo.setAttribute('aPerp', new THREE.Float32BufferAttribute(perp, 2));
     geo.setIndex(idx);
     geo.computeVertexNormals();
     // normals point up, so the tufts light like the ground they stand on
@@ -227,17 +231,25 @@ export function buildNature(T: Track, terrain: TerrainInfo, th: Theme, lite: boo
     const wind = { value: 0 };
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.uWind = wind;
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uWind;').replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uWind;\nattribute vec2 aPerp;')
+        .replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
           #ifdef USE_INSTANCING
             vec3 iw = instanceMatrix[3].xyz;
           #else
             vec3 iw = vec3(0.0);
           #endif
           float sway = sin(uWind * 1.7 + iw.x * 0.21 + iw.z * 0.17) * 0.5 + sin(uWind * 2.9 + iw.x * 0.5) * 0.25;
-          transformed.xz += vec2(0.9, 0.5) * sway * transformed.y * 0.35;`,
-      );
+          transformed.xz += vec2(0.9, 0.5) * sway * transformed.y * 0.35;
+          // phase 14 shimmer fix: far blades are thinner than a pixel and flicker as the camera moves. Past 22 m
+          // the roots widen with distance (about a pixel wide on screen), and from 55 to 90 m the tufts sink into
+          // the ground, where the terrain's grass texture carries the colour.
+          float gd = distance((modelMatrix * vec4(iw, 1.0)).xyz, cameraPosition);
+          transformed.xz += aPerp * (max(1.0, gd / 22.0) - 1.0);
+          transformed.y *= 1.0 - smoothstep(55.0, 90.0, gd);`,
+        );
     };
     mat.customProgramCacheKey = () => 'tk-grass';
     const count = lite ? 12000 : dry ? 12000 : 40000;

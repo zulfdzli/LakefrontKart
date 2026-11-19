@@ -1,9 +1,10 @@
 /**
  * Cinematic post-processing (D45, section 10.2), shared by every split-screen viewport:
  *
- * 1. The views render (scissored) into one HDR target with a depth texture. It is not multisampled: a
- *    multisampled target is resolved (and its samples discarded) after every view's render call, which would wipe
- *    the earlier split-screen views. Edges are smoothed once at the end with SMAA instead.
+ * 1. The views render (scissored) into one HDR target with a depth texture. Phase 14: the target is multisampled
+ *    (4x on High and Medium, 2x on Low). Three.js resolves it after every view's render call and then discards the
+ *    samples, but the resolve blit obeys the scissor, so each call copies only its own view and the earlier
+ *    split-screen views survive. SMAA still runs at the end for the edges inside textures and post effects.
  * 2. Atmosphere pass, per viewport (rects, inverse projections and camera matrices are uniforms):
  *    height fog with sun in-scattering (aerial perspective, low-lying mist, "volumetric-looking" sun haze),
  *    a lens flare (glow, streak and ghosts, only when the sun is actually visible in that view), and a radial
@@ -24,6 +25,12 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import type { Rect } from './renderer';
 
 export const MAX_VIEWS = 5;
+/** Phase 14: MSAA samples per tier for the scene target; ?msaa=N overrides (0 turns it off). */
+const MSAA = { high: 4, medium: 2, low: 2 } as const;
+const MSAA_OVERRIDE = ((): number | null => {
+  const v = new URLSearchParams(location.search).get('msaa');
+  return v === null ? null : Math.max(0, Math.min(8, Number(v) || 0));
+})();
 export type Tier = 'high' | 'medium' | 'low';
 
 /** Per-theme look: fog, light shafts, flare and grade. */
@@ -268,8 +275,8 @@ export class Post {
     this.composer.addPass(this.smaa);
   }
 
-  private makeTarget(w: number, h: number): THREE.WebGLRenderTarget {
-    const rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType });
+  private makeTarget(w: number, h: number, samples = 0): THREE.WebGLRenderTarget {
+    const rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples });
     rt.depthTexture = new THREE.DepthTexture(w, h, THREE.FloatType);
     return rt;
   }
@@ -337,6 +344,19 @@ export class Post {
     // the Low tier drops bloom entirely (section 10.2: everything can be disabled on Low)
     this.bloom.enabled = this.tier !== 'low' || this.override === 'low';
     this.finish.uniforms.uGrain!.value = this.tier === 'low' ? 0 : (l?.grain ?? 0.02);
+    this.setSamples(MSAA_OVERRIDE ?? MSAA[this.tier]);
+  }
+
+  /** Multisampling of the scene target: changing it means a new target (and rebinding the atmosphere inputs). */
+  private setSamples(n: number): void {
+    const n2 = Math.min(n, this.renderer.capabilities.maxSamples);
+    if (this.rt.samples === n2) return;
+    const old = this.rt;
+    this.rt = this.makeTarget(old.width, old.height, n2);
+    this.atmos.uniforms.tScene!.value = this.rt.texture;
+    this.atmos.uniforms.tDepth!.value = this.rt.depthTexture;
+    old.depthTexture?.dispose();
+    old.dispose();
   }
 
   setSize(w: number, h: number, pixelRatio: number): void {

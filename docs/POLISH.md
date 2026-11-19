@@ -474,3 +474,72 @@ Screens: `docs/screens/phase14/type/`. These cover the lobby, the phone settings
 | Area | Item | Score | Reason |
 |---|---|---|---|
 | UI/UX | Typography | **5** (was 3) | Inter and Barlow Condensed, a consistent type scale, tabular times, soft shadows |
+
+## Phase 14: final polish loop (2026-11-19, D56)
+Screens:
+- `docs/screens/phase14/final-<track>/`: every track, 1 to 5 views and all three tiers, the podium and landmark shots;
+- `docs/screens/phase14/shimmer/`: shimmer heat maps, before and after;
+- `perf.json`;
+- `sim-<track>.json`.
+
+### Measurements
+- **Shimmer** (`tools/shimmer.ts`: the share of pixels that flicker when the camera turns by quarter pixels; 4 tracks × 2 moments, 1920 × 1080):
+
+  | | Before (phase 13 code) | After | Change |
+  |---|---|---|---|
+  | 1 view (High) | 2.32% | **1.01%** | −56% |
+  | 5 views (Low; Meadows and Canyon) | 2.38% | **1.50%** | −37% |
+  | Canyon tunnel (1 view) | 3.06% | **0.67%** | −78% |
+
+- **Frame rate** (vsync, 1600 × 900, GTX 1650): **60 FPS** on all 4 tracks with 1 to 5 views; p95 16.7 to 16.8 ms. No errors.
+- **Frame time** (uncapped, 1920 × 1080, Frosty):
+
+  | Views | Median | p95 |
+  |---|---|---|
+  | 1 | 4.3 ms (was 3.6) | 10.2 ms |
+  | 3 | 6.3 ms (was 5.0) | 13.6 ms |
+  | 5 | 7.7 ms (was 6.7) | 15.3 ms |
+
+- **Leak check over 8 races**: flat (geometries ±2, textures ±1, programs 0, heap 0 MB).
+- **Draw calls and triangles with 5 views**: 379 to 484 draw calls and 2.0 to 3.0 M triangles, depending on the track. This is over section 12.8's "about 400 calls and 600k triangles", even though the frame time has headroom (see the finish gate).
+- **Gameplay** (`sim-report`, 20 races per row, test driver at skill 0.93):
+
+  | Track | Length | Normal AI lap | Easy→Normal | Normal→Hard | Character spread | Max stuck | Unfinished |
+  |---|---|---|---|---|---|---|---|
+  | Sunny Meadows | 5.02 km | 118.2 s | 5.2% | 5.0% | 1.21% | 0.2 s | 0 |
+  | Dusty Canyon | 5.08 km | 119.6 s | 5.9% | 4.8% | 1.33% | 1.1 s | 0 |
+  | Frosty Peaks | 4.97 km | 119.9 s | 4.7% | 3.4% | 2.30% | 0.9 s | 0 |
+  | Sepang Circuit | 4.73 km | 118.8 s | 5.3% | 4.7% | 2.21% | 0.9 s | 0 |
+
+- **Tests**: 69 tests, e2e 20/20 (including the 4-race Grand Prix), typecheck, lint and build all pass. The build makes no internet requests.
+
+### Fixes this loop (the lowest item: aliasing and shimmer, 3)
+1. **MSAA on the scene target**: 4× on High, 2× on Medium and Low. Split-screen views survive the resolve.
+2. **Far grass** stays about a pixel wide, and sinks into the ground from 55 to 90 m.
+3. **Catch fences** use alpha-to-coverage instead of a hard alpha test.
+4. **Asphalt** has a 0.6 mip bias, so the stones stop sparkling.
+5. **Tunnel walls** sit 0.3 m outside the barriers, which ends the z-fighting.
+
+### Final scores (compared with the phase-1 baseline)
+| Area | Item | Phase 1 | Final | Reason |
+|---|---|---|---|---|
+| Graphics | Aliasing and shimmer | 3 | **4** | MSAA plus SMAA; far grass, fence and asphalt fixed; flicker pixels down 56% (measured) |
+| Graphics | Lighting and shadow quality | 2 | 4 | PBR, image-based lighting, soft shadows, per-track light, a softer sun (D55) |
+| Graphics | Road, kerb and terrain material | 2 | 4 | Generated texture sets, splat terrain, ridged kerbs, wear and puddles |
+| Graphics | Texture tiling visibility | 3 | 4 | Macro variation and world-space detail break up repeats |
+| Graphics | Scenery density and variety | 2 | 4 | Sectors, landmarks and theme nature on every track |
+| Graphics | Kart and character detail | 2 | 4 | Neon-livery open-wheel car, spacesuit characters |
+| Graphics | Effect quality | 3 | 4 | Soft particles, flames, sparks and a festive podium |
+| Graphics | Readability at 1/5 screen | 3 | 4 | One shared map and standings, frames, name chips, minimum HUD scale |
+| Graphics | Colour harmony | 3 | 4 | Graded per theme; the Sepang podium is no longer hazy |
+| Graphics | UI finish | 3 | 4 | Glass HUD, themed results card; typography 5 (D52) |
+| Gameplay | Steering smoothness | 3* | 4 | Your hands-on test (phase 5 gate) |
+| Gameplay | Drift feel | 3* | 4 | Your hands-on test; slip-angle model (D46) |
+| Gameplay | Camera smoothness | 3 | 4 | Your phase 5 test; reworked to your references (D53 to D55): to be re-felt at the finish gate |
+| Gameplay | Collision feel | 3* | 4 | Car-shaped collisions; 0 unfinished and at most 1.1 s stuck in 480 races |
+| Gameplay | Item fairness | 3* | 4 | Weighted by position, warnings for incoming projectiles |
+| Gameplay | AI believability | 3* | 4 | Racing lines, drifting, mistakes, shortcuts; every difficulty gap at least 3.4% |
+| Gameplay | Input latency | n/a | 4 | About 35 ms on your iPhone (target 50 ms) |
+| Gameplay | Frame-time stability | 4 | 5 | A locked 60 with 1 to 5 views; automatic quality fallback |
+
+Every item is at 4 or higher. No score dropped.

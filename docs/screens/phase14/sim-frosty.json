@@ -1,0 +1,104 @@
+{
+  "track": "frosty",
+  "trackLengthM": 4970,
+  "samples": 1657,
+  "races": 20,
+  "laps": 2,
+  "rows": [
+    {
+      "items": false,
+      "diff": "easy",
+      "driverLap": 118.96666666675374,
+      "aiLap": 125.56666666666078,
+      "driverPlace": 1,
+      "rescuesPerRace": 0.05,
+      "itemsPerRace": 0,
+      "unfinished": 0,
+      "maxStuck": 0.09999999999999999,
+      "missedGates": 0,
+      "jumpsPerRace": 0
+    },
+    {
+      "items": false,
+      "diff": "normal",
+      "driverLap": 118.75000000008914,
+      "aiLap": 119.94999999999442,
+      "driverPlace": 2.7,
+      "rescuesPerRace": 0,
+      "itemsPerRace": 0,
+      "unfinished": 0,
+      "maxStuck": 0.09999999999999999,
+      "missedGates": 0,
+      "jumpsPerRace": 0
+    },
+    {
+      "items": false,
+      "diff": "hard",
+      "driverLap": 118.81666666666116,
+      "aiLap": 116.0000000000832,
+      "driverPlace": 5.6,
+      "rescuesPerRace": 0.1,
+      "itemsPerRace": 0,
+      "unfinished": 0,
+      "maxStuck": 0.09999999999999999,
+      "missedGates": 0,
+      "jumpsPerRace": 0
+    },
+    {
+      "items": true,
+      "diff": "easy",
+      "driverLap": 120.11666666675558,
+      "aiLap": 126.28333333332739,
+      "driverPlace": 1.5,
+      "rescuesPerRace": 0.25,
+      "itemsPerRace": 75.25,
+      "unfinished": 0,
+      "maxStuck": 0.19999999999999998,
+      "missedGates": 0,
+      "jumpsPerRace": 0
+    },
+    {
+      "items": true,
+      "diff": "normal",
+      "driverLap": 122.58333333332757,
+      "aiLap": 121.71666666666101,
+      "driverPlace": 3.9,
+      "rescuesPerRace": 0.25,
+      "itemsPerRace": 72.5,
+      "unfinished": 0,
+      "maxStuck": 0.8833333333333344,
+      "missedGates": 0,
+      "jumpsPerRace": 0
+    },
+    {
+      "items": true,
+      "diff": "hard",
+      "driverLap": 120.71666666666106,
+      "aiLap": 118.4166666666612,
+      "driverPlace": 4.85,
+      "rescuesPerRace": 0.25,
+      "itemsPerRace": 75.95,
+      "unfinished": 0,
+      "maxStuck": 0.2333333333333333,
+      "missedGates": 0,
+      "jumpsPerRace": 0
+    }
+  ],
+  "aiGaps": {
+    "easyNormal": 0.04682506599972174,
+    "normalHard": 0.03405172413714121
+  },
+  "perCharacter": {
+    "bruno": 121.48333333342298,
+    "pip": 118.75000000008914,
+    "zed": 119.46666666675816,
+    "mochi": 119.70000000008937,
+    "gus": 119.30000000008786,
+    "luna": 118.98333333332778
+  },
+  "characterSpread": 0.023017543859636058,
+  "simCost": {
+    "meanMs": 0.008639303363134494,
+    "p99Ms": 0.03859999999997399
+  }
+}

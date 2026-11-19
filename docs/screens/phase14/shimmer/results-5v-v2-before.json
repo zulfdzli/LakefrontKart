@@ -1,0 +1,31 @@
+{
+  "q": "",
+  "rows": [
+    {
+      "track": "meadows",
+      "t": 22,
+      "mean": 2.067,
+      "flicker": 2.78
+    },
+    {
+      "track": "meadows",
+      "t": 48,
+      "mean": 1.732,
+      "flicker": 2.09
+    },
+    {
+      "track": "canyon",
+      "t": 22,
+      "mean": 1.72,
+      "flicker": 1.9
+    },
+    {
+      "track": "canyon",
+      "t": 48,
+      "mean": 2.171,
+      "flicker": 2.74
+    }
+  ],
+  "mean": 1.922,
+  "flicker": 2.377
+}

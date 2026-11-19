@@ -1,0 +1,104 @@
+{
+  "track": "meadows",
+  "trackLengthM": 5022,
+  "samples": 1674,
+  "races": 20,
+  "laps": 2,
+  "rows": [
+    {
+      "items": false,
+      "diff": "easy",
+      "driverLap": 117.03333333332789,
+      "aiLap": 124.45000000009743,
+      "driverPlace": 1,
+      "rescuesPerRace": 0,
+      "itemsPerRace": 0,
+      "unfinished": 0,
+      "maxStuck": 0.09999999999999999,
+      "missedGates": 0,
+      "jumpsPerRace": 0
+    },
+    {
+      "items": false,
+      "diff": "normal",
+      "driverLap": 117.5500000000887,
+      "aiLap": 118.24999999999449,
+      "driverPlace": 3.4,
+      "rescuesPerRace": 0,
+      "itemsPerRace": 0,
+      "unfinished": 0,
+      "maxStuck": 0.09999999999999999,
+      "missedGates": 0,
+      "jumpsPerRace": 0
+    },
+    {
+      "items": false,
+      "diff": "hard",
+      "driverLap": 117.01666666675148,
+      "aiLap": 112.66666666666151,
+      "driverPlace": 6,
+      "rescuesPerRace": 0,
+      "itemsPerRace": 0,
+      "unfinished": 0,
+      "maxStuck": 0.09999999999999999,
+      "missedGates": 0,
+      "jumpsPerRace": 0
+    },
+    {
+      "items": true,
+      "diff": "easy",
+      "driverLap": 119.81666666666106,
+      "aiLap": 125.5999999999941,
+      "driverPlace": 1.4,
+      "rescuesPerRace": 0.15,
+      "itemsPerRace": 77.95,
+      "unfinished": 0,
+      "maxStuck": 0.09999999999999999,
+      "missedGates": 0,
+      "jumpsPerRace": 0
+    },
+    {
+      "items": true,
+      "diff": "normal",
+      "driverLap": 120.550000000092,
+      "aiLap": 120.01666666675499,
+      "driverPlace": 3.7,
+      "rescuesPerRace": 0.05,
+      "itemsPerRace": 71.75,
+      "unfinished": 0,
+      "maxStuck": 0.11666666666666665,
+      "missedGates": 0,
+      "jumpsPerRace": 0
+    },
+    {
+      "items": true,
+      "diff": "hard",
+      "driverLap": 117.61666666675126,
+      "aiLap": 114.96666666666138,
+      "driverPlace": 5.65,
+      "rescuesPerRace": 0,
+      "itemsPerRace": 81.9,
+      "unfinished": 0,
+      "maxStuck": 0.16666666666666666,
+      "missedGates": 0,
+      "jumpsPerRace": 0
+    }
+  ],
+  "aiGaps": {
+    "easyNormal": 0.05243128964146499,
+    "normalHard": 0.04955621301775055
+  },
+  "perCharacter": {
+    "bruno": 117.50000000008808,
+    "pip": 118.68333333342237,
+    "zed": 118.16666666675486,
+    "mochi": 118.91666666666111,
+    "gus": 118.24999999999453,
+    "luna": 117.89999999999455
+  },
+  "characterSpread": 0.012056737587846644,
+  "simCost": {
+    "meanMs": 0.008543120918975319,
+    "p99Ms": 0.03450000000066211
+  }
+}

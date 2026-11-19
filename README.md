@@ -2,7 +2,7 @@
 
 A local multiplayer kart racer. One computer shows the race on a big screen, and up to 5 players use their phones as controllers over the same Wi-Fi. No internet, accounts or app install needed.
 
-> Work in progress: phase 5 (QR lobby and phone controllers work; split-screen polish comes next). See `docs/PROMPT.md` for the plan and `docs/DECISIONS.md` for decisions.
+Four tracks (Sunny Meadows, Dusty Canyon, Frosty Peaks and Sepang Circuit), laps of about 2 minutes, 8 items, AI rivals at three difficulties, single races or a 4-race Grand Prix, and split-screen for 1 to 5 players. See `docs/DECISIONS.md` for every design decision and `docs/POLISH.md` for the quality scorecard.
 
 ## Quick start
 
@@ -27,6 +27,23 @@ Open the host screen on the computer (or press **F5** in VS Code), then scan the
 
 **Controller:** hold the phone sideways. The left side steers (◀ ▶, or a slider in Controls). The big round button brakes, **DRIFT** is held, and **ITEM** is tapped; swipe down on ITEM, or hold BRAKE, to throw backwards. The kart accelerates by itself.
 
+**Party leader settings:** on the leader's phone, **Settings** sets the mode (single race or Grand Prix), the track, laps (1 to 3), whether AI karts fill the empty places, AI difficulty, and items on or off. The big screen follows.
+
+## Keys on the computer
+
+| Key   | What it does                                                               |
+| ----- | -------------------------------------------------------------------------- |
+| Enter | Start the race (lobby); next race (podium)                                 |
+| Space | Skip the track intro                                                       |
+| P     | Pause or resume                                                            |
+| Esc   | Back to the lobby                                                          |
+| T / G | Next track / switch single race and Grand Prix (lobby)                     |
+| M     | Mute                                                                       |
+| F / D | Frame-rate counter / debug overlay (input latency, quality, physics lines) |
+| Q     | Cycle the graphics quality (auto, High, Medium, Low)                       |
+
+To drive from the computer's keyboard (testing), open `http://localhost:3000/?keyboard`: arrow keys steer, accelerate and brake, Shift drifts, and E throws an item (hold ↓ to throw it backwards).
+
 ## Before the first game (Windows)
 
 1. **Set your Wi-Fi to Private.** Go to Settings → Network & internet → Wi-Fi → your network, and set "Network profile type" to **Private**. On a Public network, Windows Firewall blocks the phones. The server prints a warning when it detects this.
@@ -40,6 +57,10 @@ Open the host screen on the computer (or press **F5** in VS Code), then scan the
 - If the QR shows the wrong address (VPN or several adapters), pick the right network in the dropdown on the host screen, or set the address yourself:
   `PUBLIC_URL=http://192.168.1.50:3000 npm run dev` (PowerShell: `$env:PUBLIC_URL="http://192.168.1.50:3000"; npm run dev`).
 
+## Slow or choppy?
+
+The game picks its quality automatically: High for 1 to 2 players, Medium for 3 to 4, and Low for 5. If the frame rate drops, it lowers the resolution first, then effects and shadows, and restores them when it can. On a laptop, plug in the charger and use the fast graphics chip (see above). Press F to see the frame rate.
+
 ## Scripts
 
 | Command                             | What it does                                                        |
@@ -52,6 +73,9 @@ Open the host screen on the computer (or press **F5** in VS Code), then scan the
 | `npm run capture -- --phase <name>` | Polish-loop screenshots and frame stats into `docs/screens/<name>/` |
 | `npm run e2e -- --phase <name>`     | End-to-end multiplayer check with emulated phones                   |
 | `npm run bots -- --room ABCD --n 3` | Adds simulated phones to your room (testing without 5 phones)       |
+| `npm run perf -- --phase <name>`    | Frame time, draw calls and a leak check over 8 races                |
+| `npx tsx tools/shimmer.ts`          | Shimmer meter: flicker under sub-pixel camera moves, with heat maps |
+| `npm run textures`                  | Regenerates the texture sets                                        |
 | `npm run typecheck`                 | Type-checks every workspace                                         |
 | `npm run lint` / `npm run format`   | ESLint / Prettier                                                   |
 

@@ -1,0 +1,99 @@
+{
+  "views": {
+    "1": {
+      "fps": 184,
+      "p50": 4.3,
+      "p95": 10.2,
+      "calls": 83,
+      "shadowCalls": 27,
+      "triangles": 720320,
+      "simMs": 0.05,
+      "tier": "high"
+    },
+    "3": {
+      "fps": 138,
+      "p50": 6.3,
+      "p95": 13.6,
+      "calls": 270,
+      "shadowCalls": 21,
+      "triangles": 1839392,
+      "simMs": 0.074,
+      "tier": "medium"
+    },
+    "5": {
+      "fps": 116,
+      "p50": 7.7,
+      "p95": 15.3,
+      "calls": 382,
+      "shadowCalls": 39,
+      "triangles": 3023178,
+      "simMs": 0.091,
+      "tier": "low"
+    }
+  },
+  "leak": [
+    {
+      "race": 1,
+      "geometries": 91,
+      "textures": 63,
+      "programs": 58,
+      "heapMB": 54.2
+    },
+    {
+      "race": 2,
+      "geometries": 96,
+      "textures": 66,
+      "programs": 60,
+      "heapMB": 54.2
+    },
+    {
+      "race": 3,
+      "geometries": 85,
+      "textures": 66,
+      "programs": 58,
+      "heapMB": 54.2
+    },
+    {
+      "race": 4,
+      "geometries": 83,
+      "textures": 66,
+      "programs": 57,
+      "heapMB": 54.2
+    },
+    {
+      "race": 5,
+      "geometries": 92,
+      "textures": 65,
+      "programs": 59,
+      "heapMB": 54.2
+    },
+    {
+      "race": 6,
+      "geometries": 95,
+      "textures": 66,
+      "programs": 60,
+      "heapMB": 54.2
+    },
+    {
+      "race": 7,
+      "geometries": 80,
+      "textures": 63,
+      "programs": 56,
+      "heapMB": 54.2
+    },
+    {
+      "race": 8,
+      "geometries": 85,
+      "textures": 67,
+      "programs": 57,
+      "heapMB": 54.2
+    }
+  ],
+  "leakVerdict": {
+    "geometries": 2,
+    "textures": 1,
+    "programs": 0,
+    "heapMB": 0
+  },
+  "errors": []
+}
