@@ -21,7 +21,7 @@
 import { V8, type EngineEvent, type EngineModel } from './engine-model';
 
 /** Depth of the body layer (D61): its level at no load and the extra at full load, and the rumble amount. */
-const BODY = { base: 0.3, load: 0.25, rumble: 0.35 };
+const BODY = { base: 0.51, load: 0.425, rumble: 0.6 }; // D62: 70% more than D61 (0.3, 0.25, 0.35)
 
 /** A small deterministic generator, so offline renders (tools/engine-render.ts) repeat exactly. */
 class Lcg {
@@ -231,7 +231,7 @@ export class EngineSound {
     shaper.oversample = '4x';
     this.makeup = gain(0.6);
     this.peak = filter('peaking', 900, 1.3, 7);
-    this.shelf = filter('lowshelf', 260, 0.7, 3);
+    this.shelf = filter('lowshelf', 260, 0.7, 5);
     this.low = filter('lowpass', 2500, 0.8);
     this.high = filter('highpass', 70, 0.7);
     const lump = gain(1);

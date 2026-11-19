@@ -128,18 +128,18 @@ describe('virtual F1 V8 drivetrain (D60)', () => {
     expect(sawCut).toBe(true);
   });
 
-  it("scales the gears with the game's speed setting (default handling: speedMul 1.3)", () => {
+  it("scales the gears with the game's speed setting (default handling: speedMul 1.45)", () => {
     const m = new EngineModel();
     let sp = 0;
     for (let t = 0; t < 12; t += DT) {
-      sp = Math.min(49, sp + Math.max(5, 36 * (1 - sp / 49)) * DT);
-      m.update(DT, inp({ speed: sp, throttle: true, scale: 1.3 }));
+      sp = Math.min(55.1, sp + Math.max(5, 40.6 * (1 - sp / 55.1)) * DT);
+      m.update(DT, inp({ speed: sp, throttle: true, scale: 1.45 }));
     }
     expect(m.gear).toBe(6);
     expect(m.rpm).toBeGreaterThan(14500);
     for (let t = 0; t < 2; t += DT) {
-      sp = Math.min(67.6, sp + 70 * 1.3 * DT);
-      m.update(DT, inp({ speed: sp, throttle: true, boost: true, scale: 1.3 }));
+      sp = Math.min(75.4, sp + 70 * 1.45 * DT);
+      m.update(DT, inp({ speed: sp, throttle: true, boost: true, scale: 1.45 }));
     }
     expect(m.gear).toBe(7);
     expect(m.limiter).toBe(false);

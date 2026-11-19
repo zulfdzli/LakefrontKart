@@ -828,5 +828,31 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 
 ---
 
+### D62 · Wider camera, faster cars, more bass (2026-11-19, phase 14)
+- **Q**: the user asked for three changes: the camera a little further back, faster cars, and the engine "more deep and bassy like 70%".
+- **A**:
+  - **Camera** (`camera.ts`): the chase distance goes from 6.5 to 7.8 m and the height from 3.3 to 3.7 m, so the view keeps its downward angle. The car sits lower and smaller on screen, with more road ahead.
+  - **Speed** (`DEFAULT_HANDLING.speedMul`): 1.3 to 1.45, about 12% faster. This scales top speed, acceleration, boost and off-road caps for every kart; the virtual gearbox (D60) follows it through `EngineInput.scale`.
+  - **Bass**: I took "70%" to mean 70% more bass. `BODY` in `engine-sound.ts` goes up ×1.7 (0.3/0.25/0.35 to 0.51/0.425/0.6), and the main tone's low shelf from +3 to +5 dB.
+- **What the speed broke, and the fixes** (in `ai.ts`, current handling only, so the prototype parity test is untouched):
+  - **Canyon corner exit**: at the new speed the AI ran wide at the exit after the shortcut (index ~1190), slid onto the sand still holding its drift at full lock and never came back: about 0.5 rescues per Normal race and 1 per Hard race.
+  - **Fix 1, drift release**: the AI lets go of a drift once it is off the road (not in a shortcut), so the tyres grip and it steers back.
+  - **Fix 2, corner braking**: the corner penalty scales with (speedMul / 1.3)², since the grip a corner needs grows with speed squared. At 1.3 it is exactly 1, the tuned behaviour.
+  - **Result**: Canyon rescues per 60 races fell from 28 to 1 on Normal and 60 to 1 on Hard. No track is worse than at 1.3.
+- **Spec deviation: lap length.** Section 11.1 asks for a Normal-AI median lap of 115–125 s. The faster cars cut every lap by the speed ratio, so laps are now about 107–110 s. The tests now scale the band with the speed: `tracks.test.ts` uses 115–125 × 1.3 / speedMul, about 103–112 s, and the prototype-track test (`game.test.ts`) does the same to 37–43 s. Setting `speedMul` back to 1.3 restores the original bands exactly. **To raise at the gate.**
+- **Checked**:
+  - **sim-report, 20 races per row, items off** (driver lap / Normal AI lap / gaps):
+    - meadows 107.8 / 108.9 s, gaps 5.0% and 6.3%;
+    - canyon 109.6 / 110.0 s, gaps 4.4% and 5.8%;
+    - frosty 109.5 / 109.5 s, gaps 4.6% and 5.1%;
+    - sepang 106.4 / 107.2 s, gaps 7.4% and 5.2%.
+  - **Balance**: every difficulty gap is at least 3%, the character spread is at most 1.6%, and no karts are unfinished.
+  - **Rescues**: at most 0.3 per race on every track and difficulty, and 0 on Hard.
+  - **Engine** at the new speed: at full throttle the bass (under 350 Hz) is about 41–44% of the energy, up from about 16% in D61 and about 1% in D60. The spectral centroid is about 1,280 Hz (D61 about 1,900). The peak is −13.6 dBFS and the scream sits about −23 dBFS RMS; gears and shifts are unchanged. `docs/audio/engine-demo.wav` is re-rendered at speedMul 1.45.
+  - **Camera**: screenshots in `docs/screens/phase14/camera-far/`.
+  - **Tests**: Vitest 79/79, e2e 20/20; typecheck, lint and the build pass.
+
+---
+
 ## Gate 0 status
 All decisions are settled (D1 to D16). **You confirmed a shared understanding on 2026-11-16. Gate 0 is closed.**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createGame, Game, STEP, type GameOptions, type GameEvent } from '@tk/shared';
+import { createGame, DEFAULT_HANDLING, Game, STEP, type GameOptions, type GameEvent } from '@tk/shared';
 
 const base = (o: Partial<GameOptions> = {}): GameOptions => ({
   seed: 7,
@@ -280,7 +280,9 @@ describe('rescue', () => {
 });
 
 describe('headless race (prototype track)', () => {
-  it('6 AI karts all finish with laps of about 37-43 s (D36, D43 speed)', () => {
+  // 37-43 s at speedMul 1.3 (D36, D43); laps shorten in proportion when D62 raises the speed
+  const r = 1.3 / DEFAULT_HANDLING.speedMul;
+  it(`6 AI karts all finish with laps of about ${(37 * r).toFixed(0)}-${(43 * r).toFixed(0)} s (D36, D43, D62 speed)`, () => {
     const laps: number[] = [];
     for (const seed of [1, 2, 3]) {
       const g = createGame(base({ seed, itemsOn: false }));
@@ -290,7 +292,7 @@ describe('headless race (prototype track)', () => {
       expect(s.karts.every((k) => k.finished)).toBe(true);
       for (const k of s.karts) laps.push(...k.lapTimes);
     }
-    expect(median(laps)).toBeGreaterThan(36);
-    expect(median(laps)).toBeLessThan(44);
+    expect(median(laps)).toBeGreaterThan(36 * r);
+    expect(median(laps)).toBeLessThan(44 * r);
   });
 });

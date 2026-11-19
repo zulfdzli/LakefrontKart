@@ -158,9 +158,10 @@ export class ChaseCam {
     // and while spinning out (oil, hits) the body whips round: ease back up to 3.2 m (quickly in, slowly out)
     this.spinBack += ((k.spin > 0 ? 3.2 : 0) - this.spinBack) * (1 - Math.exp(-(k.spin > 0 ? 10 : 3) * dt));
     const driftBack = Math.max(0, this.travelW - 0.35) * 4 + this.spinBack;
-    const dist = 6.5 + Math.max(0, k.sp) * 0.012 + this.fovKick * 0.8 + driftBack + (1 - intro) * 4;
-    // D55: higher (3.3 m), looking down onto the roof and wing as in your second reference
-    const hgt = 3.3 + (1 - intro) * 2.5;
+    const dist = 7.8 + Math.max(0, k.sp) * 0.012 + this.fovKick * 0.8 + driftBack + (1 - intro) * 4;
+    // D55: higher, looking down onto the roof and wing as in your second reference; D62: a little further back
+    // (6.5 to 7.8 m) and up (3.3 to 3.7 m) so the framing keeps its angle
+    const hgt = 3.7 + (1 - intro) * 2.5;
     // the follow below trails the car by about speed / 8 m; lead the target by most of that, so the framing stays
     // the same at any speed (a little trail is kept for the sense of speed)
     const lead = intro * 0.82 * (1 / 8);

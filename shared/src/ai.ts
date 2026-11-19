@@ -223,7 +223,10 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
   }
   let target = k.P.top * k.rbMul * a.skill;
   // v2: better handling carries more speed through corners (balances the speed stat); mistakes brake late
-  const cornerK = v2 ? (38 * a.corner) / k.P.turn : 38 * a.corner;
+  // D62: the corner penalty was tuned at speedMul 1.3, but grip does not scale with speed, so above that the AI
+  // brakes harder (squared: the grip a corner needs grows with speed squared); exactly 1 at 1.3 and in the prototype
+  const cornerScale = v2 ? (s.handling.speedMul / 1.3) ** 2 : 1;
+  const cornerK = (v2 ? (38 * a.corner) / k.P.turn : 38 * a.corner) * cornerScale;
   target = Math.min(target, Math.max(17 * s.handling.speedMul, k.P.top - turnAng * cornerK * (mistake ? 0.75 : 1)));
   if (k.boost > 0) target = BOOSTSP * s.handling.speedMul;
   if (Math.abs(diff) > 1.0) target = Math.min(target, 9); // target far off the nose: slow down so the turn tightens
@@ -235,6 +238,8 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
   if (a.drifts)
     inp.drift = k.drifting ? turnAng > Hd.aiDriftHold : turnAng > Hd.aiDriftIn && sp > 22 && Math.abs(inp.steer) > 0.5;
   else inp.drift = false;
+  // D62: a drift that slides off onto sand or grass is let go, so the tyres grip and the car steers back to the road
+  if (v2 && k.offroad && !k.inSc) inp.drift = false;
 
   if (k.item && k.roll <= 0 && k.itemWait <= 0) {
     let use = false,

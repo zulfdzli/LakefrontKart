@@ -1,6 +1,7 @@
 /** Phase 8: the three tracks (section 11) and the race rules that depend on them (section 12.4, section 15). */
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_HANDLING,
   TRACK_IDS,
   TRACKS,
   STEP,
@@ -85,8 +86,13 @@ describe('track layouts', () => {
 });
 
 describe('lap length (section 11.1)', () => {
+  // section 11.1's 115-125 s band was met at speedMul 1.3. D62 raised the speed at the user's request, which
+  // shortens every lap by the same ratio: the band follows it (about 103-112 s at 1.45), a logged deviation
+  const r = 1.3 / DEFAULT_HANDLING.speedMul,
+    lo = 115 * r,
+    hi = 125 * r;
   for (const id of TRACK_IDS) {
-    it(`${id}: Normal AI median lap is 115-125 s and every kart finishes`, () => {
+    it(`${id}: Normal AI median lap is ${lo.toFixed(0)}-${hi.toFixed(0)} s and every kart finishes`, () => {
       const laps: number[] = [];
       for (const seed of [1, 2]) {
         const { s, maxStill } = aiRace(id, seed, 2);
@@ -96,8 +102,8 @@ describe('lap length (section 11.1)', () => {
       }
       expect(laps.length).toBeGreaterThanOrEqual(10);
       const m = median(laps);
-      expect(m).toBeGreaterThan(115);
-      expect(m).toBeLessThan(125);
+      expect(m).toBeGreaterThan(lo);
+      expect(m).toBeLessThan(hi);
     }, 60000);
   }
 });

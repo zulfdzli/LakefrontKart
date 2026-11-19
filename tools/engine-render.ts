@@ -102,7 +102,7 @@ async function main(): Promise<void> {
         let throttle = !grid,
           air = false,
           boost = false;
-        const M = 1.3, // the game's default speed setting (handling.speedMul)
+        const M = 1.45, // the game's default speed setting (handling.speedMul)
           top = 38 * M;
         if (t >= 9.5 && t < 11) boost = true;
         if (t >= 13 && t < 14.3) air = true;
