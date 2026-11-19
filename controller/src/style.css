@@ -1235,3 +1235,47 @@ input {
   font-size: 13px;
   color: var(--label);
 }
+
+/* phase 12 settings on a landscape phone (after the base rules so they win) */
+@media (max-height: 480px) and (orientation: landscape) {
+  /* leader settings: compact rows, two settings per row, so READY / START stay on screen */
+  .cfgBox {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+    padding: 6px 10px;
+  }
+  .cfgRow {
+    font-size: 12px;
+    gap: 6px;
+  }
+  .cfgRow > span {
+    min-width: 34px;
+  }
+  .cfgRow .seg {
+    padding: 2px;
+  }
+  .cfgRow .seg button {
+    min-height: 30px;
+    font-size: 12px;
+    padding: 0 4px;
+  }
+  .cfgRow .seg.wrap button {
+    flex: 1 1 22%;
+  }
+  #cfgTrackRow {
+    grid-column: 1 / -1;
+  }
+  .cfgRow .tog {
+    transform: scale(0.7);
+  }
+  #wait .chip {
+    min-height: 52px;
+  }
+  #wait .pbtn {
+    min-height: 52px;
+  }
+  .cfgSummary {
+    font-size: 12px;
+  }
+}

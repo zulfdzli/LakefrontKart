@@ -15,6 +15,7 @@ import { MEADOWS, THEMES, type Theme } from './art/palette';
 import { Post, type PostLook, type Tier } from './post';
 import { Ambient, type AmbientKind } from './art/particles';
 import { buildNature, type Nature } from './art/nature';
+import { Celebration } from './art/celebration';
 import { TRACKS, isTrackId } from '@tk/shared';
 
 /** A viewport in CSS pixels, top-left origin (layout space). */
@@ -61,6 +62,7 @@ export class World {
   private scenery: Scenery | null = null;
   private ambient: Ambient | null = null;
   private nature: Nature | null = null;
+  private celebration: Celebration | null = null;
   effects: Effects | null = null;
   private assets: KartAssetProvider | null = null;
   views: KartView[] = [];
@@ -192,6 +194,8 @@ export class World {
       if (this.envRT) M.car.envMap = this.envRT.texture;
       this.trackWorld = buildTrackWorld(s.track, M, 1234, th, def);
       this.scene.add(this.trackWorld.group);
+      this.celebration = new Celebration(this.trackWorld.podium, this.trackWorld.terrain, th, M);
+      this.scene.add(this.celebration.group);
       // natural detail first, so the canyon formations claim their ground before the scattered scenery
       this.nature = buildNature(s.track, this.trackWorld.terrain, th, false);
       this.scene.add(this.nature.group);
@@ -316,7 +320,13 @@ export class World {
     });
   }
 
+  /** D51: start or stop the podium celebration. */
+  setCelebrate(on: boolean): void {
+    this.celebration?.setActive(on);
+  }
+
   updateAmbient(s: Readonly<GameState>, dt: number, hideBoxes: boolean): void {
+    this.celebration?.update(dt);
     this.trackWorld?.update(s.time, dt);
     this.trackWorld?.updateBoxes(s, hideBoxes);
     this.effects?.syncProjectiles(s, dt);
@@ -592,6 +602,11 @@ export class World {
       this.scene.remove(this.scenery.group);
       this.scenery.dispose();
       this.scenery = null;
+    }
+    if (this.celebration) {
+      this.scene.remove(this.celebration.group);
+      this.celebration.dispose();
+      this.celebration = null;
     }
     if (this.nature) {
       this.scene.remove(this.nature.group);

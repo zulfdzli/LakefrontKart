@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { DEFAULT_HANDLING, RESCUE_T, SPIN_T, clamp, wrapA, type Character, type Kart } from '@tk/shared';
 import { P_, merge, jitter, canvasTex, box, cyl, ico, cone, octa, hexStr, type Part } from './geo';
-import { INK, DARK, WHITE, kartPaint } from './palette';
+import { INK, DARK, WHITE, METAL, kartPaint } from './palette';
 import { CAR, CAR_SCALE, FIN, buildCar, buildDecals, buildWheels, helmetParts, mergePbr } from './car';
 import { holoShell } from './holo';
 import type { Materials } from './materials';
@@ -139,6 +139,23 @@ function buildFigure(ch: Character, paint: number): { figure: THREE.BufferGeomet
       P_(box(0.05, 0.8, 0.12), WHITE, sd * 0.45, 1.3, 0, 0, 0, sd * 0.06),
       P_(box(0.05, 0.7, 0.1), WHITE, sd * 0.42, 0.5, 0),
     );
+  // D51 spacesuit details: white shoulder and knee pads, a chest panel with status lights, a metal neck ring,
+  // a small life-support pack and a glowing belt buckle
+  const pads: Part[] = [
+    P_(box(0.44, 0.34, 0.07), WHITE, 0, 1.47, 0.43, -0.12),
+    P_(ico(0.2, 1), WHITE, 0.5, 1.86, 0, 0, 0, 0, 1, 0.6, 1),
+    P_(ico(0.2, 1), WHITE, -0.5, 1.86, 0, 0, 0, 0, 1, 0.6, 1),
+    P_(box(0.26, 0.22, 0.1), WHITE, 0.24, 0.56, 0.18),
+    P_(box(0.26, 0.22, 0.1), WHITE, -0.24, 0.56, 0.18),
+    P_(box(0.52, 0.6, 0.26), WHITE, 0, 1.45, -0.5),
+  ];
+  const ring: Part[] = [P_(cyl(0.31, 0.34, 0.09, 16), METAL, 0, 2.06, 0)];
+  const lights: Part[] = [
+    P_(box(0.07, 0.07, 0.03), 0x39ff6a, -0.12, 1.52, 0.47),
+    P_(box(0.07, 0.07, 0.03), 0x40c4ff, 0, 1.52, 0.47),
+    P_(box(0.07, 0.07, 0.03), 0xff4f6a, 0.12, 1.52, 0.47),
+    P_(box(0.2, 0.11, 0.05), 0xffc83d, 0, 0.88, 0.5),
+  ];
   const head = headParts(ch).map((p) => {
     p.m.premultiply(new THREE.Matrix4().makeScale(0.82, 0.82, 0.82).setPosition(0, 2.0, 0.02));
     return p;
@@ -146,7 +163,11 @@ function buildFigure(ch: Character, paint: number): { figure: THREE.BufferGeomet
   const figure = mergePbr([
     { parts: suit, fin: FIN.pearl },
     { parts: stripes, fin: FIN.pearl },
-    { parts: head, fin: ch.kind === 'robot' ? FIN.metal : FIN.fur },
+    { parts: pads, fin: FIN.pearl },
+    { parts: ring, fin: FIN.metal },
+    { parts: lights, fin: FIN.light },
+    // vinyl-toy heads: smooth with a soft sheen
+    { parts: head, fin: ch.kind === 'robot' ? FIN.metal : ([0.45, 0, 0.55, 0] as const) },
   ]);
   // one arm hanging from the shoulder (origin), sleeve and glove
   const arm = mergePbr([

@@ -454,3 +454,14 @@ Leak check over 8 races: geometries ±2, textures ±2, programs 0, heap 0 MB.
 | Gameplay | Frame-time stability | **5** (was 4) | 5 views: p95 10.9 ms uncapped, a locked 60 with vsync; automatic quality fallback |
 | Gameplay | Input latency | 4 | About 35 ms estimated on your iPhone; shown live in the overlay |
 | Graphics | Kart and character detail | 4 | Neon livery car; characters on the podium |
+
+## Podium ceremony (2026-11-19, D51)
+Screens: `docs/screens/phase14/podium/` (`<track>-podium.png` and `-podium-b.png`, plus `overview.jpg`).
+
+- The podium now has a festive stage per track, a celebration (fireworks, sparklers, confetti, ribbons, bunting, balloons, banners, searchlights, snow on Frosty Peaks, fans on Sunny Meadows) and a results card framed in the track's theme.
+- Frame rate: 60 FPS (p95 16.7 ms with vsync) on all four tracks at 1920 × 1080. No errors. 69 tests pass, and e2e passes 20/20 (including the full 4-race Grand Prix).
+- Known: Sepang's podium still looks hazy, because of the theme's sun flare and haze. This was there before the change.
+
+| Area | Item | Score | Reason |
+|---|---|---|---|
+| Graphics | Podium and results | **5** (was 3) | Themed festive stage, layered particles, glowing materials and a themed card |

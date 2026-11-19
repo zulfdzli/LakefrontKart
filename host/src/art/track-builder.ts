@@ -914,36 +914,13 @@ export function buildTrackWorld(
   {
     podium.y = terrainH(podium.x, podium.z);
     podium.ry = Math.atan2(TC.x - podium.x, TC.z - podium.z);
-    const parts: Part[] = [P_(box(17, 4, 9), 0x5c6bc0, 0, -1.3, 0), P_(box(17.6, 0.4, 9.6), 0xffffff, 0, 0.75, 0)];
-    const blocks: [number, number, number][] = [
-      [0, 2.6, 0xffca28],
-      [-5, 1.8, 0xcfd8dc],
-      [5, 1.2, 0xd08b4b],
-    ];
-    for (const [x, hgt, c] of blocks) {
-      parts.push(P_(box(4.6, hgt, 4.6), c, x, 0.95 + hgt / 2, 0));
+    // D51: the stage itself is built by Celebration (art/celebration.ts); only the step tops are fixed here
+    for (const [x, hgt] of [
+      [0, 2.6],
+      [-5, 1.8],
+      [5, 1.2],
+    ] as const)
       podium.spots.push([x, 0.95 + hgt, 0]);
-    }
-    for (const s of [-1, 1]) {
-      parts.push(P_(cyl(0.35, 0.35, 11, 6), 0xeceff1, s * 8.2, 5.5, -3.8));
-      parts.push(
-        P_(
-          cone(0.9, 2.2, 3),
-          s > 0 ? 0xff5252 : 0x40c4ff,
-          s * 8.2 - s * 0.9,
-          10,
-          -3.8,
-          0,
-          0,
-          (s * Math.PI) / 2,
-          1,
-          1,
-          0.2,
-        ),
-      );
-    }
-    parts.push(P_(box(17, 1.2, 0.5), 0xffeb3b, 0, 9.4, -3.8));
-    addStatic(inFrame(parts, podium.x, podium.y, podium.z, podium.ry));
   }
 
   // windmill

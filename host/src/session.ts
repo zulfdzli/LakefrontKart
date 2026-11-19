@@ -135,6 +135,7 @@ export class RaceSession {
     this.world.setVisibleKarts(stage === 'podium' ? new Set(this.podiumOrder.slice(0, 3).map((k) => k.id)) : null);
     this.audio.mood = stage === 'preview' ? 'menu' : stage === 'podium' ? 'podium' : 'race';
     this.world.setTrophy(stage === 'podium' && this.trophy);
+    this.world.setCelebrate(stage === 'podium');
   }
 
   /** Start the race; with `intro`, a track flyover plays before the countdown. */
@@ -217,8 +218,6 @@ export class RaceSession {
     if (this.stage === 'podium') {
       this.podT += pdt;
       this.world.podiumPose(this.podiumOrder, this.podT);
-      const pd = this.world.podium;
-      if (pdt > 0) this.world.effects?.podiumConfetti(pd.x, pd.y, pd.z);
     } else this.world.syncKarts(s, alpha, pdt, this.camPositions);
     this.world.updateAmbient(s, pdt, this.stage === 'podium');
 

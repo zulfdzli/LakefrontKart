@@ -633,6 +633,33 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
     - **In the 3D view**: velocity vectors, headings, the checkpoint gates and the start line.
 - **Why**: Section 12.8.
 
+
+### D51 · Festive podium ceremony (2026-11-19, your request with a reference)
+- **Q**: How should the podium look, given the 2 × 2 reference of festive podiums (one per track)?
+- **A**: The podium is rebuilt in `host/src/art/celebration.ts`. The camera angles and the results card position stay the same.
+  - **Stage** (always there):
+    - a deep blue base and a white top with a neon edge in the track's colour: green on Meadows, orange on Canyon, cyan on Frosty, blue on Sepang;
+    - gold, silver and bronze steps in polished, marble-veined metal with glowing frames;
+    - chrome poles with gold finials and pennants, and a gold bar reading ★ VICTORY ★;
+    - on Frosty Peaks, snow caps and drifts on the steps and icicles under the stage edge.
+  - **Celebration** (only during the podium):
+    - bunting along the bar and from the pole tops out to the sides and to the front;
+    - swaying balloon clusters, and two championship banners with a trophy and stars in the track's colours;
+    - fireworks behind the stage (peony, gold willow with trails, ring and crackling shells);
+    - sparkler fountains at the stage front and on the ground, and twinkling stars round the bar;
+    - foil confetti that tumbles, settles and fades, plus curly ribbons; confetti cannons from both poles at the start;
+    - searchlights sweeping the sky; falling snow on Frosty Peaks;
+    - on Sunny Meadows, a stand of cheering animal fans behind the steps and a stadium light tower.
+  - **Characters**: spacesuit details (shoulder and knee pads, a chest panel with status lights, a metal neck ring, a life-support pack, a glowing buckle) and vinyl-toy heads.
+  - **Results card**: framed in the track's theme:
+    - Meadows: gold with twinkling stars;
+    - Canyon: sun gold with a zig-zag band;
+    - Frosty: icy, with snow and icicles;
+    - Sepang: green with leaves and a green RACE AGAIN.
+    - All themes: a glowing frame, a gold title, and glossy buttons with a light sweep.
+  - **Cost**: the stage is 4 draw calls at all times; the celebration adds about 14 while the podium shows, and nothing during a race. 60 FPS on all four tracks at 1080p. `tools/podium-shot.ts` captures each track's podium.
+- **Why**: Your request. The reference's look comes from bloom, particles and colour, so glowing materials and particles do the work here; no real-time lights were added, because adding lights would recompile every material.
+
 ---
 
 ## Gate 0 status

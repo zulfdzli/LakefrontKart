@@ -320,23 +320,6 @@ export class Effects {
       );
   }
 
-  podiumConfetti(x: number, y: number, z: number): void {
-    if (this.rng.next() < 0.5)
-      this.sparks.emit(
-        x + this.rnd(-8, 8),
-        y + 14,
-        z + this.rnd(-6, 6),
-        this.rnd(-2, 2),
-        this.rnd(-1, 1),
-        this.rnd(-2, 2),
-        CONFETTI[Math.floor(this.rng.next() * 5)]!,
-        3,
-        1.1,
-        2.5,
-        y + 0.8,
-      );
-  }
-
   private addSkid(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): void {
     const dx = x1 - x0,
       dz = z1 - z0,

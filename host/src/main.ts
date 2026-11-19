@@ -364,6 +364,18 @@ function showResults(order: Kart[]): void {
   let best1: Kart | null = null;
   for (const k of order) if (k.bestLap && (!best1 || k.bestLap < best1.bestLap)) best1 = k;
   $('resBest').textContent = best1 ? `Best lap: ${fmtT(best1.bestLap)} (${standings([best1])[0]!.name})` : '';
+  // D51: the card is framed in the track's theme (gold stars, desert sun, ice, leaves)
+  const tid = session.s.track.id;
+  const theme = isTrackId(tid) ? TRACKS[tid].theme : 'meadows';
+  $('results').dataset.theme = theme;
+  $('resDeco').innerHTML =
+    theme === 'meadows'
+      ? '<i>★</i><i>★</i><b>★</b><i>★</i><i>★</i>'
+      : theme === 'canyon'
+        ? '<i>✦</i><b>☀</b><i>✦</i>'
+        : theme === 'frosty'
+          ? '<i>❄</i><b>❄</b><i>❄</i>'
+          : '<i>❀</i><b>✿</b><i>❀</i>';
   $('results').classList.remove('hidden');
 }
 
