@@ -1,19 +1,24 @@
 /*
- * Phone controller, styled after reference/controller/controller.jpeg (D3, D14): a pearl-white glossy remote with
- * bevels, recessed wells, soft domed buttons, a blue glow accent, translucent pale-blue side panels, grey rounded
- * labels and player LEDs. Our own icons and labels replace the original console remote's markings.
+ * Phone controller, shaped after reference/controller/controller.jpeg (D3, D14): a glossy remote with bevels,
+ * recessed wells, soft domed buttons, a blue glow accent, translucent side panels, rounded labels and player LEDs.
+ * Our own icons and labels replace the original console remote's markings. Dark mode (D58): a graphite shell with
+ * charcoal domed buttons and light text; the blue glow and player colours are unchanged.
  */
 :root {
   --font: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --ink: #2a2f3a;
-  --label: #8b919d;
-  --shell-hi: #fbfcfe;
-  --shell: #eef1f6;
-  --shell-lo: #dde2ea;
-  --well: #e1e6ee;
+  color-scheme: dark;
+  --ink: #e9edf4;
+  --label: #8c95a5;
+  --soft: #c3cad6;
+  --shell-hi: #2c323d;
+  --shell: #1e232c;
+  --shell-lo: #151920;
+  --well: #10141a;
+  --raised: #333b48;
+  --btn: radial-gradient(circle at 36% 28%, #4a5260 0%, #2d333d 45%, #1b1f26 100%);
   --glow: #3fa9f5;
-  --panel-a: #eef5fd;
-  --panel-b: #cfe0f2;
+  --panel-a: #1d2b3d;
+  --panel-b: #142131;
   --me: #3fa9f5;
 }
 * {
@@ -32,7 +37,7 @@ body {
   touch-action: none;
   font-family: var(--font);
   color: var(--ink);
-  background: radial-gradient(120% 90% at 50% 20%, #f1f3f7, #d7dce4);
+  background: radial-gradient(120% 90% at 50% 20%, #1c2129, #090b0f);
 }
 button {
   font-family: var(--font);
@@ -50,24 +55,24 @@ input {
 .card,
 .remote {
   background:
-    radial-gradient(140% 70% at 30% 0%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 55%),
+    radial-gradient(140% 70% at 30% 0%, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 55%),
     linear-gradient(160deg, var(--shell-hi), var(--shell) 45%, var(--shell-lo));
   box-shadow:
-    inset 0 2px 1px rgba(255, 255, 255, 0.95),
-    inset 0 -6px 14px rgba(120, 130, 150, 0.18),
-    0 20px 50px rgba(40, 50, 70, 0.25);
+    inset 0 2px 1px rgba(255, 255, 255, 0.08),
+    inset 0 -6px 14px rgba(0, 0, 0, 0.4),
+    0 20px 50px rgba(0, 0, 0, 0.6);
 }
 .rbtn,
 .pbtn {
   border: none;
   cursor: pointer;
   touch-action: none;
-  color: #6b7280;
-  background: radial-gradient(circle at 36% 28%, #ffffff 0%, #f1f3f7 45%, #d9dee6 100%);
+  color: #b4bcc9;
+  background: var(--btn);
   box-shadow:
-    0 6px 10px rgba(60, 70, 90, 0.22),
-    0 2px 0 rgba(255, 255, 255, 0.9) inset,
-    0 -3px 6px rgba(120, 130, 150, 0.25) inset;
+    0 6px 10px rgba(0, 0, 0, 0.5),
+    0 2px 0 rgba(255, 255, 255, 0.12) inset,
+    0 -3px 6px rgba(0, 0, 0, 0.4) inset;
   transition:
     transform 0.08s ease-out,
     box-shadow 0.08s ease-out,
@@ -78,10 +83,10 @@ input {
 .pbtn.on {
   transform: translateY(2px) scale(0.96);
   box-shadow:
-    0 2px 4px rgba(60, 70, 90, 0.25),
+    0 2px 4px rgba(0, 0, 0, 0.5),
     0 0 0 4px var(--glow),
     0 0 22px var(--glow),
-    0 -2px 5px rgba(120, 130, 150, 0.3) inset;
+    0 -2px 5px rgba(0, 0, 0, 0.4) inset;
 }
 .leds {
   display: flex;
@@ -92,7 +97,7 @@ input {
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background: #8f959f;
+  background: #353b46;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 .leds i.lit {
@@ -143,8 +148,8 @@ input {
   font-size: 30px;
   font-weight: 700;
   letter-spacing: 2px;
-  color: #5d6472;
-  text-shadow: 0 1px 0 #fff;
+  color: var(--soft);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
 }
 .screen {
   width: 100%;
@@ -175,8 +180,8 @@ input {
   border: none;
   background: var(--well);
   box-shadow:
-    inset 0 3px 8px rgba(80, 90, 110, 0.22),
-    0 1px 0 #fff;
+    inset 0 3px 8px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.06);
   outline: none;
 }
 #code {
@@ -231,8 +236,8 @@ input {
   margin: 0;
   padding: 10px 14px;
   border-radius: 16px;
-  background: #ffe1dc;
-  color: #b3261e;
+  background: rgba(229, 57, 53, 0.18);
+  color: #ff8a80;
   font-weight: 600;
   text-align: center;
 }
@@ -260,8 +265,8 @@ input {
 .leaderTag {
   font-size: 14px;
   font-weight: 700;
-  color: #b8860b;
-  background: #fff4cc;
+  color: #ffd54f;
+  background: rgba(255, 213, 79, 0.14);
   padding: 3px 10px;
   border-radius: 999px;
 }
@@ -278,7 +283,7 @@ input {
   border: none;
   background: var(--well);
   box-shadow:
-    inset 0 2px 6px rgba(80, 90, 110, 0.18),
+    inset 0 2px 6px rgba(0, 0, 0, 0.55),
     0 0 0 3px var(--c);
   display: flex;
   flex-direction: column;
@@ -286,14 +291,14 @@ input {
   justify-content: center;
   gap: 2px;
   font-weight: 600;
-  color: #5d6472;
+  color: var(--soft);
   transition: transform 0.15s;
 }
 .chip span {
   font-size: 32px;
 }
 .chip.mine {
-  background: #fff;
+  background: var(--raised);
   box-shadow:
     0 0 0 4px var(--me),
     0 0 18px var(--me);
@@ -305,7 +310,7 @@ input {
 .resTitle {
   font-size: 30px;
   font-weight: 700;
-  color: #5d6472;
+  color: var(--soft);
 }
 .standings {
   list-style: none;
@@ -335,7 +340,7 @@ input {
   flex: 1;
 }
 .standings li.me {
-  background: #fff;
+  background: var(--raised);
   box-shadow: 0 0 0 3px var(--me);
 }
 .standings li .rk {
@@ -360,18 +365,18 @@ input {
 .trigger {
   border-radius: 18px;
   background:
-    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0) 0 7px, rgba(255, 255, 255, 0.35) 7px 9px),
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0) 0 7px, rgba(255, 255, 255, 0.035) 7px 9px),
     linear-gradient(var(--panel-a), var(--panel-b));
   box-shadow:
-    inset 0 2px 6px rgba(70, 100, 140, 0.28),
-    0 1px 0 #fff;
+    inset 0 2px 6px rgba(0, 0, 0, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.06);
   min-height: 40px;
   display: flex;
   align-items: center;
   padding: 0 16px;
   gap: 18px;
   font-weight: 700;
-  color: #4b5563;
+  color: var(--soft);
 }
 .trigger.top {
   justify-content: space-between;
@@ -421,8 +426,8 @@ input {
   flex: 1;
   height: 12px;
   border-radius: 8px;
-  background: rgba(90, 110, 140, 0.18);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
 .charge i {
@@ -475,15 +480,15 @@ input {
 .dpad .arm,
 .dpad .hub {
   position: absolute;
-  background: radial-gradient(circle at 40% 30%, #ffffff, #eef1f5 50%, #d8dde5);
+  background: var(--btn);
   box-shadow:
-    0 6px 12px rgba(60, 70, 90, 0.22),
-    inset 0 2px 0 rgba(255, 255, 255, 0.9),
-    inset 0 -3px 6px rgba(120, 130, 150, 0.22);
+    0 6px 12px rgba(0, 0, 0, 0.5),
+    inset 0 2px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #a7adb8;
+  color: #6c7585;
   font-size: calc(var(--dh) * 0.11);
   transition:
     transform 0.08s,
@@ -525,7 +530,7 @@ input {
   width: 28%;
   height: 54%;
   border-radius: 14%;
-  box-shadow: inset 0 2px 6px rgba(120, 130, 150, 0.25);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 .dpad.left .l,
 .dpad.right .r {
@@ -534,7 +539,7 @@ input {
   box-shadow:
     0 0 0 4px var(--glow),
     0 0 22px var(--glow),
-    inset 0 -2px 5px rgba(120, 130, 150, 0.3);
+    inset 0 -2px 5px rgba(0, 0, 0, 0.4);
 }
 .slider {
   position: relative;
@@ -551,7 +556,7 @@ input {
   transform: translateY(-50%);
   border-radius: 999px;
   background: var(--well);
-  box-shadow: inset 0 3px 8px rgba(80, 90, 110, 0.28);
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.55);
 }
 .slider .knob {
   --x: 0;
@@ -562,8 +567,8 @@ input {
   aspect-ratio: 1;
   border-radius: 50%;
   transform: translate(calc(-50% + var(--x) * 34cqw), -50%);
-  background: radial-gradient(circle at 36% 28%, #ffffff, #f1f3f7 45%, #d9dee6);
-  box-shadow: 0 6px 10px rgba(60, 70, 90, 0.25);
+  background: var(--btn);
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.5);
 }
 .slider {
   container-type: inline-size;
@@ -579,8 +584,8 @@ input {
   justify-content: center;
   background: var(--well);
   box-shadow:
-    inset 0 4px 10px rgba(80, 90, 110, 0.28),
-    0 1px 0 #fff;
+    inset 0 4px 10px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.06);
 }
 .rbtn.big {
   width: 82%;
@@ -606,7 +611,7 @@ input {
   min-width: 26px;
   min-height: 26px;
   fill: none;
-  stroke: #8b919d;
+  stroke: #98a1b0;
   stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -633,8 +638,8 @@ input {
   border-radius: 999px;
   background: var(--well);
   box-shadow:
-    inset 0 3px 8px rgba(80, 90, 110, 0.25),
-    0 1px 0 #fff;
+    inset 0 3px 8px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.06);
 }
 .pill.v {
   flex-direction: column;
@@ -650,8 +655,8 @@ input {
   box-shadow:
     0 0 0 3px rgba(63, 169, 245, 0.35),
     0 0 18px rgba(63, 169, 245, 0.55),
-    0 6px 10px rgba(60, 70, 90, 0.22),
-    inset 0 2px 0 rgba(255, 255, 255, 0.9);
+    0 6px 10px rgba(0, 0, 0, 0.5),
+    inset 0 2px 0 rgba(255, 255, 255, 0.12);
 }
 
 /* speaker grille */
@@ -667,7 +672,7 @@ input {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #9ea4ae;
+  background: #353b46;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 .grille i:nth-child(-n + 3),
@@ -750,11 +755,11 @@ input {
   border-radius: 50%;
   border: none;
   font-size: 16px;
-  color: #c0392b;
-  background: radial-gradient(circle at 36% 28%, #fff, #e8ebf0);
+  color: #ff6b5e;
+  background: var(--btn);
   box-shadow:
-    0 3px 6px rgba(60, 70, 90, 0.22),
-    inset 0 -2px 4px rgba(120, 130, 150, 0.25);
+    0 3px 6px rgba(0, 0, 0, 0.5),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.4);
 }
 .power::before {
   content: '';
@@ -788,7 +793,7 @@ input {
 }
 .remote.boosting .trigger.top {
   box-shadow:
-    inset 0 2px 6px rgba(70, 100, 140, 0.28),
+    inset 0 2px 6px rgba(0, 0, 0, 0.5),
     0 0 14px var(--me);
 }
 .toast {
@@ -798,7 +803,7 @@ input {
   transform: translate(-50%, -8px);
   padding: 8px 16px;
   border-radius: 999px;
-  background: rgba(42, 47, 58, 0.85);
+  background: rgba(52, 60, 74, 0.95);
   color: #fff;
   font-weight: 600;
   opacity: 0;
@@ -822,7 +827,7 @@ input {
 @keyframes placeUp {
   0% {
     transform: scale(1.5);
-    color: #2e7d32;
+    color: #69d17a;
   }
   100% {
     transform: scale(1);
@@ -831,7 +836,7 @@ input {
 @keyframes placeDown {
   0% {
     transform: scale(1.3);
-    color: #c62828;
+    color: #ff6b5e;
   }
   100% {
     transform: scale(1);
@@ -847,7 +852,7 @@ input {
   line-height: 1;
   color: var(--glow);
   text-shadow:
-    0 6px 0 rgba(40, 60, 100, 0.25),
+    0 6px 0 rgba(0, 0, 0, 0.5),
     0 0 30px rgba(77, 168, 255, 0.5);
   opacity: 0;
   pointer-events: none;
@@ -859,7 +864,7 @@ input {
 .count.go {
   color: #2fbf62;
   text-shadow:
-    0 6px 0 rgba(20, 80, 40, 0.25),
+    0 6px 0 rgba(0, 0, 0, 0.5),
     0 0 30px rgba(47, 191, 98, 0.6);
 }
 @keyframes countPop {
@@ -913,7 +918,7 @@ input {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.97), rgba(232, 237, 245, 0.97));
+  background: radial-gradient(circle at 50% 40%, rgba(32, 37, 46, 0.97), rgba(10, 12, 16, 0.97));
   animation: fade 0.3s ease-out both;
   text-align: center;
 }
@@ -960,7 +965,7 @@ input {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  background: rgba(238, 241, 246, 0.94);
+  background: rgba(13, 16, 21, 0.95);
   font-size: 22px;
   text-align: center;
   padding: 24px;
@@ -1008,7 +1013,7 @@ input {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(40, 46, 60, 0.35);
+  background: rgba(0, 0, 0, 0.6);
   padding: 16px;
   animation: fade 0.2s ease-out both;
 }
@@ -1022,13 +1027,13 @@ input {
   flex-direction: column;
   gap: 12px;
   background: linear-gradient(160deg, var(--shell-hi), var(--shell));
-  box-shadow: 0 20px 50px rgba(40, 50, 70, 0.3);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
   animation: rise 0.35s cubic-bezier(0.2, 1.5, 0.4, 1) both;
 }
 .sheetCard h2 {
   margin: 0;
   font-size: 22px;
-  color: #5d6472;
+  color: var(--soft);
   text-align: center;
 }
 .opt {
@@ -1044,7 +1049,7 @@ input {
   background: var(--well);
   border-radius: 999px;
   padding: 4px;
-  box-shadow: inset 0 2px 6px rgba(80, 90, 110, 0.22);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
 }
 .seg button {
   border: none;
@@ -1056,9 +1061,9 @@ input {
   color: var(--label);
 }
 .seg button.sel {
-  background: #fff;
+  background: var(--raised);
   color: var(--ink);
-  box-shadow: 0 2px 6px rgba(60, 70, 90, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 .tog {
   width: 64px;
@@ -1066,7 +1071,7 @@ input {
   border-radius: 999px;
   border: none;
   background: var(--well);
-  box-shadow: inset 0 2px 6px rgba(80, 90, 110, 0.25);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
   position: relative;
 }
 .tog::after {
@@ -1077,8 +1082,8 @@ input {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  background: #dfe4ec;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
   transition: transform 0.2s;
 }
 .tog.on {
@@ -1100,7 +1105,7 @@ input {
   align-items: center;
   padding: 12px 14px;
   border-radius: 20px;
-  background: rgba(42, 47, 58, 0.92);
+  background: rgba(52, 60, 74, 0.97);
   color: #fff;
   font-weight: 600;
   font-size: 15px;
@@ -1183,7 +1188,7 @@ input {
   padding: 8px 10px;
   border-radius: 22px;
   background: var(--well);
-  box-shadow: inset 0 2px 6px rgba(80, 90, 110, 0.2);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
 }
 .cfgBox[hidden] {
   display: none;
@@ -1201,7 +1206,7 @@ input {
 }
 .cfgRow .seg {
   flex: 1;
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(0, 0, 0, 0.3);
 }
 .cfgRow .seg button {
   flex: 1;
