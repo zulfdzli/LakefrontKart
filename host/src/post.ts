@@ -124,7 +124,7 @@ const ATMOS = {
           vec3 acc = col;
           for (int k = 1; k <= 7; k++) {
             vec2 q = c + d * (1.0 - amt * float(k) / 7.0);
-            acc += texture2D(tScene, R.xy + clamp(q, 0.001, 0.999) * R.zw).rgb;
+            acc += textureLod(tScene, R.xy + clamp(q, 0.001, 0.999) * R.zw, 0.0).rgb; // explicit level: no derivatives in the loop (D3D X3595)
           }
           col = acc / 8.0;
         }
@@ -160,7 +160,7 @@ const ATMOS = {
         float vis = 0.0;
         for (int k = 0; k < 5; k++) {
           vec2 o = vec2(float(k - 2) * 0.004, float(2 - k) * 0.003);
-          vis += smoothstep(0.9, 1.6, lum(texture2D(tScene, suv + o).rgb));
+          vis += smoothstep(0.9, 1.6, lum(textureLod(tScene, suv + o, 0.0).rgb));
         }
         vis = vis / 5.0 * smoothstep(-0.1, 0.05, min(min(sp.x, sp.y), min(1.0 - sp.x, 1.0 - sp.y)) + 0.1);
         if (vis > 0.0) {
