@@ -688,6 +688,16 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - Before and after: `docs/screens/phase14/camera/before-after.jpg`.
 - **Why**: Your request. The car fills more of the screen, and there is still enough road ahead to see corners coming.
 
+### D54 · Broadcast-style chase camera (2026-11-19, your reference; replaces D53)
+- **Q**: Make the race camera look like your reference screenshot of a TV-style racing game: low and tight behind the car.
+- **A**: Changes in `host/src/camera.ts`:
+  - **Position**: 7.9 m behind the car's centre (about 4.5 m behind the rear wing), plus up to about 0.8 m at top speed. The camera is 2.55 m high, just above the roofline, and aims 16 m down the road at 1.25 m, so the horizon sits about 40% down the screen.
+  - **Speed-independent framing**: the camera's smoothing used to leave it about speed ÷ 8 metres further back than intended (4 m at 100 km/h). It now leads by 65% of that, so the framing barely changes with speed. A little trailing is kept for the sense of speed.
+  - **Lens**: 6° narrower than before. It still widens with speed and boost, and still widens for split-screen views.
+  - **Result**: the car's rear sits in the lower middle at about a quarter of the screen width, as in the reference.
+  - The countdown swing-in and the drift framing are kept. Tested in 1 to 5 player split-screen at 60 FPS.
+- **Why**: Your request.
+
 ---
 
 ## Gate 0 status

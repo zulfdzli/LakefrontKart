@@ -1,0 +1,26 @@
+{
+  "phase": "phase14/camera2-frosty",
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 (0x00001F9D) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "viewport": "1920x1080",
+  "seed": 7,
+  "racePerf": {
+    "fps": 59,
+    "p50": 16.7,
+    "p95": 16.7
+  },
+  "render": {
+    "calls": 152,
+    "triangles": 757622,
+    "views": 1,
+    "pixelRatio": 1,
+    "simMs": 0.2614658908903813,
+    "tier": "high",
+    "memory": {
+      "geometries": 101,
+      "textures": 63,
+      "programs": 55
+    }
+  },
+  "split": {},
+  "errors": []
+}

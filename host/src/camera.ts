@@ -151,15 +151,19 @@ export class ChaseCam {
     const intro = s.phase === 'countdown' ? smooth01((COUNTDOWN_T - s.cd) / 2.4) : s.phase === 'grid' ? 0 : 1;
     const a = this.camH + Math.PI * (1 - intro);
     this.fovKick += ((k.boost > 0 ? 1 : 0) - this.fovKick) * (1 - Math.exp(-6 * dt));
-    // D53: about 15% closer and a little lower than before (9.8 m, 4.0 m), so the car fills more of the view
-    const dist = 8.3 + Math.max(0, k.sp) * 0.026 + this.fovKick * 1.2 + (1 - intro) * 3;
-    const hgt = 3.5 + (1 - intro) * 2.5;
-    this.target.set(ix - Math.sin(a) * dist, iy + hgt, iz - Math.cos(a) * dist);
+    // D54: a low, tight broadcast-style chase view (your reference): about 3.5 m behind the rear wing, just above
+    // the roofline, so the car's rear fills the lower middle of the screen and the horizon sits about 40% down
+    const dist = 7.9 + Math.max(0, k.sp) * 0.015 + this.fovKick * 0.8 + (1 - intro) * 4;
+    const hgt = 2.55 + (1 - intro) * 3;
+    // the follow below trails the car by about speed / 8 m; lead the target by most of that, so the framing stays
+    // the same at any speed (a little trail is kept for the sense of speed)
+    const lead = intro * 0.65 * (1 / 8);
+    this.target.set(ix - Math.sin(a) * dist + k.vx * lead, iy + hgt, iz - Math.cos(a) * dist + k.vz * lead);
     if (!this.init) {
       cam.position.copy(this.target);
       this.init = true;
     } else cam.position.lerp(this.target, 1 - Math.exp(-8 * dt));
-    this.look.set(ix + Math.sin(this.camH) * 8 * intro, iy + 1.6, iz + Math.cos(this.camH) * 8 * intro);
+    this.look.set(ix + Math.sin(this.camH) * 16 * intro, iy + 1.25, iz + Math.cos(this.camH) * 16 * intro);
     cam.lookAt(this.look);
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt * 2.2);
@@ -169,7 +173,8 @@ export class ChaseCam {
       cam.position.y += Math.sin(t * 61 + 1) * sk * 0.6;
       cam.position.z += Math.cos(t * 47) * sk;
     }
-    this.setFov(this.baseFov + Math.max(0, k.sp) * 0.19 + this.fovKick * 7, dt);
+    // a slightly narrower lens than before (baseFov - 6), widening with speed and boost
+    this.setFov(this.baseFov - 6 + Math.max(0, k.sp) * 0.15 + this.fovKick * 6, dt);
     this.focus.set(ix, iy, iz);
   }
 }
