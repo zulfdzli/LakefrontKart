@@ -12,7 +12,7 @@ import { Effects } from './art/effects';
 import { KartView, ProceduralKartProvider, type KartAssetProvider } from './art/kart';
 import { setMaxAnisotropy } from './art/geo';
 import { MEADOWS, THEMES, type Theme } from './art/palette';
-import { Post, type PostLook, type Tier } from './post';
+import { MAX_MOVERS, Post, type Mover, type PostLook, type Tier } from './post';
 import { Ambient, type AmbientKind } from './art/particles';
 import { buildNature, type Nature } from './art/nature';
 import { Celebration } from './art/celebration';
@@ -36,6 +36,8 @@ export interface ViewToRender {
   /** 0..1 speed (radial speed blur) and boost (chromatic fringe) for the post-processing. */
   blur?: number;
   boost?: number;
+  /** 0..1 camera motion blur (D63). */
+  motion?: number;
 }
 
 /** Light intensities are scaled by π: three.js r155+ uses physical units, the prototype (r128) did not. */
@@ -73,6 +75,9 @@ export class World {
   /** D45 cinematic post-processing; ?nopost renders straight to the screen as before. */
   readonly post: Post | null;
   private lastFrame = performance.now();
+  /** D63: each kart's body centre last frame, so the motion blur can take the karts' own movement out. */
+  private readonly kartPrev = new Map<number, THREE.Vector3>();
+  private readonly movers: Mover[] = [];
   private readonly maxPixelRatio: number;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -235,6 +240,7 @@ export class World {
       v.dispose();
     }
     this.views = [];
+    this.kartPrev.clear();
   }
 
   get podium(): TrackWorld['podium'] {
@@ -584,12 +590,42 @@ export class World {
       r.setViewport(0, 0, window.innerWidth, H);
       r.setScissor(0, 0, window.innerWidth, H);
       this.post.render(
-        list.map((v) => ({ rect: v.rect, camera: v.camera, blur: v.blur ?? 0, boost: v.boost ?? 0 })),
+        list.map((v) => ({
+          rect: v.rect,
+          camera: v.camera,
+          blur: v.blur ?? 0,
+          boost: v.boost ?? 0,
+          motion: v.motion ?? 0,
+        })),
         window.innerWidth,
         H,
         dt,
+        this.updateMovers(),
       );
     }
+  }
+
+  /** The karts for the motion blur (D63): where each one is, its heading and how far it moved since the last frame. */
+  private updateMovers(): Mover[] {
+    let n = 0;
+    for (const kv of this.views) {
+      if (!kv.root.visible || n >= MAX_MOVERS) continue;
+      const m = (this.movers[n] ??= { pos: new THREE.Vector3(), yaw: 0, delta: new THREE.Vector3() });
+      m.pos.copy(kv.root.position);
+      m.yaw = kv.root.rotation.y;
+      const prev = this.kartPrev.get(kv.kartId);
+      if (prev) {
+        m.delta.subVectors(m.pos, prev);
+        if (m.delta.lengthSq() > 64) m.delta.set(0, 0, 0); // a rescue drop, not movement
+        prev.copy(m.pos);
+      } else {
+        m.delta.set(0, 0, 0);
+        this.kartPrev.set(kv.kartId, m.pos.clone());
+      }
+      n++;
+    }
+    this.movers.length = n;
+    return this.movers;
   }
 
   hideTags(): void {

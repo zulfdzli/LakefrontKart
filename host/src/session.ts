@@ -307,6 +307,8 @@ export class RaceSession {
           ? Math.min(1, Math.max(0, (p.kart.sp - 30) / 40) * 0.55 + (p.kart.boost > 0 ? 0.45 : 0))
           : 0,
       boost: this.stage === 'racing' && p.kart.boost > 0 ? 1 : 0,
+      // D63 camera motion blur while racing (the post pass starts clean after a pause or a camera jump)
+      motion: this.stage === 'racing' && !this.paused ? 1 : 0,
     }));
   }
 

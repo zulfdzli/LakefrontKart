@@ -2,7 +2,7 @@
 
 A local multiplayer kart racer. One computer shows the race on a big screen, and up to 5 players use their phones as controllers over the same Wi-Fi. No internet, accounts or app install needed.
 
-Four tracks (Sunny Meadows, Dusty Canyon, Frosty Peaks and Sepang Circuit), laps of about 2 minutes, 8 items, AI rivals at three difficulties, single races or a 4-race Grand Prix, and split-screen for 1 to 5 players. See `docs/DECISIONS.md` for every design decision and `docs/POLISH.md` for the quality scorecard.
+Four tracks (Sunny Meadows, Dusty Canyon, Frosty Peaks and Sepang Circuit), laps of just under 2 minutes, 8 items, AI rivals at three difficulties, single races or a 4-race Grand Prix, and split-screen for 1 to 5 players. See `docs/DECISIONS.md` for every design decision and `docs/POLISH.md` for the quality scorecard.
 
 ## Quick start
 
@@ -60,6 +60,8 @@ To drive from the computer's keyboard (testing), open `http://localhost:3000/?ke
 ## Slow or choppy?
 
 The game picks its quality automatically: High for 1 to 2 players, Medium for 3 to 4, and Low for 5. If the frame rate drops, it lowers the resolution first, then effects and shadows, and restores them when it can. On a laptop, plug in the charger and use the fast graphics chip (see above). Press F to see the frame rate.
+
+Racing has motion blur (the road and scenery smear with speed and turning; the karts stay sharp). If it bothers you, open the host page with `?mblur=0` on the end of the address, for example `http://localhost:3000/play?mblur=0`.
 
 ## Scripts
 

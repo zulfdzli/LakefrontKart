@@ -854,5 +854,24 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 
 ---
 
+### D63 · Camera motion blur while racing (2026-11-19, phase 14)
+- **Q**: the user asked for a motion blur effect when racing.
+- **Before**: the only blur was D45's radial speed streak. It is faint, only at the screen edges, starts at about 108 km/h and needs a boost to be strong. It is not motion blur: turning, the road rushing past and scenery near the camera stayed sharp.
+- **A**: camera motion blur in the atmosphere pass (`post.ts`), sharing one sampling loop with the radial streak, which is kept.
+  - **Method**: for every pixel, the world position is rebuilt from the depth buffer and projected with last frame's camera (view-projection per view slot). The image is then smeared along that screen motion, centred on the pixel.
+  - **Shutter**: a fixed exposure of 0.6 of a 60 fps frame (about a 216° shutter), so the smear is the same length at any frame rate. It is capped at 6% of the view width, so a sudden camera move cannot smear the whole view.
+  - **Karts stay sharp**: each kart's movement since the last frame is taken out for the pixels inside its box (oriented by heading, 3.5 × 6.2 × 1.6 m, from just above the road). The renderer passes up to 8 karts. Samples that land on another kart are rejected, so a sharp car is not smeared into the blurred road around it.
+    - **Why a box**: a sphere was tried first and left a sharp disc of road around the car.
+    - **Wheels**: they sit below the box floor, so the road under and beside the car still blurs.
+  - **When**: only while racing and not paused. A new camera, a camera jump over 8 m (rescue) or a pause starts clean, with no smear from the previous frame.
+  - **Cost**: 12 samples on High, 9 on Medium and 6 on Low (5 views). The depth and colour taps use explicit-LOD lookups, so warning X3595 does not return.
+  - **Off switch**: `?mblur=0` on the host page turns it off (for comfort), as described in the README.
+- **Checked**:
+  - **Screenshots** (`docs/screens/phase14/motion-blur/`): at 156 km/h the road and kerbs streak towards the camera and the car is crisp. In a drift the scenery sweeps sideways with the camera's yaw while the kart alongside stays sharp.
+  - **Frame rate**: 60 FPS in a race and with 2 to 5 split views, with no X3595 warning.
+  - **Tests**: Vitest 79/79, e2e 20/20; typecheck, lint and the build pass. The README "laps of about 2 minutes" now reads "just under 2 minutes" (D62).
+
+---
+
 ## Gate 0 status
 All decisions are settled (D1 to D16). **You confirmed a shared understanding on 2026-11-16. Gate 0 is closed.**

@@ -7,8 +7,10 @@
  *    split-screen views survive. SMAA still runs at the end for the edges inside textures and post effects.
  * 2. Atmosphere pass, per viewport (rects, inverse projections and camera matrices are uniforms):
  *    height fog with sun in-scattering (aerial perspective, low-lying mist, "volumetric-looking" sun haze),
- *    a lens flare (glow, streak and ghosts, only when the sun is actually visible in that view), and a radial
- *    speed blur towards the screen edges that grows with speed and boost.
+ *    a lens flare (glow, streak and ghosts, only when the sun is actually visible in that view), and motion blur:
+ *    camera motion blur (D63: each pixel's world position from depth is reprojected with last frame's camera, and
+ *    the image is smeared along that screen motion over a fixed shutter time), with the karts' own movement taken
+ *    out so they stay sharp, plus the radial speed streak towards the edges that grows with speed and boost.
  * 3. Bloom (UnrealBloomPass) on the bright parts: sparks, flames, item boxes, the sun, wet highlights.
  * 4. Finish: colour grading (lift/gamma/gain, saturation, contrast, warmth), per-view vignette, chromatic
  *    fringe while boosting, and fine animated film grain.
@@ -32,6 +34,28 @@ const MSAA_OVERRIDE = ((): number | null => {
   return v === null ? null : Math.max(0, Math.min(8, Number(v) || 0));
 })();
 export type Tier = 'high' | 'medium' | 'low';
+
+/** D63 motion blur: shutter as a share of a 60 fps frame (0.5 = a 180 degree shutter), samples per tier, the longest
+ * smear (share of the view width), and ?mblur=0 to turn it off. */
+const MBLUR = {
+  shutter: 0.6,
+  taps: { high: 12, medium: 9, low: 6 } as const,
+  maxLen: 0.06,
+  on: new URLSearchParams(location.search).get('mblur') !== '0',
+};
+/** Karts (moving objects) the motion blur compensates for. */
+export const MAX_MOVERS = 8;
+export interface Mover {
+  /** The kart's origin on the ground (world). */
+  pos: THREE.Vector3;
+  /** Heading (rotation about y). */
+  yaw: number;
+  /** World movement since the last frame. */
+  delta: THREE.Vector3;
+}
+/** A kart's box in its own frame (metres, after CAR_SCALE): half width, rear and front, floor and roof. Wheels below
+ * the floor count as road (they touch it), so the road next to and under the car still blurs. */
+const KART_BOX = { halfW: 1.75, rear: -3.25, front: 2.95, floor: 0.12, roof: 1.75 };
 
 /** Per-theme look: fog, light shafts, flare and grade. */
 export interface PostLook {
@@ -64,6 +88,8 @@ export interface PostView {
   /** 0..1: speed blur and boost fringe. */
   blur: number;
   boost: number;
+  /** 0..1: camera motion blur (D63), 0 when paused or off the race. */
+  motion: number;
 }
 
 const ATMOS = {
@@ -84,12 +110,22 @@ const ATMOS = {
     uFog: { value: new THREE.Vector4() },
     uScatter: { value: 0 },
     uFlare: { value: 0 },
+    uPrevVP: { value: Array.from({ length: MAX_VIEWS }, () => new THREE.Matrix4()) },
+    uMotion: { value: new Array<number>(MAX_VIEWS).fill(0) },
+    uShutter: { value: 0 },
+    uTaps: { value: 12 },
+    uMovers: { value: 0 },
+    uMover: { value: Array.from({ length: MAX_MOVERS }, () => new THREE.Vector4()) },
+    uMoverD: { value: Array.from({ length: MAX_MOVERS }, () => new THREE.Vector4()) },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
     #define MAXV ${MAX_VIEWS}
+    #define MAXM ${MAX_MOVERS}
+    #define MAXTAPS 12
+    #define MAXLEN ${MBLUR.maxLen.toFixed(3)}
     uniform sampler2D tScene; uniform sampler2D tDepth;
     uniform int uCount;
     uniform vec4 uRect[MAXV]; uniform mat4 uInvProj[MAXV]; uniform mat4 uCamWorld[MAXV];
@@ -97,9 +133,29 @@ const ATMOS = {
     uniform vec3 uSunDir; uniform vec3 uFogColor; uniform vec3 uSunColor;
     uniform vec4 uFog; // density, falloff, base height, mist
     uniform float uScatter; uniform float uFlare;
+    uniform mat4 uPrevVP[MAXV]; uniform float uMotion[MAXV]; uniform float uShutter; uniform int uTaps;
+    uniform int uMovers; uniform vec4 uMover[MAXM]; uniform vec4 uMoverD[MAXM]; // xyz + cos(yaw), delta + sin(yaw)
     varying vec2 vUv;
 
     float lum(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+    /** View-space position of a pixel of view vi (lp: 0..1 inside the view, z: depth buffer). */
+    vec3 viewPos(int vi, vec2 lp, float z) {
+      vec4 v = uInvProj[vi] * vec4(lp * 2.0 - 1.0, z * 2.0 - 1.0, 1.0);
+      return v.xyz / v.w;
+    }
+    /** Which kart's box a world point is in, or -1. */
+    int moverAt(vec3 p) {
+      for (int m = 0; m < MAXM; m++) {
+        if (m >= uMovers) break;
+        vec3 q = p - uMover[m].xyz;
+        if (dot(q, q) > 16.0) continue;
+        float c = uMover[m].w, s = uMoverD[m].w;
+        vec3 l = vec3(c * q.x - s * q.z, q.y, s * q.x + c * q.z);
+        if (abs(l.x) < ${KART_BOX.halfW.toFixed(2)} && l.z > ${KART_BOX.rear.toFixed(2)} && l.z < ${KART_BOX.front.toFixed(2)} &&
+            l.y > ${KART_BOX.floor.toFixed(2)} && l.y < ${KART_BOX.roof.toFixed(2)}) return m;
+      }
+      return -1;
+    }
 
     void main() {
       int vi = -1;
@@ -113,31 +169,56 @@ const ATMOS = {
       vec4 R = uRect[vi];
       vec2 lp = (vUv - R.xy) / R.zw;              // 0..1 inside this view
 
-      // radial speed blur, strongest at the edges of the view
-      float bl = uBlur[vi];
-      if (bl > 0.01) {
-        vec2 c = vec2(0.5, 0.42);
-        vec2 d = lp - c;
-        float edge = smoothstep(0.12, 0.62, length(d * vec2(uAspect[vi], 1.0)) / max(1.0, uAspect[vi] * 0.6));
-        float amt = bl * edge * 0.085;
-        if (amt > 0.001) {
-          vec3 acc = col;
-          for (int k = 1; k <= 7; k++) {
-            vec2 q = c + d * (1.0 - amt * float(k) / 7.0);
-            acc += textureLod(tScene, R.xy + clamp(q, 0.001, 0.999) * R.zw, 0.0).rgb; // explicit level: no derivatives in the loop (D3D X3595)
-          }
-          col = acc / 8.0;
-        }
-      }
-
       // world position from depth
       float z = texture2D(tDepth, vUv).x;
-      vec4 v = uInvProj[vi] * vec4(lp * 2.0 - 1.0, z * 2.0 - 1.0, 1.0);
-      v /= v.w;
+      vec3 vp = viewPos(vi, lp, z);
       vec3 camPos = uCamWorld[vi][3].xyz;
-      vec3 wp = (uCamWorld[vi] * vec4(v.xyz, 1.0)).xyz;
+      vec3 wp = (uCamWorld[vi] * vec4(vp, 1.0)).xyz;
       vec3 rd = normalize(wp - camPos);
-      float dist = z >= 0.99999 ? 4200.0 : length(v.xyz);
+      float dist = z >= 0.99999 ? 4200.0 : length(vp);
+
+      // D63 camera motion blur: where was this point on screen last frame? A kart's pixels move with the kart, so
+      // its own movement is taken out first (it stays sharp); everything else is treated as standing still
+      vec2 mv = vec2(0.0);
+      int own = -1;
+      if (uMotion[vi] > 0.0) {
+        own = moverAt(wp);
+        vec3 pw = own >= 0 ? wp - uMoverD[own].xyz : wp;
+        vec4 pc = uPrevVP[vi] * vec4(pw, 1.0);
+        if (pc.w > 0.05) {
+          mv = (lp - (pc.xy / pc.w * 0.5 + 0.5)) * uShutter * uMotion[vi];
+          float ml = length(mv * vec2(uAspect[vi], 1.0));
+          if (ml > MAXLEN) mv *= MAXLEN / ml;
+        }
+      }
+      // radial speed streak, strongest at the edges of the view
+      float amt = 0.0;
+      vec2 rc = lp - vec2(0.5, 0.42);
+      float bl = uBlur[vi];
+      if (bl > 0.01) {
+        float edge = smoothstep(0.12, 0.62, length(rc * vec2(uAspect[vi], 1.0)) / max(1.0, uAspect[vi] * 0.6));
+        amt = bl * edge * 0.085;
+      }
+      // both in one pass: samples spread along the motion (centred on the pixel) and inward along the streak
+      if (amt > 0.001 || dot(mv, mv) > 2e-6) {
+        vec3 acc = col;
+        float wsum = 1.0;
+        float nT = float(uTaps - 1);
+        for (int k = 1; k < MAXTAPS; k++) {
+          if (k >= uTaps) break;
+          float t = float(k) / nT;
+          vec2 q = clamp(lp - rc * amt * t + mv * (t - 0.5), 0.001, 0.999);
+          vec2 suv = R.xy + q * R.zw;
+          // explicit level: no derivatives in the loop (D3D X3595)
+          float tz = textureLod(tDepth, suv, 0.0).x;
+          // do not pull a sharp kart into the blurred road around it
+          int tm = moverAt((uCamWorld[vi] * vec4(viewPos(vi, q, tz), 1.0)).xyz);
+          float w = tm >= 0 && tm != own ? 0.0 : 1.0;
+          acc += textureLod(tScene, suv, 0.0).rgb * w;
+          wsum += w;
+        }
+        col = acc / wsum;
+      }
 
       // height fog (analytic integral along the ray) with sun in-scattering and low-lying mist
       float dens = uFog.x, fall = uFog.y, base = uFog.z;
@@ -255,6 +336,11 @@ export class Post {
   override: Tier | null = null;
   private look: PostLook | null = null;
   private readonly sunWorld = new THREE.Vector3();
+  /** Last frame's view-projection per view slot (D63), and which camera it belonged to. */
+  private readonly prevVP = Array.from({ length: MAX_VIEWS }, () => new THREE.Matrix4());
+  private readonly prevCam: (THREE.Camera | null)[] = new Array<THREE.Camera | null>(MAX_VIEWS).fill(null);
+  private readonly prevPos = Array.from({ length: MAX_VIEWS }, () => new THREE.Vector3());
+  private readonly vp = new THREE.Matrix4();
   private readonly tmp = new THREE.Vector3();
   private time = 0;
 
@@ -344,6 +430,7 @@ export class Post {
     // the Low tier drops bloom entirely (section 10.2: everything can be disabled on Low)
     this.bloom.enabled = this.tier !== 'low' || this.override === 'low';
     this.finish.uniforms.uGrain!.value = this.tier === 'low' ? 0 : (l?.grain ?? 0.02);
+    this.atmos.uniforms.uTaps!.value = MBLUR.taps[this.tier];
     this.setSamples(MSAA_OVERRIDE ?? MSAA[this.tier]);
   }
 
@@ -372,10 +459,19 @@ export class Post {
   }
 
   /** Composite: per-view atmosphere and lens, bloom, grade, tone mapping, to the screen. */
-  render(views: PostView[], W: number, H: number, dt: number): void {
+  render(views: PostView[], W: number, H: number, dt: number, movers: readonly Mover[] = []): void {
     this.time += dt;
     const a = this.atmos.uniforms,
       f = this.finish.uniforms;
+    // a fixed exposure time, so the smear is the same length at any frame rate
+    a.uShutter!.value = (MBLUR.shutter * (1 / 60)) / Math.max(1 / 240, Math.min(1 / 20, dt));
+    const nm = Math.min(MAX_MOVERS, movers.length);
+    a.uMovers!.value = nm;
+    for (let i = 0; i < nm; i++) {
+      const m = movers[i]!;
+      (a.uMover!.value as THREE.Vector4[])[i]!.set(m.pos.x, m.pos.y, m.pos.z, Math.cos(m.yaw));
+      (a.uMoverD!.value as THREE.Vector4[])[i]!.set(m.delta.x, m.delta.y, m.delta.z, Math.sin(m.yaw));
+    }
     const n = Math.min(MAX_VIEWS, views.length);
     a.uCount!.value = n;
     f.uCount!.value = n;
@@ -389,6 +485,20 @@ export class Post {
       (a.uBlur!.value as number[])[i] = v.blur;
       (a.uAspect!.value as number[])[i] = w / h;
       (f.uBoost!.value as number[])[i] = v.boost;
+      // motion blur: last frame's camera for this view; a new camera, a cut or a jump (rescue) starts clean
+      v.camera.updateMatrixWorld();
+      this.vp.multiplyMatrices(v.camera.projectionMatrix, v.camera.matrixWorldInverse);
+      const pv = this.prevVP[i]!;
+      const fresh =
+        !MBLUR.on ||
+        v.motion <= 0 ||
+        this.prevCam[i] !== v.camera ||
+        this.prevPos[i]!.distanceTo(v.camera.position) > 8;
+      (a.uPrevVP!.value as THREE.Matrix4[])[i]!.copy(fresh ? this.vp : pv);
+      (a.uMotion!.value as number[])[i] = fresh ? 0 : v.motion;
+      pv.copy(this.vp);
+      this.prevCam[i] = v.camera;
+      this.prevPos[i]!.copy(v.camera.position);
       // the sun's position on this view (z > 0 when in front of the camera)
       const p = this.tmp.copy(this.sunWorld).add(v.camera.position).project(v.camera);
       const sx = p.x * 0.5 + 0.5,
