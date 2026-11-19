@@ -738,5 +738,22 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 
 ---
 
+### D57 · Oil Slick redone to be easy to spot (2026-11-19, phase 14)
+- **Q** (finish gate): the Oil Slick looked crude, a flat dark octagon that barely showed on dark asphalt. The user asked for it to be redone so players can see it.
+- **A** (`host/src/art/effects.ts`, `slickMaterial`):
+  - **Look**: an unlit, glossy pool drawn by a shader on a flat quad:
+    - a near-black middle with a sky reflection that grows at grazing angles (the chase camera's view);
+    - slowly swirling thin-film rainbow in a fringe round the edge and in thin streaks;
+    - a bright glossy lip;
+    - a ragged outline with a few splash droplets, different for every pool.
+  - **Edges**: the outline is cut in the shader with smooth edges, so it stays clean at any distance.
+  - **Size**: the average radius is about 3.1 m, matching the 3.2 m hit radius, so what you see is what spins you.
+  - **Life**: it spreads out over 0.35 s when dropped and fades over its last 2 s (it lasts 40 s). It also gives off the odd pink or cyan glint, so it catches the eye from a distance.
+  - **Drop splash**: dropping it throws a splash and a violet shockwave ring behind the kart.
+  - **Unchanged**: the gameplay (radius, life, spin-out, AI avoidance).
+- **Results** (`docs/screens/phase14/oil/`): clearly visible on all 4 tracks from the chase camera. Typecheck, lint, 69 tests and the build pass.
+
+---
+
 ## Gate 0 status
 All decisions are settled (D1 to D16). **You confirmed a shared understanding on 2026-11-16. Gate 0 is closed.**

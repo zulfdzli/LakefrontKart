@@ -5,7 +5,7 @@
 import { CAR_WORLD as CAR } from './car';
 import * as THREE from 'three';
 import { Rng, type GameEvent, type GameState, type Kart } from '@tk/shared';
-import { P_, merge, jitter, ico, cyl, octa, hash3 } from './geo';
+import { P_, merge, ico, cyl, octa } from './geo';
 import { DRIFT_COL, CONFETTI } from './palette';
 import type { Materials } from './materials';
 import type { KartView } from './kart';
@@ -13,6 +13,82 @@ import { SoftPool } from './particles';
 
 const _o = new THREE.Object3D();
 const _c = new THREE.Color();
+
+/**
+ * Oil Slick pool. Dark asphalt under dark oil reads poorly, so the pool is drawn unlit and glossy: a near-black
+ * body with slowly swirling thin-film rainbow bands, a brighter band and a glossy lip round its ragged edge, a few
+ * splash droplets outside it, and a sky reflection that grows at grazing angles (which is how the chase camera sees
+ * it) over a glossy black middle. The outline is cut from a quad in the shader, so it is smooth at any distance, and its average radius
+ * (about 3.1 m) matches the 3.2 m hit radius. `uSpread` grows it when dropped and `uFade` fades it at the end.
+ */
+function slickMaterial(time: { value: number }, seed: number): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: { uTime: time, uSeed: { value: seed % 97 }, uSpread: { value: 1 }, uFade: { value: 1 } },
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -3,
+    polygonOffsetUnits: -3,
+    vertexShader: /* glsl */ `
+      varying vec2 vP;
+      varying vec3 vW;
+      void main() {
+        vP = position.xz;
+        vec4 w = modelMatrix * vec4(position, 1.0);
+        vW = w.xyz;
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uTime, uSeed, uSpread, uFade;
+      varying vec2 vP;
+      varying vec3 vW;
+      float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vnoise(vec2 p) {
+        vec2 i = floor(p), f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y);
+      }
+      void main() {
+        vec2 p = vP / uSpread;
+        float a = atan(p.y, p.x);
+        // ragged outline: a few lobes, different for every pool
+        float edge = 3.1 + 0.26 * sin(3.0 * a + uSeed) + 0.16 * sin(5.0 * a + uSeed * 2.3) + 0.08 * sin(11.0 * a + uSeed * 4.1);
+        float d = length(p) - edge; // metres, negative inside
+        float drop = 9.0;
+        for (int i = 0; i < 7; i++) {
+          float fi = float(i);
+          float da = fi * 0.898 + uSeed * 1.7 + h21(vec2(fi, uSeed)) * 0.6;
+          float dr = 3.35 + h21(vec2(uSeed, fi)) * 0.45;
+          float rr = 0.1 + h21(vec2(fi * 3.1, uSeed + 1.0)) * 0.17;
+          drop = min(drop, length(p - vec2(cos(da), sin(da)) * dr) - rr);
+        }
+        float dd = min(d, drop);
+        float aa = fwidth(dd) + 0.01;
+        float cover = 1.0 - smoothstep(-aa, aa, dd);
+        if (cover < 0.004) discard;
+        vec3 V = normalize(cameraPosition - vW);
+        float ndv = clamp(V.y, 0.0, 1.0);
+        float fres = pow(1.0 - ndv, 3.0);
+        // thin film: swirling thickness, thinning towards the lip
+        vec2 q = p * 0.5 + vec2(uSeed);
+        float th = vnoise(q + vec2(uTime * 0.06, -uTime * 0.05)) * 0.65
+                 + vnoise(q * 2.3 - uTime * 0.04) * 0.35 - d * 0.14;
+        vec3 film = 0.5 + 0.5 * cos(6.2832 * (th * 2.4 + ndv * 0.5 + vec3(0.0, 0.33, 0.67)));
+        film = mix(film, vec3(dot(film, vec3(0.333))), 0.25);
+        // rainbow in a fringe round the edge and in thin swirl streaks; the middle stays a glossy black
+        float band = smoothstep(-1.0, -0.25, d);
+        float streak = 1.0 - smoothstep(0.0, 0.05, abs(th - 0.55));
+        float amt = clamp(0.85 * band + 0.45 * streak, 0.0, 1.0);
+        vec3 col = vec3(0.006, 0.004, 0.012) + vec3(0.16, 0.15, 0.24) * fres;
+        col = mix(col, film * 0.95, amt * 0.85);
+        // glossy lip just inside the edge, and on the droplets
+        float lip = 1.0 - smoothstep(0.0, 0.14, abs(d + 0.1));
+        lip = max(lip, 1.0 - smoothstep(0.0, 0.06, abs(drop + 0.04)));
+        col += vec3(1.0, 0.9, 1.0) * lip * 0.85;
+        gl_FragColor = vec4(col, cover * uFade * 0.95);
+      }`,
+  });
+}
 
 /** Instanced particle pool with a ring-buffer head. */
 class Pool {
@@ -174,25 +250,9 @@ export class Effects {
     P_(cyl(1.05, 1.05, 0.34, 8), 0xff7043, 0, 0, 0),
     P_(cyl(0.5, 0.5, 0.4, 8), 0xffeb3b, 0, 0, 0),
   ]);
-  private readonly slickGeo: THREE.BufferGeometry;
-  private readonly slickMat = new THREE.MeshBasicMaterial({
-    color: 0x2a1840,
-    transparent: true,
-    opacity: 0.92,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -3,
-    polygonOffsetUnits: -3,
-  });
-  private readonly slickSheen = new THREE.MeshBasicMaterial({
-    color: 0x7e57c2,
-    transparent: true,
-    opacity: 0.55,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -4,
-    polygonOffsetUnits: -4,
-  });
+  /** One flat 8 m quad; the shader cuts the pool's ragged outline out of it (see slickMaterial). */
+  private readonly slickGeo = new THREE.PlaneGeometry(8, 8).rotateX(-Math.PI / 2);
+  private readonly slickTime = { value: 0 };
   private readonly live = new Set<object>();
 
   constructor(private readonly M: Materials) {
@@ -238,19 +298,6 @@ export class Effects {
       this.group.add(m);
       this.rings.push(m);
     }
-    const g = jitter(new THREE.CircleGeometry(3.2, 9).rotateX(-Math.PI / 2), 0.0, 1),
-      p = g.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i),
-        z = p.getZ(i),
-        r = Math.hypot(x, z);
-      if (r > 0.1) {
-        const f = 0.8 + hash3(Math.round(x * 50), Math.round(z * 50), 1, 3) * 0.4;
-        p.setX(i, x * f);
-        p.setZ(i, z * f);
-      }
-    }
-    this.slickGeo = g;
   }
 
   private rnd(a: number, b: number): number {
@@ -575,6 +622,14 @@ export class Effects {
       case 'stall':
         if (k) this.puff(k.x - Math.sin(k.h) * 2.5, k.y + 1, k.z - Math.cos(k.h) * 2.5, 0x616161, 6, 1.5, 1);
         break;
+      case 'useoil':
+        if (k && near) {
+          const bx = k.x - Math.sin(k.h) * 4.5,
+            bz = k.z - Math.cos(k.h) * 4.5;
+          this.burst(bx, k.y + 0.6, bz, [0x4a148c, 0x1a1026, 0xea80fc, 0x80ffea], 16, 4, 1.1);
+          this.ring(bx, k.y, bz, 0xb388ff);
+        }
+        break;
       case 'shieldpop':
         if (k) this.burst(k.x, k.y + 1.5, k.z, [0x80d8ff, 0xffffff], 22, 7);
         break;
@@ -640,9 +695,33 @@ export class Effects {
       v.position.set(b.x, b.y + 0.9, b.z);
       v.rotation.y += dt * 14;
     }
+    this.slickTime.value = s.time;
     for (const sl of s.slicks) {
       live.add(sl);
-      this.projView(sl, 'slick', sl);
+      const v = this.projView(sl, 'slick', sl) as THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+      const u = v.material.uniforms;
+      // spreads out over a third of a second when dropped, fades over its last two seconds (it lasts 40 s)
+      const t = Math.min(1, sl.age / 0.35);
+      u.uSpread!.value = 0.3 + 0.7 * (1 - (1 - t) * (1 - t));
+      u.uFade!.value = Math.min(1, Math.max(0, (40 - sl.age) / 2));
+      // the odd rising glint so the pool catches the eye from a distance
+      if (dt > 0 && this.rng.next() < dt * 5) {
+        const a = this.rnd(0, Math.PI * 2),
+          r = this.rnd(0.4, 2.6);
+        this.sparks.emit(
+          sl.x + Math.cos(a) * r,
+          sl.y + 0.25,
+          sl.z + Math.sin(a) * r,
+          0,
+          this.rnd(0.6, 1.4),
+          0,
+          this.rng.next() < 0.5 ? 0xea80fc : 0x80ffea,
+          0.7,
+          0.35,
+          0,
+          -999,
+        );
+      }
     }
     // Seeker Comet: a blazing core with a long glowing trail, plus a pulsing target ring on the leader
     for (const c of s.comets) {
@@ -671,6 +750,7 @@ export class Effects {
       if (!live.has(o)) {
         this.group.remove(v);
         this.projViews.delete(o);
+        if (v instanceof THREE.Mesh && v.material instanceof THREE.ShaderMaterial) v.material.dispose();
       }
   }
 
@@ -693,12 +773,8 @@ export class Effects {
         v.add(new THREE.Mesh(this.orbShell, this.orbShellMat));
       } else if (kind === 'bolt') v = new THREE.Mesh(this.boltGeo, this.M.kart);
       else {
-        v = new THREE.Group();
-        v.add(new THREE.Mesh(this.slickGeo, this.slickMat));
-        const sh = new THREE.Mesh(this.slickGeo, this.slickSheen);
-        sh.scale.setScalar(0.35);
-        sh.position.set(0.7, 0.02, 0.4);
-        v.add(sh);
+        v = new THREE.Mesh(this.slickGeo, slickMaterial(this.slickTime, this.projViews.size * 1.618 + (at?.x ?? 0)));
+        v.renderOrder = 1;
         if (at) v.position.set(at.x, at.y + 0.13, at.z);
       }
       this.group.add(v);
