@@ -32,8 +32,8 @@ const F = {
   latex: [0.14, 0, 1, 0],
   snow: [0.62, 0, 0.25, 0],
   ice: [0.06, 0, 1, 0],
-  neon: [0.3, 0, 1, 1.5],
-  trim: [0.3, 0, 1, 1.1],
+  neon: [0.35, 0, 1, 0.65],
+  trim: [0.35, 0, 1, 0.42],
 } as const satisfies Record<string, Finish>;
 
 interface Look {
@@ -552,10 +552,11 @@ function barTex(): THREE.CanvasTexture {
       g.fillStyle = 'rgba(255,255,255,0.55)';
       g.fillRect(0, 4, w, 5);
       g.fillStyle = '#c62828';
-      g.font = 'bold 52px sans-serif';
+      g.font = 'italic 800 60px "Barlow Condensed", sans-serif';
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      g.fillText('★  V I C T O R Y  ★', w / 2, h / 2 + 3);
+      g.letterSpacing = '10px';
+      g.fillText('★  VICTORY  ★', w / 2, h / 2 + 3);
     },
     true,
   );
@@ -680,7 +681,7 @@ export class Celebration {
     // the steps (separate meshes below); their glowing front frames and top edges belong to the stage
     const steps: [number, number, number, number][] = [
       [0, 2.6, 0xf0a818, 0xffd84a],
-      [-5, 1.8, 0xaab4c0, 0xdde8ff],
+      [-5, 1.8, 0xc9d1dc, 0xdde8ff],
       [5, 1.2, 0xb0602a, 0xff8a30],
     ];
     const marble = this.tex(marbleTex(this.rnd));
@@ -795,7 +796,7 @@ export class Celebration {
           map: bt,
           emissive: 0xffffff,
           emissiveMap: bt,
-          emissiveIntensity: 0.55,
+          emissiveIntensity: 0.18,
           roughness: 0.35,
         }),
       ),
@@ -921,7 +922,7 @@ export class Celebration {
         roughness: 0.65,
         emissive: 0xffffff,
         emissiveMap: bt,
-        emissiveIntensity: 0.35,
+        emissiveIntensity: 0.12,
       }),
     );
     const bg = this.geo(new THREE.PlaneGeometry(2.3, 4.6).translate(0, -2.3, 0));
@@ -982,7 +983,7 @@ export class Celebration {
       this.geo(
         mergePbr([
           { parts: stand, fin: F.satin },
-          { parts: lamps, fin: [0.3, 0, 1, 1.6] },
+          { parts: lamps, fin: [0.3, 0, 1, 0.9] },
         ]),
       ),
       M.car,

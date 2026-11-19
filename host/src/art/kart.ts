@@ -302,7 +302,7 @@ function nameTag(name: string, color: number): THREE.Sprite {
       g.beginPath();
       g.arc(34, h / 2, 7, 0, Math.PI * 2);
       g.fill();
-      g.font = 'bold 32px Fredoka, sans-serif';
+      g.font = '700 30px "Inter Variable", sans-serif';
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.fillStyle = '#fff';

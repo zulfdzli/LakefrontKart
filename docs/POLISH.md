@@ -465,3 +465,12 @@ Screens: `docs/screens/phase14/podium/` (`<track>-podium.png` and `-podium-b.png
 | Area | Item | Score | Reason |
 |---|---|---|---|
 | Graphics | Podium and results | **5** (was 3) | Themed festive stage, layered particles, glowing materials and a themed card |
+
+## Softer podium glow and new typography (2026-11-19, D52)
+Screens: `docs/screens/phase14/type/`. These cover the lobby, the phone settings, the race HUD (`03` to `07`), `<track>-podium.png` and `overview-podiums.jpg`.
+
+- Results: 69 tests and e2e 20/20 pass. 60 FPS on every podium, with no errors.
+
+| Area | Item | Score | Reason |
+|---|---|---|---|
+| UI/UX | Typography | **5** (was 3) | Inter and Barlow Condensed, a consistent type scale, tabular times, soft shadows |

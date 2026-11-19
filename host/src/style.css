@@ -1,6 +1,6 @@
 /* Host screen. HUD rules are scoped to .phud so there can be one per viewport (section 6.2). */
 :root {
-  --font: 'Fredoka', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --ink: #1d1b2e;
   --sun: #ffeb3b;
 }
@@ -1679,4 +1679,382 @@ h1.logo span {
   --b0: #8cf58c;
   --b1: #2fbf4a;
   --b2: #17802c;
+}
+
+/* ---------------- D52 typography: Inter for interface text, Barlow Condensed for display ----------------
+ * Display (titles, places, countdown, buttons, speed): condensed, heavy, uppercase, a slight racing italic.
+ * Interface (names, lists, hints, labels): Inter, with tabular figures wherever times line up.
+ * Text sits on soft shadows instead of the old cartoon outlines. */
+:root {
+  --font: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --display: 'Barlow Condensed', 'Inter Variable', system-ui, sans-serif;
+  --tshadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 3px 14px rgba(0, 0, 0, 0.35);
+}
+html,
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+h1.logo,
+#resTitle,
+#pause h2,
+.phud .place,
+.phud .msg,
+.phud .fin b,
+.phud .fin small,
+.phud .delta,
+.phud .lap.pill,
+.phud .speed,
+.phud .wrong,
+.phud .threat,
+.phud .itemcnt,
+.big,
+.introCard b,
+.joinTitle,
+.joinCard .code b,
+.lobbyFoot .status,
+.slot .pn,
+.pick b {
+  font-family: var(--display);
+}
+
+/* title and lobby */
+h1.logo {
+  font-size: 92px;
+  font-weight: 800;
+  font-style: italic;
+  line-height: 0.82;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: #fff;
+  -webkit-text-stroke: 0;
+  transform: none;
+  text-shadow:
+    0 2px 0 rgba(10, 12, 30, 0.35),
+    0 12px 34px rgba(0, 0, 0, 0.45);
+}
+h1.logo span {
+  color: var(--sun);
+}
+.lobby .logo {
+  font-size: clamp(56px, 7.5vw, 104px);
+}
+.joinTitle {
+  font-size: 26px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-shadow: none;
+}
+.joinCard .code small {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  opacity: 0.8;
+}
+.joinCard .code b {
+  font-size: 58px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-shadow: var(--tshadow);
+}
+.joinCard .url,
+.joinCard .warn {
+  font-weight: 500;
+  letter-spacing: 0.005em;
+}
+.slot .pn {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-shadow: none;
+}
+.slot .name {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-shadow: var(--tshadow);
+}
+.slot .meta {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.slot .state {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.slot.empty .name {
+  font-weight: 500;
+  font-size: 16px;
+}
+.lobbyFoot .cfg span,
+.lobbyFoot .cfg .trackChip {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.lobbyFoot .status {
+  font-size: 26px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-shadow: var(--tshadow);
+}
+.sub {
+  font-weight: 500;
+}
+
+/* buttons */
+.big {
+  font-size: 27px;
+  font-weight: 800;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+.alt {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* race HUD */
+.phud {
+  font-family: var(--font);
+  font-weight: 600;
+}
+.phud .outl {
+  -webkit-text-stroke: 0;
+  text-shadow: var(--tshadow);
+}
+.phud .place {
+  font-size: 76px;
+  font-weight: 800;
+  font-style: italic;
+  line-height: 0.82;
+  letter-spacing: -0.01em;
+}
+.phud .place sup {
+  font-size: 30px;
+  font-weight: 700;
+  margin-left: 1px;
+}
+.phud .place small {
+  font-family: var(--font);
+  font-style: normal;
+  font-size: 16px;
+  font-weight: 600;
+}
+.phud .lap.pill {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.phud .time,
+.phud .lastlap,
+.phud .split,
+.phud .fin span,
+.stand li,
+#standings li,
+#gpTable li {
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+}
+.phud .time.pill {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.phud .lastlap {
+  font-size: 12px;
+  font-weight: 500;
+}
+.phud .split {
+  font-size: 14px;
+  font-weight: 600;
+}
+.phud .speed {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+.phud.multi .speed {
+  font-size: 40px;
+}
+.phud .speed small,
+.phud.multi .speed small {
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-left: 4px;
+}
+.phud .msg {
+  font-size: calc(124px * var(--s));
+  font-weight: 800;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  -webkit-text-stroke: 0;
+  text-shadow:
+    0 3px 0 rgba(10, 12, 30, 0.35),
+    0 10px 36px rgba(0, 0, 0, 0.5);
+}
+.phud .msg.small {
+  font-size: calc(58px * var(--s));
+  -webkit-text-stroke: 0;
+  letter-spacing: 0.03em;
+}
+.phud .delta {
+  font-size: 34px;
+  font-weight: 800;
+  font-style: italic;
+}
+.phud .wrong,
+.phud .threat {
+  font-size: 30px;
+  font-weight: 800;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+.phud .itemcnt {
+  font-size: 16px;
+  font-weight: 800;
+}
+.phud .hint {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.phud .draftTag {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.phud .who {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.phud .fin small {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.phud .fin b {
+  font-size: 128px;
+  font-weight: 800;
+  font-style: italic;
+  -webkit-text-stroke: 0;
+  text-shadow:
+    0 3px 0 rgba(10, 12, 30, 0.35),
+    0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.phud .fin b sup {
+  font-size: 50px;
+}
+.phud .fin span {
+  font-size: 22px;
+  font-weight: 600;
+}
+.stand li {
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.sstand h4,
+#gpTable h4 {
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* results, pause, intro card */
+#resTitle,
+#results[data-theme] #resTitle {
+  font-size: 54px;
+  font-weight: 800;
+  font-style: italic;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  -webkit-text-stroke: 0;
+}
+#resTitle {
+  text-shadow:
+    0 2px 0 rgba(10, 12, 30, 0.35),
+    0 8px 26px rgba(0, 0, 0, 0.45);
+}
+#results[data-theme] #resTitle {
+  padding: 0 0.08em;
+  filter: drop-shadow(0 2px 0 rgba(10, 12, 30, 0.45)) drop-shadow(0 0 12px var(--glow));
+}
+#standings li {
+  font-size: 15px;
+  font-weight: 600;
+}
+#standings .pts {
+  font-weight: 700;
+}
+#resBest {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+#resWrap .keys {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.65;
+}
+#pause h2 {
+  font-size: 72px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.04em;
+  -webkit-text-stroke: 0;
+  text-shadow:
+    0 2px 0 rgba(10, 12, 30, 0.35),
+    0 10px 30px rgba(0, 0, 0, 0.5);
+}
+#pause .pauseBy {
+  font-weight: 500;
+  text-shadow: var(--tshadow);
+}
+.introCard b {
+  font-size: 60px;
+  font-weight: 800;
+  font-style: italic;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.introCard span {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+}
+.netDown {
+  font-weight: 600;
+}
+/* gradient-filled text must not carry a text-shadow (it shows through the transparent fill) */
+.phud .place {
+  text-shadow: none;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 12px rgba(255, 190, 60, 0.35));
+}
+.phud .place small,
+.phud .place sup {
+  text-shadow: none;
 }

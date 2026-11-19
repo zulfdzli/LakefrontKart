@@ -349,7 +349,7 @@ export function buildDecals(number: number, _paint: number): { geo: THREE.Buffer
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   // number cell (0, 0, 128, 128): white with a dark outline
-  g.font = 'bold 96px Fredoka, sans-serif';
+  g.font = 'italic 800 96px "Barlow Condensed", sans-serif';
   g.lineWidth = 10;
   g.strokeStyle = '#1c1d22';
   g.strokeText('#' + number, 64, 70);
@@ -369,15 +369,15 @@ export function buildDecals(number: number, _paint: number): { geo: THREE.Buffer
   g.lineWidth = 6;
   g.stroke();
   g.fillStyle = '#1c1d22';
-  g.font = 'bold 48px Fredoka, sans-serif';
+  g.font = 'italic 800 48px "Barlow Condensed", sans-serif';
   g.fillText('TK', 192, 66);
   // sponsor rows (y = 128 + k * 64): white text on clear, except row 4 (on white panels: paint-coloured text)
   const rows = ['VELOCITY', 'HYPER', 'KARTRONIX', 'RAPID TYRES', 'AGILE', 'NEXTGEN'];
   rows.forEach((t, k) => {
     // fill the row: as large as fits 470 px wide and 52 px tall
-    g.font = 'bold 52px Fredoka, sans-serif';
+    g.font = 'italic 800 52px "Barlow Condensed", sans-serif';
     const fit = Math.min(52, (52 * 470) / g.measureText(t).width);
-    g.font = `bold ${Math.floor(fit)}px Fredoka, sans-serif`;
+    g.font = `italic 800 ${Math.floor(fit)}px "Barlow Condensed", sans-serif`;
     // white with a dark outline, the HYPER and RAPID TYRES rows in the neon accent (as the reference)
     g.lineWidth = 6;
     g.strokeStyle = '#1c1d22';

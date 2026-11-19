@@ -4,7 +4,7 @@
  * labels and player LEDs. Our own icons and labels replace the original console remote's markings.
  */
 :root {
-  --font: 'Fredoka', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --ink: #2a2f3a;
   --label: #8b919d;
   --shell-hi: #fbfcfe;
@@ -1277,5 +1277,118 @@ input {
   }
   .cfgSummary {
     font-size: 12px;
+  }
+}
+
+/* ---------------- D52 typography: Inter for interface text, Barlow Condensed for display ---------------- */
+:root {
+  --font: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --display: 'Barlow Condensed', 'Inter Variable', system-ui, sans-serif;
+}
+html,
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+.brand,
+.resTitle,
+.count,
+.sPlace,
+.finCard b,
+.wrongWay,
+.sheetCard h2,
+#code,
+.roomTag b {
+  font-family: var(--display);
+}
+.brand {
+  font-weight: 800;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.resTitle {
+  font-weight: 800;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.sheetCard h2 {
+  font-weight: 800;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.count,
+.sPlace,
+.finCard b,
+.wrongWay {
+  font-weight: 800;
+  font-style: italic;
+  text-transform: uppercase;
+}
+#code,
+.roomTag b {
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+/* buttons: Inter, semibold, quiet tracking; the big ones in caps */
+.pbtn {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.pbtn.mini {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.field,
+.note,
+.err,
+.cfgSummary,
+.opt,
+.tip {
+  font-weight: 500;
+}
+.me b,
+.sName b {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.leaderTag,
+.lbl,
+.rbtn small,
+.cfgRow > span {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.cfgRow .seg button,
+.seg button {
+  font-weight: 600;
+}
+.standings li,
+.gpBox li,
+.sLap,
+.sPing,
+.finCard span {
+  font-variant-numeric: tabular-nums;
+}
+.gpBox h4 {
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+@media (max-height: 480px) and (orientation: landscape) {
+  .cfgSummary {
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .cfgRow > span {
+    font-size: 11px;
+    letter-spacing: 0.04em;
   }
 }

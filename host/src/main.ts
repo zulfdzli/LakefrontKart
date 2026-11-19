@@ -1,6 +1,9 @@
-import '@fontsource/fredoka/500.css';
-import '@fontsource/fredoka/600.css';
-import '@fontsource/fredoka/700.css';
+import '@fontsource-variable/inter/index.css';
+import '@fontsource/barlow-condensed/600.css';
+import '@fontsource/barlow-condensed/700.css';
+import '@fontsource/barlow-condensed/800.css';
+import '@fontsource/barlow-condensed/700-italic.css';
+import '@fontsource/barlow-condensed/800-italic.css';
 import './style.css';
 import {
   TRACKS,
@@ -57,6 +60,12 @@ let previewTrack: TrackId | null = null;
 const world = new World($<HTMLCanvasElement>('c'));
 // surface textures (phase 9) load before anything is built; ?lotex uses the half-size Low-tier set
 await loadTextures(params.has('lotex'), world.renderer.capabilities.getMaxAnisotropy());
+// D52: canvas-drawn text (decals, name tags, signs, the podium bar) needs the display fonts loaded first
+await Promise.all(
+  ['800 48px "Barlow Condensed"', 'italic 800 48px "Barlow Condensed"', '700 32px "Inter Variable"'].map((f) =>
+    document.fonts.load(f).catch(() => []),
+  ),
+);
 const audio = new Audio();
 const keyboard = new Keyboard();
 const debug = new DebugOverlay(world, $('debug'));

@@ -810,7 +810,7 @@ export function buildTrackWorld(
           g.fillStyle = 'rgba(255,255,255,0.85)';
           g.fillRect(56, 3, w - 112, 3);
           g.fillRect(56, h - 6, w - 112, 3);
-          g.font = 'bold 38px Fredoka, sans-serif';
+          g.font = 'italic 800 38px "Barlow Condensed", sans-serif';
           g.textAlign = 'center';
           g.textBaseline = 'middle';
           g.lineWidth = 6;
@@ -1630,7 +1630,7 @@ export function buildTrackWorld(
               g.fillRect(0, y, w, 64);
               g.fillStyle = 'rgba(255,255,255,.15)';
               g.fillRect(0, y, w, 6);
-              g.font = 'bold 40px Fredoka, sans-serif';
+              g.font = 'italic 800 40px "Barlow Condensed", sans-serif';
               g.textAlign = 'center';
               g.textBaseline = 'middle';
               g.fillStyle = '#fff';
@@ -1641,7 +1641,7 @@ export function buildTrackWorld(
               g.fillStyle = '#212121';
               g.fillRect(0, y, w, 5);
               g.fillRect(0, y + 59, w, 5);
-              g.font = 'bold 50px Fredoka, sans-serif';
+              g.font = 'italic 800 50px "Barlow Condensed", sans-serif';
               g.textAlign = 'center';
               g.textBaseline = 'middle';
               g.fillText(['150', '100', '50'][k - 6]!, w / 2, y + 34);
@@ -1851,7 +1851,7 @@ export function buildTrackWorld(
         g.strokeStyle = '#fff';
         g.lineWidth = 5;
         g.strokeRect(3, 3, w - 6, h - 6);
-        g.font = 'bold 48px Fredoka, sans-serif';
+        g.font = 'italic 800 48px "Barlow Condensed", sans-serif';
         g.textAlign = 'center';
         g.textBaseline = 'middle';
         g.lineWidth = 6;

@@ -660,6 +660,24 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **Cost**: the stage is 4 draw calls at all times; the celebration adds about 14 while the podium shows, and nothing during a race. 60 FPS on all four tracks at 1080p. `tools/podium-shot.ts` captures each track's podium.
 - **Why**: Your request. The reference's look comes from bloom, particles and colour, so glowing materials and particles do the work here; no real-time lights were added, because adding lights would recompile every material.
 
+### D52 · Softer podium glow; modern, professional typography (2026-11-19, your request)
+- **Q**: Tone down the podium's glow, and give the game modern, professional typography.
+- **A**:
+  - **Podium glow**: about half as strong everywhere:
+    - the stage's neon edge and the step frames;
+    - the VICTORY bar, the banners and the light tower.
+    - The silver step is lighter, so it still reads as silver without the glow.
+  - **Typefaces**: Fredoka (rounded and playful) is replaced by two typefaces, bundled offline like before:
+    - **Inter** for all interface text: names, lists, hints, labels and settings. Lap times, standings and splits use tabular figures, so the digits line up.
+    - **Barlow Condensed** (bold or extra-bold, uppercase, with a slight racing italic) for display text in the style of motorsport TV graphics: the logo, place, lap, speed, the countdown and messages, FINISHED, the results and pause titles, the intro card, the room code and the big buttons.
+  - **Text treatment**:
+    - The cartoon outlines and hard offset shadows are replaced by soft shadows.
+    - Labels are in small caps with wide letter-spacing.
+    - The logo is no longer tilted.
+    - Canvas-drawn text (car sponsor decals, name tags, track signs and the VICTORY bar) uses the new typefaces, which are loaded before anything is drawn.
+  - **Phone**: Inter is wider than Fredoka, so on a landscape phone the settings labels and the one-line summary are slightly smaller. READY stays on screen.
+- **Why**: Your request.
+
 ---
 
 ## Gate 0 status
