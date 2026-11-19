@@ -20,12 +20,12 @@ export const CAR_SCALE = 1.15;
 
 /** Wheel placement, shared with the effects (skid marks, sparks, smoke). */
 export const CAR = {
-  rearX: 1.08,
+  rearX: 1.14,
   rearZ: -1.62,
-  rearR: 0.66,
-  frontX: 1.02,
+  rearR: 0.7,
+  frontX: 1.08,
   frontZ: 1.86,
-  frontR: 0.57,
+  frontR: 0.6,
   /** Driver's head (helmet centre) in body space. */
   head: new THREE.Vector3(0, 0.98, -0.22),
   /** Exhaust exits for the boost flames. */
@@ -46,6 +46,9 @@ const TYRE = 0x3a3a46;
 const RIM = 0x2e3036;
 const NUT = 0x55565e;
 const LIGHT = 0xff2a2a;
+/** The reference's neon yellow-green accent (wing endplates, tyre sidewalls). */
+const NEON = 0xc8f21e;
+const SIDEWALL = 0xf2d21b;
 
 /**
  * Surface finish per vertex (D47): roughness, metalness, clear-coat, and w = glow (> 0) or carbon weave (-1).
@@ -53,8 +56,8 @@ const LIGHT = 0xff2a2a;
  */
 export type Finish = readonly [number, number, number, number];
 export const FIN = {
-  /** Metallic-flake paint under a glossy clear-coat. */
-  paint: [0.2, 0.45, 1, 0],
+  /** Metallic-flake paint under a glossy clear-coat; w = 0.01 marks it for the neon livery stripes. */
+  paint: [0.2, 0.45, 1, 0.01],
   /** White panels: pearl, less metal so they stay white. */
   pearl: [0.16, 0.08, 1, 0],
   /** Carbon fibre: woven, lacquered. */
@@ -142,7 +145,8 @@ function byFinish(parts: Part[], paint: number): { parts: Part[]; fin: Finish }[
     else if (c === TYRE) g.rubber.push(p);
     else if (c === RIM || c === NUT) g.metal.push(p);
     else if (c === LIGHT) g.light.push(p);
-    else if (c === 0xf5f5f5) g.band.push(p);
+    else if (c === SIDEWALL) g.band.push(p);
+    else if (c === NEON) g.pearl.push(p);
     else if (c === WHITE && c !== paint) g.pearl.push(p);
     else g.paint.push(p);
   }
@@ -189,69 +193,58 @@ function rod(a: [number, number, number], b: [number, number, number], t: number
 
 /** The car body for one paint colour. */
 export function buildCar(paint: number): THREE.BufferGeometry {
-  const K = paint,
-    W = WHITE;
+  const K = paint;
   const parts: Part[] = [];
   const add = (...p: Part[]): void => {
     parts.push(...p);
   };
 
-  // floor, edges, plank and diffuser
-  add(P_(taper(-2.05, 1.62, 0.12, 0.18, 1.05, 1.5, 0.12, 0.18), BLACK));
-  add(P_(taper(-1.6, 0.08, 0.12, 0.28, 0.9, 0.08, 0.12, 0.24, 0.84), CARBON));
-  add(P_(taper(-1.6, 0.08, 0.12, 0.28, 0.9, 0.08, 0.12, 0.24, -0.84), CARBON));
-  add(P_(taper(-2.6, 1.3, 0.12, 0.52, -2.0, 1.4, 0.12, 0.2), BLACK));
-  for (const x of [-0.4, 0, 0.4]) add(P_(box(0.03, 0.3, 0.55), CARBON, x, 0.3, -2.32));
+  // floor, edges, plank and diffuser (black carbon underbody, as the reference)
+  add(P_(taper(-2.05, 1.7, 0.12, 0.18, 1.05, 1.56, 0.12, 0.18), BLACK));
+  add(P_(taper(-1.6, 0.08, 0.12, 0.3, 0.9, 0.08, 0.12, 0.26, 0.88), CARBON));
+  add(P_(taper(-1.6, 0.08, 0.12, 0.3, 0.9, 0.08, 0.12, 0.26, -0.88), CARBON));
+  add(P_(taper(-2.6, 1.34, 0.12, 0.54, -2.0, 1.44, 0.12, 0.2), BLACK));
+  for (const x of [-0.42, -0.14, 0.14, 0.42]) add(P_(box(0.03, 0.3, 0.55), CARBON, x, 0.3, -2.32));
 
-  // survival cell and cockpit rim
-  add(P_(taper(-0.6, 0.88, 0.2, 0.92, 0.9, 0.7, 0.2, 0.84), K));
-  add(P_(taper(-0.55, 0.62, 0.86, 0.95, 0.45, 0.5, 0.82, 0.9), BLACK));
-  // nose: long and tapering, with a black tip
-  add(P_(taper(0.9, 0.66, 0.22, 0.84, 2.7, 0.3, 0.22, 0.46), K));
-  add(P_(taper(2.7, 0.3, 0.22, 0.46, 3.02, 0.2, 0.22, 0.36), BLACK));
-  // white chevron along the nose top (the reference's white nose panel)
-  add(P_(taper(1.2, 0.3, 0.8, 0.83, 2.4, 0.16, 0.5, 0.53), W));
+  // survival cell: carbon lower half, painted upper half; cockpit rim
+  add(P_(taper(-0.6, 0.9, 0.2, 0.5, 0.9, 0.72, 0.2, 0.46), CARBON));
+  add(P_(taper(-0.6, 0.88, 0.5, 0.92, 0.9, 0.7, 0.46, 0.84), K));
+  add(P_(taper(-0.55, 0.62, 0.86, 0.96, 0.45, 0.5, 0.82, 0.91), BLACK));
+  // nose: long, tapering and dropping to the wing, carbon underside, black tip
+  add(P_(taper(0.9, 0.66, 0.22, 0.46, 2.7, 0.3, 0.22, 0.3), CARBON));
+  add(P_(taper(0.9, 0.66, 0.46, 0.84, 2.7, 0.3, 0.3, 0.46), K));
+  add(P_(taper(2.7, 0.3, 0.22, 0.46, 3.05, 0.18, 0.2, 0.34), BLACK));
 
-  // front wing: main plane, two flap elements, white centre panels, endplates
-  add(P_(box(2.6, 0.05, 0.52), BLACK, 0, 0.17, 2.86));
-  add(P_(box(2.4, 0.04, 0.3), BLACK, 0, 0.27, 2.62, -0.35));
-  add(P_(box(2.2, 0.04, 0.24), BLACK, 0, 0.36, 2.48, -0.6));
-  for (const s of [1, -1]) {
-    // white panels on the main plane's leading edge (seen from the front, as the reference)
-    add(P_(box(0.66, 0.1, 0.06), W, s * 0.6, 0.2, 3.13));
-    // endplates, splayed outward at the front like the reference's top view
-    add(P_(box(0.05, 0.4, 0.82), BLACK, s * 1.3, 0.3, 2.7, 0, s * 0.22, 0));
-    add(P_(box(0.05, 0.12, 0.82), K, s * 1.3, 0.52, 2.7, 0, s * 0.22, 0));
+  // front wing: four elements that sweep up towards the tips (the reference's curved wing), neon endplates
+  for (const sd of [1, -1]) {
+    for (let e = 0; e < 3; e++) {
+      const y = 0.15 + e * 0.08,
+        zc = 2.92 - e * 0.16;
+      // inner section flat, outer section rising gently towards the tip
+      add(P_(box(0.72, 0.045, 0.34 - e * 0.05), BLACK, sd * 0.38, y, zc, -0.25 * e));
+      add(P_(box(0.62, 0.045, 0.32 - e * 0.05), BLACK, sd * 1.0, y + 0.06, zc, -0.25 * e, 0, sd * 0.12));
+    }
+    add(P_(box(0.05, 0.46, 0.86), BLACK, sd * 1.33, 0.36, 2.72, 0, sd * 0.24, 0));
+    add(P_(box(0.055, 0.13, 0.86), NEON, sd * 1.33, 0.6, 2.72, 0, sd * 0.24, 0));
   }
-  // nose pylons into the wing
   add(rod([0.12, 0.3, 2.55], [0.2, 0.18, 2.75], 0.05, BLACK), rod([-0.12, 0.3, 2.55], [-0.2, 0.18, 2.75], 0.05, BLACK));
 
-  // sidepods: front inlet, undercut, white top panel; mirrors above
-  for (const s of [1, -1]) {
-    const x = s * 0.72;
-    add(P_(taper(-1.25, 0.34, 0.26, 0.5, 0.55, 0.62, 0.3, 0.8, x), K));
-    // white only on the inner top, beside the cockpit (as the reference); the rest of the sidepod is body colour
-    add(P_(taper(-0.75, 0.2, 0.56, 0.62, 0.15, 0.24, 0.74, 0.8, x - s * 0.17), W));
-    add(P_(box(0.44, 0.34, 0.05), BLACK, x, 0.6, 0.56));
-    add(P_(taper(-1.0, 0.24, 0.16, 0.3, 0.45, 0.4, 0.16, 0.32, x), CARBON));
-    // mirrors on stalks
-    add(rod([s * 0.42, 0.84, 0.55], [s * 0.66, 0.98, 0.5], 0.04, BLACK));
-    add(P_(box(0.22, 0.1, 0.06), K, s * 0.72, 1.0, 0.5));
+  // sidepods: wider and sculpted (high inlet, downwash ramp to the rear), carbon undercut; mirrors on stalks
+  for (const sd of [1, -1]) {
+    const x = sd * 0.78;
+    add(P_(taper(-1.35, 0.4, 0.3, 0.52, 0.55, 0.66, 0.34, 0.86, x), K));
+    add(P_(taper(-1.0, 0.3, 0.14, 0.32, 0.5, 0.5, 0.14, 0.34, x), CARBON));
+    add(P_(box(0.5, 0.36, 0.05), BLACK, x, 0.62, 0.56));
+    add(rod([sd * 0.42, 0.86, 0.55], [sd * 0.7, 1.0, 0.5], 0.04, BLACK));
+    add(P_(box(0.24, 0.11, 0.07), BLACK, sd * 0.76, 1.02, 0.5));
   }
 
-  // engine cover up to the airbox, with white side panels and the shark fin
-  add(P_(taper(-2.35, 0.36, 0.28, 0.62, -0.55, 0.86, 0.28, 1.12), K));
-  // the large white panel on each side of the engine cover, from the cockpit back towards the rear wheels
-  for (const s of [1, -1]) {
-    add(P_(taper(-1.95, 0.02, 0.42, 0.68, -0.6, 0.02, 0.44, 1.08, s * 0.25 + s * 0.12), W));
-  }
+  // engine cover up to the airbox, and the shark fin
+  add(P_(taper(-2.35, 0.36, 0.28, 0.64, -0.55, 0.88, 0.28, 1.12), K));
   add(P_(box(0.38, 0.34, 0.42), K, 0, 1.24, -0.78));
-  // white zone on the engine-cover top just behind the airbox
-  add(P_(taper(-1.35, 0.5, 0.95, 1.0, -0.98, 0.66, 1.03, 1.08), W));
   add(P_(box(0.26, 0.2, 0.04), BLACK, 0, 1.28, -0.56));
   add(P_(box(0.12, 0.08, 0.2), BLACK, 0, 1.45, -0.78));
   add(P_(taper(-2.2, 0.03, 0.62, 0.95, -0.95, 0.03, 1.0, 1.36), K));
-  // exhaust
   add(P_(cyl(0.09, 0.11, 0.3, 8), CARBON, 0, 0.74, -2.5, Math.PI / 2));
 
   // halo: a hoop around the cockpit with a centre pillar in front
@@ -265,16 +258,19 @@ export function buildCar(paint: number): THREE.BufferGeometry {
     );
   }
 
-  // rear wing: main plane, DRS flap, endplates, swan-neck pylon; beam wing below
-  add(P_(box(1.94, 0.06, 0.44), BLACK, 0, 1.22, -2.58, 0.18));
-  add(P_(box(1.94, 0.05, 0.3), BLACK, 0, 1.44, -2.5, 0.5));
-  for (const s of [1, -1]) {
-    add(P_(box(0.045, 0.78, 0.7), BLACK, s * 0.99, 1.12, -2.52));
-    add(P_(box(0.05, 0.1, 0.7), K, s * 0.99, 1.55, -2.52));
+  // rear wing: the reference's rounded wing (main plane curving down into the endplates), DRS flap,
+  // painted top flap, swan-neck pylon, beam wing
+  add(P_(box(1.6, 0.06, 0.46), BLACK, 0, 1.3, -2.58, 0.16));
+  add(P_(box(1.6, 0.05, 0.3), K, 0, 1.5, -2.5, 0.48));
+  for (const sd of [1, -1]) {
+    // a quarter-round corner from the main plane into the endplate
+    const corner = new THREE.TorusGeometry(0.22, 0.03, 4, 8, Math.PI / 2).rotateY(Math.PI / 2).scale(1, 1, 1.0);
+    add(P_(corner, BLACK, sd * 0.8, 1.1, -2.58, 0, 0, sd > 0 ? 0 : Math.PI / 2));
+    add(P_(box(0.045, 0.62, 0.72), BLACK, sd * 1.02, 0.94, -2.52));
+    add(P_(box(0.05, 0.1, 0.72), NEON, sd * 1.02, 0.66, -2.52));
   }
-  add(rod([0, 0.68, -2.3], [0, 1.2, -2.5], 0.07, BLACK));
+  add(rod([0, 0.68, -2.3], [0, 1.28, -2.5], 0.07, BLACK));
   add(P_(box(1.42, 0.05, 0.26), BLACK, 0, 0.62, -2.5, 0.25));
-  // crash structure and rain light
   add(P_(taper(-2.78, 0.22, 0.34, 0.54, -2.3, 0.3, 0.32, 0.62), BLACK));
   add(P_(box(0.18, 0.13, 0.04), LIGHT, 0, 0.44, -2.8));
 
@@ -303,10 +299,21 @@ export function buildCar(paint: number): THREE.BufferGeometry {
 /** A slick tyre with a coloured sidewall band, a dark rim and a centre lock nut, axis along x. */
 function wheel(r: number, w: number, band: number): Part[] {
   const R = Math.PI / 2;
+  // sidewall lettering: short yellow arcs around the band (both sides)
+  const marks: Part[] = [];
+  for (let k = 0; k < 10; k++) {
+    if (k % 5 === 4) continue;
+    const a = (k / 10) * Math.PI * 2;
+    for (const sd of [1, -1])
+      marks.push(
+        P_(box(0.012, r * 0.05, r * 0.24), band, sd * (w / 2 + 0.008), Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9, a),
+      );
+  }
   return [
-    P_(cyl(r, r, w, 18), TYRE, 0, 0, 0, 0, 0, R),
-    P_(cyl(r * 0.86, r * 0.86, w + 0.012, 18), TYRE, 0, 0, 0, 0, 0, R),
-    P_(cyl(r * 0.8, r * 0.8, w + 0.016, 18), band, 0, 0, 0, 0, 0, R),
+    P_(cyl(r, r, w, 22), TYRE, 0, 0, 0, 0, 0, R),
+    P_(cyl(r * 0.86, r * 0.86, w + 0.012, 22), TYRE, 0, 0, 0, 0, 0, R),
+    ...marks,
+    P_(cyl(r * 0.8, r * 0.8, w + 0.016, 22), band, 0, 0, 0, 0, 0, R),
     P_(cyl(r * 0.74, r * 0.74, w + 0.02, 18), RIM, 0, 0, 0, 0, 0, R),
     // five spokes and the centre lock nut, machined metal
     ...[0, 1, 2, 3, 4].map((k) => P_(box(w + 0.03, r * 0.1, r * 1.3), NUT, 0, 0, 0, (k * Math.PI * 2) / 5, 0, 0)),
@@ -316,16 +323,16 @@ function wheel(r: number, w: number, band: number): Part[] {
 
 /** Rear axle (both wheels, one mesh, spun together) and one front wheel (steered on its pivot). */
 export function buildWheels(): { rear: THREE.BufferGeometry; front: THREE.BufferGeometry } {
-  const band = 0xf5f5f5;
+  const band = SIDEWALL;
   const rear: Part[] = [];
   for (const s of [1, -1])
-    for (const p of wheel(CAR.rearR, 0.78, band)) {
+    for (const p of wheel(CAR.rearR, 0.86, band)) {
       p.m.premultiply(new THREE.Matrix4().makeTranslation(s * CAR.rearX, 0, 0));
       rear.push(p);
     }
   return {
     rear: mergePbr(byFinish(rear, -1)),
-    front: mergePbr(byFinish(wheel(CAR.frontR, 0.62, band), -1)),
+    front: mergePbr(byFinish(wheel(CAR.frontR, 0.7, band), -1)),
   };
 }
 
@@ -333,7 +340,7 @@ export function buildWheels(): { rear: THREE.BufferGeometry; front: THREE.Buffer
  * Livery decals for one car (number and fictional sponsors), drawn into one small atlas and placed on the body
  * as slightly raised quads: one extra draw call per car.
  */
-export function buildDecals(number: number, paint: number): { geo: THREE.BufferGeometry; map: THREE.CanvasTexture } {
+export function buildDecals(number: number, _paint: number): { geo: THREE.BufferGeometry; map: THREE.CanvasTexture } {
   const S = 512;
   const c = document.createElement('canvas');
   c.width = c.height = S;
@@ -345,9 +352,9 @@ export function buildDecals(number: number, paint: number): { geo: THREE.BufferG
   g.font = 'bold 96px Fredoka, sans-serif';
   g.lineWidth = 10;
   g.strokeStyle = '#1c1d22';
-  g.strokeText(String(number), 64, 70);
-  g.fillStyle = '#fff';
-  g.fillText(String(number), 64, 70);
+  g.strokeText('#' + number, 64, 70);
+  g.fillStyle = '#d4ff2a';
+  g.fillText('#' + number, 64, 70);
   // badge cell (128, 0, 128, 128): the Turbo Karts shield
   g.fillStyle = '#ffd600';
   g.beginPath();
@@ -365,15 +372,17 @@ export function buildDecals(number: number, paint: number): { geo: THREE.BufferG
   g.font = 'bold 48px Fredoka, sans-serif';
   g.fillText('TK', 192, 66);
   // sponsor rows (y = 128 + k * 64): white text on clear, except row 4 (on white panels: paint-coloured text)
-  const rows = ['VOLTEX', 'NIMBUS OIL', 'KARTRONIX', 'RAPIDO TYRES', 'ZAP COLA', 'SKYFIZZ'];
+  const rows = ['VELOCITY', 'HYPER', 'KARTRONIX', 'RAPID TYRES', 'AGILE', 'NEXTGEN'];
   rows.forEach((t, k) => {
-    g.font = 'bold 44px Fredoka, sans-serif';
-    g.fillStyle = k === 4 ? '#' + paint.toString(16).padStart(6, '0') : '#ffffff';
-    if (k === 4) {
-      g.lineWidth = 3;
-      g.strokeStyle = '#1c1d22';
-      g.strokeText(t, S / 2, 128 + k * 64 + 34);
-    }
+    // fill the row: as large as fits 470 px wide and 52 px tall
+    g.font = 'bold 52px Fredoka, sans-serif';
+    const fit = Math.min(52, (52 * 470) / g.measureText(t).width);
+    g.font = `bold ${Math.floor(fit)}px Fredoka, sans-serif`;
+    // white with a dark outline, the HYPER and RAPID TYRES rows in the neon accent (as the reference)
+    g.lineWidth = 6;
+    g.strokeStyle = '#1c1d22';
+    g.strokeText(t, S / 2, 128 + k * 64 + 34);
+    g.fillStyle = k === 1 || k === 3 ? '#d4ff2a' : '#ffffff';
     g.fillText(t, S / 2, 128 + k * 64 + 34);
   });
   const map = new THREE.CanvasTexture(c);
@@ -420,22 +429,22 @@ export function buildDecals(number: number, paint: number): { geo: THREE.BufferG
   };
   const UP = -Math.PI / 2;
   // number: engine cover top (read from behind), both sides of the engine cover, and the nose top
-  quad(NUM, 0.4, 0.4, [0, 0.905, -1.7], [UP + 0.27, Math.PI, 0]);
-  quad(NUM, 0.46, 0.46, [0.372, 0.79, -1.0], [0, Math.PI / 2, 0]);
-  quad(NUM, 0.46, 0.46, [-0.372, 0.79, -1.0], [0, -Math.PI / 2, 0]);
-  quad(NUM, 0.3, 0.3, [0, 0.73, 1.45], [UP + 0.19, 0, 0]);
+  quad(NUM, 0.42, 0.42, [0, 0.92, -1.7], [UP + 0.27, Math.PI, 0]);
+  quad(NUM, 0.34, 0.34, [0, 0.705, 1.55], [UP + 0.12, 0, 0]);
   // badge on the nose
-  quad(BADGE, 0.2, 0.2, [0, 0.6, 2.2], [UP + 0.19, 0, 0]);
-  // sponsors: sidepods, engine cover panels, rear wing (face and endplates), front wing
+  quad(BADGE, 0.2, 0.2, [0, 0.58, 2.25], [UP + 0.12, 0, 0]);
+  // sponsors, placed as the reference: VELOCITY big on the sidepods, AGILE high on the engine cover,
+  // HYPER low on the sidepod, KARTRONIX on the rear wing, RAPID TYRES on the front wing, NEXTGEN on the beam wing
   for (const s of [1, -1]) {
     const ry = (s * Math.PI) / 2;
-    quad(row(0), 0.84, 0.105, [s * 1.0, 0.52, -0.3], [0, ry, 0]);
-    quad(row(4), 0.62, 0.078, [s * 0.375, 0.64, -1.4], [0, ry, 0]);
-    quad(row(1), 0.7, 0.088, [s * 1.02, 1.12, -2.52], [0, ry, 0]);
+    quad(row(0), 1.7, 0.21, [s * 1.07, 0.62, -0.4], [0, ry, 0]);
+    quad(row(1), 0.5, 0.062, [s * 1.07, 0.42, 0.1], [0, ry, 0]);
+    quad(row(4), 0.5, 0.062, [s * 0.4, 0.92, -1.2], [0, ry, -s * 0.0]);
+    quad(row(0), 0.62, 0.078, [s * 1.055, 1.0, -2.52], [0, ry, 0]);
+    quad(row(3), 0.6, 0.075, [s * 1.0, 0.205, 2.86], [UP, 0, s * 0.0]);
   }
-  quad(row(2), 1.5, 0.19, [0, 1.2, -2.815], [-0.18, Math.PI, 0]);
-  quad(row(3), 1.4, 0.175, [0, 0.199, 2.88], [UP, 0, 0]);
-  quad(row(5), 0.56, 0.07, [0, 0.88, 0.4], [UP + 0.05, 0, 0]);
+  quad(row(2), 1.4, 0.18, [0, 1.3, -2.83], [-0.16, Math.PI, 0]);
+  quad(row(5), 0.9, 0.11, [0, 0.62, -2.64], [-0.25, Math.PI, 0]);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));

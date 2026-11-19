@@ -4,7 +4,7 @@
     {
       "check": "host creates a 4-letter room",
       "ok": true,
-      "note": "FZ8U"
+      "note": "EJPN"
     },
     {
       "check": "phone 1 joins and becomes leader",
@@ -56,12 +56,12 @@
     {
       "check": "a finished player sees their place and time on the phone",
       "ok": true,
-      "note": "FINISHED 3rd 4:02.03 Waiting for the others…"
+      "note": "FINISHED 2nd 4:04.87 Waiting for the others…"
     },
     {
       "check": "results on every phone: leader gets RACE AGAIN, others wait for the leader",
       "ok": true,
-      "note": "You finished 3rd"
+      "note": "You finished 2nd"
     },
     {
       "check": "RACE AGAIN restarts; phones count down to GO",
@@ -70,7 +70,7 @@
     {
       "check": "refreshing the host keeps the room and the players",
       "ok": true,
-      "note": "FZ8U → FZ8U"
+      "note": "EJPN → EJPN"
     },
     {
       "check": "phones return to the waiting screen after a host refresh",

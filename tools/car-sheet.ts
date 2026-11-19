@@ -61,12 +61,12 @@ async function main(): Promise<void> {
       console.log('  ' + name);
     }
     if (errors.length) console.log('errors:', errors.join('\n'));
-    const ref = readFileSync(path.join(ROOT, 'reference', 'kart', 'kart.jpg')).toString('base64');
+    const ref = readFileSync(path.join(ROOT, 'reference', 'kart', 'kart-v2.jpg')).toString('base64');
     const mine = readFileSync(path.join(OUT, 'car-sheet.png')).toString('base64');
     const comp = await browser.newPage({ viewport: { width: 2000, height: 760 } });
     await comp.setContent(`<body style="margin:0;background:#1e2126;font-family:sans-serif;color:#fff;display:flex;gap:30px;align-items:center;justify-content:center;height:100vh">
       <figure style="margin:0;text-align:center"><img src="data:image/jpeg;base64,${ref}" style="width:960px"><figcaption>Reference</figcaption></figure>
-      <figure style="margin:0;text-align:center"><img src="data:image/png;base64,${mine}" style="width:960px"><figcaption>Built (P1 colour; fictional sponsors)</figcaption></figure></body>`);
+      <figure style="margin:0;text-align:center"><img src="data:image/png;base64,${mine}" style="width:960px"><figcaption>Built (P1 colour, neon livery)</figcaption></figure></body>`);
     await comp.screenshot({ path: path.join(OUT, 'car-vs-reference.png') });
     console.log('  car-vs-reference');
   } finally {

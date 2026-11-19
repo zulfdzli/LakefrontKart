@@ -19,6 +19,9 @@ const HOP_T = DEFAULT_HANDLING.driftHop;
 export interface KartModel {
   chassis: THREE.BufferGeometry;
   head: THREE.BufferGeometry;
+  /** D49 podium: the character standing in a racing suit (body and head), and one arm (pivot at the shoulder). */
+  figure: THREE.BufferGeometry;
+  arm: THREE.BufferGeometry;
   /** Outline hulls (inverted), or null to skip outlines. */
   chassisOutline: THREE.BufferGeometry | null;
   headOutline: THREE.BufferGeometry | null;
@@ -113,6 +116,46 @@ function headParts(ch: Character): Part[] {
   }
 }
 
+/**
+ * The character for the podium (D49): a racing suit in the car's colour with white side stripes, gloves and
+ * boots, and the character's own head with the helmet off. About 2.4 m tall in car units.
+ */
+function buildFigure(ch: Character, paint: number): { figure: THREE.BufferGeometry; arm: THREE.BufferGeometry } {
+  const suit: Part[] = [
+    // legs and boots
+    P_(cyl(0.2, 0.17, 0.78, 10), paint, 0.24, 0.47, 0),
+    P_(cyl(0.2, 0.17, 0.78, 10), paint, -0.24, 0.47, 0),
+    P_(box(0.3, 0.16, 0.44), DARK, 0.24, 0.08, 0.06),
+    P_(box(0.3, 0.16, 0.44), DARK, -0.24, 0.08, 0.06),
+    // torso: a rounded suit, a belt and a collar
+    P_(cyl(0.42, 0.48, 0.95, 14), paint, 0, 1.3, 0),
+    P_(ico(0.46, 2), paint, 0, 1.72, 0, 0, 0, 0, 1, 0.55, 0.9),
+    P_(cyl(0.49, 0.49, 0.1, 14), DARK, 0, 0.88, 0),
+    P_(cyl(0.24, 0.3, 0.14, 12), DARK, 0, 1.98, 0),
+  ];
+  const stripes: Part[] = [];
+  for (const sd of [1, -1])
+    stripes.push(
+      P_(box(0.05, 0.8, 0.12), WHITE, sd * 0.45, 1.3, 0, 0, 0, sd * 0.06),
+      P_(box(0.05, 0.7, 0.1), WHITE, sd * 0.42, 0.5, 0),
+    );
+  const head = headParts(ch).map((p) => {
+    p.m.premultiply(new THREE.Matrix4().makeScale(0.82, 0.82, 0.82).setPosition(0, 2.0, 0.02));
+    return p;
+  });
+  const figure = mergePbr([
+    { parts: suit, fin: FIN.pearl },
+    { parts: stripes, fin: FIN.pearl },
+    { parts: head, fin: ch.kind === 'robot' ? FIN.metal : FIN.fur },
+  ]);
+  // one arm hanging from the shoulder (origin), sleeve and glove
+  const arm = mergePbr([
+    { parts: [P_(cyl(0.14, 0.12, 0.72, 10), paint, 0, -0.36, 0)], fin: FIN.pearl },
+    { parts: [P_(ico(0.16, 1), DARK, 0, -0.78, 0)], fin: FIN.rubber },
+  ]);
+  return { figure, arm };
+}
+
 export class ProceduralKartProvider implements KartAssetProvider {
   readonly kind = 'procedural' as const;
   private readonly wheels = buildWheels();
@@ -138,8 +181,9 @@ export class ProceduralKartProvider implements KartAssetProvider {
         { parts: headParts(ch), fin: ch.kind === 'robot' ? FIN.metal : FIN.fur },
         { parts: ch.kind === 'robot' ? [] : helmetParts(ch.accent, paint), fin: FIN.paint },
       ]);
-    const m: KartModel = { chassis, head, chassisOutline: null, headOutline: null };
-    this.built.push(chassis, head);
+    const { figure, arm } = buildFigure(ch, paint);
+    const m: KartModel = { chassis, head, figure, arm, chassisOutline: null, headOutline: null };
+    this.built.push(chassis, head, figure, arm);
     return m;
   }
 
@@ -274,6 +318,9 @@ export class KartView {
   private readonly stars = new THREE.Group();
   private readonly drone: THREE.Mesh;
   private readonly shadow: THREE.Mesh;
+  /** D49: the character on the podium (hidden while racing). */
+  private readonly figure = new THREE.Group();
+  private readonly arms: THREE.Group[] = [];
   private readonly decals: THREE.Mesh;
   private readonly decalMat: THREE.MeshPhysicalMaterial;
   /** Interpolated position (render frame). */
@@ -368,6 +415,23 @@ export class KartView {
       this.stars.add(s);
     }
     this.body.add(this.stars);
+    {
+      const fig = new THREE.Mesh(model.figure, M.car);
+      fig.castShadow = true;
+      this.figure.add(fig);
+      for (const sd of [1, -1]) {
+        const a = new THREE.Group();
+        a.position.set(sd * 0.56, 1.72, 0);
+        const m = new THREE.Mesh(model.arm, M.car);
+        m.castShadow = true;
+        a.add(m);
+        this.figure.add(a);
+        this.arms.push(a);
+      }
+      this.figure.visible = false;
+      this.figure.scale.setScalar(1.25);
+      this.root.add(this.figure);
+    }
     this.shadow = new THREE.Mesh(S.shadowGeo, S.shadowMat);
     this.shadow.position.y = 0.06;
     this.shadow.renderOrder = 1;
@@ -505,15 +569,30 @@ export class KartView {
   }
 
   /** Podium pose for place i (0 = winner). */
+  /**
+   * The podium (D49): the character stands on its step instead of the car. The winner jumps with both arms
+   * up; second and third bounce and wave.
+   */
   podiumPose(i: number, x: number, y: number, z: number, ry: number, t: number): void {
-    const hop = i === 0 ? Math.abs(Math.sin(t * 4)) * 0.9 : Math.abs(Math.sin(t * 3 + i)) * 0.35;
+    const hop = i === 0 ? Math.abs(Math.sin(t * 4)) * 0.55 : Math.abs(Math.sin(t * 3 + i)) * 0.18;
     this.root.position.set(x, y + 0.02, z);
     this.root.rotation.set(0, ry, 0);
-    this.body.position.y = hop;
-    this.body.rotation.set(0, i === 0 ? Math.sin(t * 2) * 0.3 : 0, 0);
-    this.body.scale.set(1, 1, 1);
-    this.body.visible = true;
-    this.head.rotation.set(0, Math.sin(t * 1.5 + i) * 0.4, Math.sin(t * 3 + i) * 0.15);
+    this.body.visible = false;
+    this.figure.visible = true;
+    this.figure.position.y = hop;
+    this.figure.rotation.set(0, Math.sin(t * 1.3 + i) * 0.25, Math.sin(t * 3 + i) * 0.05);
+    const [right, left] = this.arms as [THREE.Group, THREE.Group];
+    if (i === 0) {
+      // both arms up, pumping
+      const w = Math.sin(t * 8) * 0.25;
+      right.rotation.set(0, 0, Math.PI - 0.35 + w);
+      left.rotation.set(0, 0, -Math.PI + 0.35 - w);
+    } else {
+      // one arm waving, the other relaxed
+      right.rotation.set(0, 0, Math.PI * 0.85 + Math.sin(t * 6 + i) * 0.45);
+      left.rotation.set(0, 0, -0.18);
+    }
+    this.shadow.scale.set(0.45, 1, 0.45);
     for (const f of this.flames) f.visible = false;
     this.shield.visible = false;
     this.stars.visible = false;

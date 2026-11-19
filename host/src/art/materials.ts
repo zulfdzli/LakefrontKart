@@ -59,14 +59,43 @@ function carMaterial(): THREE.MeshPhysicalMaterial {
   });
   m.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec4 aPbr;\nvarying vec4 vPbr;\nvarying vec3 vObj;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPbr = aPbr;\nvObj = position;');
+      .replace(
+        '#include <common>',
+        '#include <common>\nattribute vec4 aPbr;\nvarying vec4 vPbr;\nvarying vec3 vObj;\nvarying vec3 vObjN;',
+      )
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPbr = aPbr;\nvObj = position;\nvObjN = normal;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec4 vPbr;\nvarying vec3 vObj;')
+      .replace('#include <common>', '#include <common>\nvarying vec4 vPbr;\nvarying vec3 vObj;\nvarying vec3 vObjN;')
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
         float weave = 0.0;
+        // D49 livery: neon chevrons sweeping forward over the paint (yellow-green, blue, purple, pink), as the
+        // reference. Top surfaces get forward-pointing V's, the sides rising diagonals; anti-aliased with fwidth.
+        if (vPbr.w > 0.005 && vPbr.w < 0.02) {
+          vec3 n = normalize(vObjN);
+          float uTop = vObj.z * 0.9 - abs(vObj.x) * 2.4 + vObj.y * 0.4;
+          float uSide = vObj.z * 0.75 + vObj.y * 2.1;
+          float u = mix(uTop, uSide, smoothstep(0.35, 0.75, abs(n.x))) * 1.05;
+          float f = fract(u);
+          float aa = fwidth(u) * 1.2 + 0.002;
+          float b1 = smoothstep(0.0 - aa, 0.0 + aa, f) - smoothstep(0.13 - aa, 0.13 + aa, f);
+          float b2 = smoothstep(0.16 - aa, 0.16 + aa, f) - smoothstep(0.24 - aa, 0.24 + aa, f);
+          float b3 = smoothstep(0.26 - aa, 0.26 + aa, f) - smoothstep(0.31 - aa, 0.31 + aa, f);
+          float b4 = smoothstep(0.33 - aa, 0.33 + aa, f) - smoothstep(0.37 - aa, 0.37 + aa, f);
+          float b5 = smoothstep(0.39 - aa, 0.39 + aa, f) - smoothstep(0.405 - aa, 0.405 + aa, f);
+          // the stripes fade towards the nose tip, leaving the base colour there
+          float zone = smoothstep(-2.4, -1.6, vObj.z) * (1.0 - smoothstep(1.6, 2.6, vObj.z) * 0.55);
+          // stripes come in groups with plain base colour between them (every other repeat)
+          zone *= smoothstep(0.12, 0.2, fract(u * 0.5 + 0.25)) * (1.0 - smoothstep(0.94, 1.0, fract(u * 0.5 + 0.25)));
+          vec3 c = diffuseColor.rgb;
+          c = mix(c, vec3(0.75, 1.0, 0.08), b1 * zone);
+          c = mix(c, vec3(0.08, 0.32, 1.0), b2 * zone);
+          c = mix(c, vec3(0.5, 0.12, 0.95), b3 * zone);
+          c = mix(c, vec3(1.0, 0.25, 0.6), b4 * zone);
+          c = mix(c, vec3(1.0), b5 * zone);
+          diffuseColor.rgb = c;
+        }
         if (vPbr.w < -0.5) {
           vec2 q = vec2(vObj.x + vObj.z, vObj.y - vObj.z) * 55.0;
           vec2 c = floor(q);
@@ -89,7 +118,7 @@ function carMaterial(): THREE.MeshPhysicalMaterial {
       )
       .replace(
         '#include <emissivemap_fragment>',
-        '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * max(vPbr.w, 0.0);',
+        '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * (vPbr.w > 0.5 ? vPbr.w : 0.0);',
       );
   };
   m.customProgramCacheKey = () => 'tk-car';

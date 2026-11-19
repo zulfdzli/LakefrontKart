@@ -592,6 +592,25 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
   - **Fixed**: switching to a second track crashed since phase 10, because the cinematic pass removes the scene's fog and the next theme change recoloured it. This affected T in the lobby and every Grand Prix race after the first.
 - **Why**: Section 12.6 and section 12.4.
 
+### D49 · Car livery and shape from the second reference; characters on the podium (2026-11-19, your request)
+- **Q**: You gave a new four-view reference (`reference/kart/kart-v2.jpg`, a modern open-wheel car in a neon multicolour livery) and asked for the podium to show the characters instead of the cars.
+- **A**:
+  - **Livery**: drawn in the car shader as neon chevrons sweeping forward over the paint, in yellow-green, blue, purple, pink and a thin white line. On top surfaces they form forward-pointing V's, as in the reference's top view; on the sides they rise diagonally. They come in groups with short plain gaps, are anti-aliased, and fade towards the nose tip. One draw call per car, no textures.
+  - **Base colour**: still each player's own colour (D44); the reference's red is P1's red, and AI cars are orange.
+  - **Shape**:
+    - a carbon lower body (survival cell, nose and sidepod undercut);
+    - wider, sculpted sidepods;
+    - a front wing that sweeps up towards its tips, with neon endplates;
+    - a painted top flap on the rear wing, with rounded corners and neon endplate bands;
+    - bigger, wider tyres (rear radius 0.70 m, front 0.60 m) with yellow sidewall bands and lettering marks.
+  - **Sponsors**: the reference's words, which are generic or the game's own: VELOCITY (large on the sidepods), HYPER, AGILE, KARTRONIX (rear wing), RAPID TYRES (front wing) and NEXTGEN (beam wing). Text is white or neon yellow with a dark outline. Numbers show as "#1" to "#5" for players, matching the reference's "#7" style.
+  - **Podium**: the top three characters stand on their steps instead of their cars. Each wears a racing suit in their car's colour with white stripes, gloves and boots, with their own face showing.
+    - **Winner**: jumps with both arms up.
+    - **2nd and 3rd**: bounce and wave.
+    - **Grand Prix**: the trophy still turns above the champion.
+  - **Comparison**: `npm run car-sheet` now compares with `kart-v2.jpg`.
+- **Why**: Your request.
+
 ---
 
 ## Gate 0 status
