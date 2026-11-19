@@ -1,8 +1,12 @@
 /**
- * Procedural WebAudio (prototype): engine, tyre squeal, sound effects and a step-sequencer music loop that
- * speeds up on the final lap. Browsers need a user gesture before audio can start (unlock()).
+ * Procedural WebAudio: the F1 V8 engine (engine-model.ts + engine-sound.ts, D60), tyre squeal, sound effects and
+ * a step-sequencer music loop that speeds up on the final lap. Browsers need a user gesture before audio can
+ * start: unlock() runs on the first key press, click or tap anywhere (and on the game's own buttons). Everything
+ * goes through a master limiter so nothing clips. The engine fades out while the tab is hidden or unfocused.
  */
 import { clamp } from '@tk/shared';
+import { EngineModel, type EngineInput } from './engine-model';
+import { EngineSound, noiseBuffer } from './engine-sound';
 
 const midi = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
 const PROG: [number, number[]][] = [
@@ -33,15 +37,31 @@ const BASS_STEPS = [0, 3, 6, 8, 11, 14];
 
 export type MusicMood = 'off' | 'menu' | 'race' | 'podium';
 
+const GESTURES = ['pointerdown', 'keydown', 'touchend'] as const;
+
+/**
+ * Master safety limiter: a fast, hard compressor just under full scale, so engine, effects and music together
+ * never clip harshly. Exported so offline renders use the same chain.
+ */
+export function masterLimiter(ac: BaseAudioContext): DynamicsCompressorNode {
+  const l = ac.createDynamicsCompressor();
+  l.threshold.value = -6;
+  l.knee.value = 4;
+  l.ratio.value = 20;
+  l.attack.value = 0.002;
+  l.release.value = 0.15;
+  return l;
+}
+
 export class Audio {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
   private sfx!: GainNode;
   private music!: GainNode;
   private noise!: AudioBuffer;
-  private eng!: OscillatorNode;
-  private eng2!: OscillatorNode;
-  private engG!: GainNode;
+  private engine$: EngineSound | null = null;
+  /** The virtual drivetrain behind the engine sound (rpm, gear, load); read-only for the game. */
+  readonly drivetrain = new EngineModel();
   private sqG!: GainNode;
   private step = 0;
   private next = 0;
@@ -52,7 +72,32 @@ export class Audio {
 
   constructor() {
     this.muted = localStorage.getItem('tk_muted') === '1';
+    // autoplay rules: start on the first gesture anywhere on the page
+    const first = (): void => {
+      this.unlock();
+      if (this.ready) for (const e of GESTURES) window.removeEventListener(e, first, true);
+    };
+    for (const e of GESTURES) window.addEventListener(e, first, true);
+    // tab hidden: fade the engine and suspend the context (no CPU in the background); unfocused: fade the engine
+    document.addEventListener('visibilitychange', () => this.onFocus());
+    window.addEventListener('blur', () => this.onFocus());
+    window.addEventListener('focus', () => this.onFocus());
   }
+
+  private onFocus(): void {
+    const ac = this.ctx;
+    if (!ac) return;
+    const visible = !document.hidden,
+      focused = visible && document.hasFocus();
+    this.engine$?.setFocus(focused);
+    if (!visible) {
+      window.clearTimeout(this.suspendTimer);
+      this.suspendTimer = window.setTimeout(() => {
+        if (document.hidden) void ac.suspend();
+      }, 250);
+    } else if (ac.state === 'suspended') void ac.resume();
+  }
+  private suspendTimer = 0;
 
   get ready(): boolean {
     return !!this.ctx && this.ctx.state === 'running';
@@ -62,37 +107,19 @@ export class Audio {
   unlock(): void {
     try {
       if (!this.ctx) {
-        const ac = (this.ctx = new AudioContext());
+        const ac = (this.ctx = new AudioContext({ latencyHint: 'interactive' }));
         this.master = ac.createGain();
         this.master.gain.value = this.muted ? 0 : 0.9;
-        this.master.connect(ac.destination);
+        this.master.connect(masterLimiter(ac)).connect(ac.destination);
         this.sfx = ac.createGain();
         this.sfx.connect(this.master);
         this.music = ac.createGain();
         this.music.gain.value = 0;
         this.music.connect(this.master);
-        const buf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate),
-          d = buf.getChannelData(0);
-        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        const buf = noiseBuffer(ac, 2, (Math.random() * 1e9) | 0);
         this.noise = buf;
-        this.eng = ac.createOscillator();
-        this.eng.type = 'sawtooth';
-        this.eng2 = ac.createOscillator();
-        this.eng2.type = 'square';
-        const engF = ac.createBiquadFilter();
-        engF.type = 'lowpass';
-        engF.frequency.value = 650;
-        this.engG = ac.createGain();
-        this.engG.gain.value = 0;
-        const g2 = ac.createGain();
-        g2.gain.value = 0.45;
-        this.eng.connect(engF);
-        this.eng2.connect(g2);
-        g2.connect(engF);
-        engF.connect(this.engG);
-        this.engG.connect(this.sfx);
-        this.eng.start();
-        this.eng2.start();
+        this.engine$ = new EngineSound(ac, this.sfx, buf);
+        this.engine$.setFocus(!document.hidden && document.hasFocus());
         const src = ac.createBufferSource();
         src.buffer = buf;
         src.loop = true;
@@ -196,23 +223,27 @@ export class Audio {
     }
   }
 
-  /** Engine and squeal follow one kart (the fastest human in multiplayer, section 6.5). */
-  engine(on: boolean, sp: number, boosting: boolean, squeal: boolean): void {
+  /**
+   * Engine and squeal follow one kart (player 1's, section 6.5). Call once per frame from the game loop with the
+   * frame time; while `on` is false (not racing, paused) the drivetrain holds and the engine fades out.
+   */
+  engine(on: boolean, inp: EngineInput, squeal: boolean, dt: number): void {
     const ac = this.ctx;
     if (!ac) return;
-    const t = ac.currentTime,
-      s = Math.abs(sp),
-      gear = Math.min(4, Math.floor(s / 11));
-    const f = 48 + gear * 10 + (s - gear * 11) * 4.2 + (boosting ? 30 : 0);
-    this.eng.frequency.setTargetAtTime(f, t, 0.03);
-    this.eng2.frequency.setTargetAtTime(f * 0.5, t, 0.03);
     const live = on && !this.muted;
-    this.engG.gain.setTargetAtTime(live ? 0.045 : 0, t, 0.08);
-    this.sqG.gain.setTargetAtTime(live && squeal ? 0.04 : 0, t, 0.05);
+    const ev = on ? this.drivetrain.update(dt, inp) : null;
+    this.engine$?.update(this.drivetrain, ev, { on: live, speed: inp.speed, boost: inp.boost, dt });
+    this.sqG.gain.setTargetAtTime(live && squeal ? 0.04 : 0, ac.currentTime, 0.05);
+  }
+
+  /** A new race: the engine back to idle in 1st. */
+  resetEngine(): void {
+    this.drivetrain.reset();
   }
 
   dispose(): void {
     clearInterval(this.timer);
+    this.engine$?.dispose();
     void this.ctx?.close();
     this.ctx = null;
   }

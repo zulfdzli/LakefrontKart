@@ -774,5 +774,44 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 
 ---
 
+### D60 · Procedural F1 V8 engine sound (2026-11-19, phase 14)
+- **Q**: the user asked for a realistic, high-revving F1 V8 engine sound for the player's car, with these parts:
+  - built with Web Audio only, no audio files;
+  - virtual rpm (4,000 idle to an 18,000 redline) and automatic gears, since the game tracks neither;
+  - idle hum, the scream, shift pops and cuts, overrun crackles and a rev-limiter bounce;
+  - a safety limiter, a fade when the tab loses focus, and unlock on the first gesture;
+  - no changes to the driving physics.
+- **What the game tracks**: speed (`k.sp`), the gas (`input.throttle`; the kart accelerates by itself, so off the gas means braking, spinning, stalled or a rescue), boost, airborne (`k.air`), and the grid phase. There is no rpm, no gear and no throttle position.
+- **A**: three pieces.
+  - **`host/src/engine-model.ts`**: a pure virtual drivetrain, unit-tested in `tests/engine-model.test.ts` (10 tests).
+    - **Gears**: 7. The redline speeds are 11, 16.5, 22, 28, 34, 44 and 54 m/s, multiplied by the game's speed setting (`handling.speedMul`, 1.3 by default). Every character's normal top speed sits mid-band in 6th (about 14,700–16,200 rpm), and a boost pulls 7th to about 17,300.
+    - **Shifts**: upshift at 17,300 rpm on the gas, with a 45 ms ignition cut. When the car stops gaining speed high in a gear it short-shifts, so it never hovers at the shift point. Braking downshifts keep the lower gear under 16,000 rpm, so the revs stay high, and each has an 85 ms blip with a 900 rpm overshoot.
+    - **rpm**: clutch slip at about 8,800 rpm from a standstill. Grid revs reach 13,000 while DRIFT is held in the countdown (the rocket-start input). In the air on the gas the engine free-revs to the limiter: 22 Hz cuts, bouncing about 380 rpm under 18,000.
+    - **Idle**: hunts about ±150 rpm.
+    - **Read-only**: it never writes to the kart.
+  - **`host/src/engine-sound.ts`**: Web Audio nodes only.
+    - **Main tone**: the firing frequency is rpm / 15 (about 270 Hz at idle, 1,200 Hz at the redline). An exhaust-pulse waveform (a custom PeriodicWave) is joined by the flat-plane V8's half order, which gives the rasp.
+    - **Grit and drive**: band-passed noise ring-modulated by the firing wave adds grit locked to the pulses. A slow random pitch wander means no two cycles are identical. A 4× oversampled, slightly asymmetric soft clipper adds drive that grows with load and rpm.
+    - **Filters**: an exhaust resonance peak at 2.1 × the firing frequency, and a brightness low-pass that opens with rpm and load. On the overrun a high-pass rises, giving the hollow, thinner descending tone.
+    - **Idle pulse**: the once-per-cycle order (rpm / 120) pulses the level.
+    - **Shifts**: the upshift cut dips about 11 dB for about 35 ms, with a crisp pop (a band-passed noise crack plus a low thump). The downshift blip is a level and rpm spike, usually with a small bark.
+    - **Limiter**: a softened 22 Hz square wave cuts the level by about 12 dB and wobbles the pitch.
+    - **Overrun**: crackles come in a burst when you lift, then occasionally. Straight-cut gearbox whine follows road speed and is mostly heard on the overrun.
+    - **Levels**: a bus compressor glues it. The scream sits at about −24 dBFS RMS, the idle at about −31.
+  - **`host/src/audio.ts`**:
+    - **Replaced**: the old two-oscillator engine.
+    - **Master limiter**: a −6 dB threshold, 20:1 ratio and 2 ms attack, on everything.
+    - **Unlock**: on the first pointerdown, keydown or touchend anywhere.
+    - **Focus**: when the tab is hidden the engine fades and the context suspends after 250 ms, then resumes when visible. On window blur the engine fades, and on focus it fades back in.
+  - **`session.ts`**: feeds player 1's kart each frame. A new race resets the engine to idle in 1st.
+- **Checked**:
+  - **Render**: `tools/engine-render.ts` drives the real modules through a scripted lap in an OfflineAudioContext. The result, `docs/audio/engine-demo.wav` (28 s), covers idle, grid revs, the launch and upshifts, a boost into 7th, a jump on the limiter, braking with blipped downshifts, a spin-out overrun, a lift to a stop and idle.
+  - **Measured**: peak −15.8 dBFS, so the master limiter never engages on the engine alone. The limiter modulation is 22 Hz with a 17 dB envelope range. The idle pulse is 34 Hz, 9 dB deep.
+  - **Live race** (real AudioContext): the context runs after the first click. Grid idle, launch and gears behave as designed, and the context suspends and resumes with tab visibility.
+  - **Tests**: Vitest 79/79, e2e 20/20; typecheck, lint and the build pass.
+- **Note**: the engine follows player 1's kart only, as the old one did (section 6.5). The other karts make no engine sound.
+
+---
+
 ## Gate 0 status
 All decisions are settled (D1 to D16). **You confirmed a shared understanding on 2026-11-16. Gate 0 is closed.**

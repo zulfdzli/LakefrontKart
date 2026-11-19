@@ -149,6 +149,7 @@ export class RaceSession {
     this.panel.reset();
     for (const v of this.world.views) v.resetMotion();
     this.audio.tempo = 1;
+    this.audio.resetEngine();
     this.slowMo = 0;
     this.lastFinish = null;
     if (intro) {
@@ -237,12 +238,22 @@ export class RaceSession {
     }
     const lead = this.players[0];
     if (lead) {
-      const k = lead.kart;
+      // D60: the virtual V8 reads the kart (speed, gas, jumps, grid revs); it never changes the driving
+      const k = lead.kart,
+        grid = s.phase === 'grid' || s.phase === 'countdown';
       this.audio.engine(
         this.stage === 'racing' && !this.paused,
-        k.sp,
-        k.boost > 0,
+        {
+          speed: k.sp,
+          throttle: k.input.throttle && !k.input.brake && k.stall <= 0 && k.spin <= 0 && k.rescue <= 0,
+          boost: k.boost > 0,
+          air: k.air,
+          grid,
+          launch: grid && k.input.drift,
+          scale: s.handling.speedMul,
+        },
         k.drifting || (k.wall && Math.abs(k.sp) > 10),
+        dt,
       );
     }
   }

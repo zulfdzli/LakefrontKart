@@ -25,7 +25,7 @@ Open the host screen on the computer (or press **F5** in VS Code), then scan the
 
 **How phones join:** scan the QR code (or open the URL and type the 4-letter room code), type a name and tap **JOIN**. Up to 5 phones can join. The first phone to join is the party leader (👑): it presses **START RACE**. Enter on the computer also starts. On iPhone, tap Share → "Add to Home Screen" for a full-screen controller.
 
-**Controller:** hold the phone sideways. The left side steers (◀ ▶, or a slider in Controls). The tall **BRAKE** pedal at the right edge brakes, **DRIFT** is held, and **ITEM** is tapped; swipe down on ITEM, or hold BRAKE, to throw backwards. The kart accelerates by itself.
+**Controller:** hold the phone sideways. The left side steers (◀ ▶, or a slider in Controls). The tall **BRAKE** pedal at the right edge brakes, **DRIFT** is held, and **ITEM** is tapped; swipe down on ITEM, or hold BRAKE, to throw backwards. The kart accelerates by itself. Player 1's kart has a procedural F1 V8 engine sound (no audio files): it idles on the grid, revs while you hold DRIFT in the countdown, shifts through 7 gears, pops on the overrun and bounces off the rev limiter in the air. Sound starts on the first click or key press; **M** mutes.
 
 **Party leader settings:** on the leader's phone, **Settings** sets the mode (single race or Grand Prix), the track, laps (1 to 3), whether AI karts fill the empty places, AI difficulty, and items on or off. The big screen follows.
 
@@ -75,6 +75,7 @@ The game picks its quality automatically: High for 1 to 2 players, Medium for 3 
 | `npm run bots -- --room ABCD --n 3` | Adds simulated phones to your room (testing without 5 phones)       |
 | `npm run perf -- --phase <name>`    | Frame time, draw calls and a leak check over 8 races                |
 | `npx tsx tools/shimmer.ts`          | Shimmer meter: flicker under sub-pixel camera moves, with heat maps |
+| `npx tsx tools/engine-render.ts`    | Renders the F1 V8 engine sound over a scripted lap to a WAV         |
 | `npm run textures`                  | Regenerates the texture sets                                        |
 | `npm run typecheck`                 | Type-checks every workspace                                         |
 | `npm run lint` / `npm run format`   | ESLint / Prettier                                                   |
