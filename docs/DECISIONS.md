@@ -755,5 +755,24 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 
 ---
 
+### D59 · BRAKE moves to the right edge as a tall pedal (2026-11-19, phase 14)
+- **Q**: the user asked for the brake button to move to the right side of the controller, so it is easier to press.
+- **A** (`controller/index.html`, `controller/src/style.css`):
+  - **Position**: BRAKE moves from beside the steering to the right edge, after DRIFT and just inside the LEDs, under the right thumb's resting spot.
+  - **Shape**: a round button in that column shrank to 46–68 px, because ITEM and DRIFT take most of the right-hand width. So BRAKE becomes a tall pill, a pedal in a recessed slot, at `clamp(76px, 10vw, 100px)` × 82% of the deck height.
+  - **Layout**: the deck order is now steering | pause pill | grille | ITEM + DRIFT | BRAKE | LEDs.
+- **Measured** (6 phone sizes, 640 × 360 to 932 × 430):
+
+  | | Before | After |
+  |---|---|---|
+  | BRAKE | 46–63 px circle | 64–81 × 198–256 px pedal (about 5× the area) |
+  | Steering area width | | 16–20 px narrower (6–13%) |
+
+  No buttons overlap: 8 px gaps on every size.
+- **Trade-off**: "hold BRAKE and tap ITEM to throw backwards" now needs two right-hand fingers. Swiping down on ITEM still throws backwards one-handed, and the hint under the buttons already says so.
+- **Results**: e2e 20/20 (including "phone 2 BRAKE reaches kart P2 only"). Screens in `docs/screens/phase14/dark-controller/` (`fit-*.png`, `phone-drive-*.png`). README updated.
+
+---
+
 ## Gate 0 status
 All decisions are settled (D1 to D16). **You confirmed a shared understanding on 2026-11-16. Gate 0 is closed.**

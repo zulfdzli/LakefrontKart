@@ -25,7 +25,7 @@ Open the host screen on the computer (or press **F5** in VS Code), then scan the
 
 **How phones join:** scan the QR code (or open the URL and type the 4-letter room code), type a name and tap **JOIN**. Up to 5 phones can join. The first phone to join is the party leader (👑): it presses **START RACE**. Enter on the computer also starts. On iPhone, tap Share → "Add to Home Screen" for a full-screen controller.
 
-**Controller:** hold the phone sideways. The left side steers (◀ ▶, or a slider in Controls). The big round button brakes, **DRIFT** is held, and **ITEM** is tapped; swipe down on ITEM, or hold BRAKE, to throw backwards. The kart accelerates by itself.
+**Controller:** hold the phone sideways. The left side steers (◀ ▶, or a slider in Controls). The tall **BRAKE** pedal at the right edge brakes, **DRIFT** is held, and **ITEM** is tapped; swipe down on ITEM, or hold BRAKE, to throw backwards. The kart accelerates by itself.
 
 **Party leader settings:** on the leader's phone, **Settings** sets the mode (single race or Grand Prix), the track, laps (1 to 3), whether AI karts fill the empty places, AI difficulty, and items on or off. The big screen follows.
 

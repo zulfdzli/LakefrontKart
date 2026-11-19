@@ -442,7 +442,8 @@ input {
 }
 .deck {
   display: grid;
-  grid-template-columns: 2.15fr 0.5fr 0.32fr 0.13fr 1.2fr 0.08fr;
+  /* steering | pause pill | grille | ITEM + DRIFT | BRAKE | LEDs: BRAKE sits under the right thumb (D59) */
+  grid-template-columns: 2.4fr 0.32fr 0.13fr 1.2fr auto 0.08fr;
   align-items: center;
   justify-items: center;
   gap: 8px;
@@ -574,11 +575,11 @@ input {
   container-type: inline-size;
 }
 
-/* the big round button (BRAKE), in a recessed ring */
+/* BRAKE (D59): a tall pedal in a recessed slot at the right edge, where the right thumb rests */
 .ring {
-  width: min(100%, calc(var(--dh) * 0.52));
-  aspect-ratio: 1;
-  border-radius: 50%;
+  width: clamp(76px, 10vw, 100px);
+  height: min(100%, calc(var(--dh) * 0.82));
+  border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -588,9 +589,9 @@ input {
     0 1px 0 rgba(255, 255, 255, 0.06);
 }
 .rbtn.big {
-  width: 82%;
-  aspect-ratio: 1;
-  border-radius: 50%;
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
+  border-radius: 999px;
 }
 .rbtn {
   display: flex;
