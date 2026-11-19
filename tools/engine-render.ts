@@ -20,7 +20,7 @@ const arg = (n: string, d: string): string => {
   const i = args.indexOf(`--${n}`);
   return i >= 0 && args[i + 1] ? args[i + 1]! : d;
 };
-const OUT = path.join(ROOT, arg('out', 'docs/audio/engine-demo.wav'));
+const OUT = path.resolve(ROOT, arg('out', 'docs/audio/engine-demo.wav'));
 const PORT = Number(arg('port', '3108'));
 
 function startServer(): Promise<ChildProcess> {
@@ -43,7 +43,15 @@ function startServer(): Promise<ChildProcess> {
 
 interface Result {
   wav: string;
-  sections: { name: string; from: number; to: number; rms: number; peak: number; rpm: [number, number] }[];
+  sections: {
+    name: string;
+    from: number;
+    to: number;
+    rms: number;
+    peak: number;
+    low: number;
+    rpm: [number, number];
+  }[];
   peak: number;
   events: string[];
 }
@@ -128,13 +136,25 @@ async function main(): Promise<void> {
       const d = buf.getChannelData(0);
       let peak = 0;
       for (const v of d) peak = Math.max(peak, Math.abs(v));
+      // the body: the signal under ~350 Hz (two cascaded one-pole low-passes), for the share of energy down there
+      const lo = new Float32Array(d.length),
+        a = 1 - Math.exp((-2 * Math.PI * 350) / SR);
+      let y1 = 0,
+        y2 = 0;
+      for (let i = 0; i < d.length; i++) {
+        y1 += a * (d[i]! - y1);
+        y2 += a * (y1 - y2);
+        lo[i] = y2;
+      }
       const sections = SECTIONS.map(([name, from, to]) => {
         let s2 = 0,
+          l2 = 0,
           pk = 0;
         const a = Math.floor(from * SR),
           b = Math.floor(to * SR);
         for (let i = a; i < b; i++) {
           s2 += d[i]! * d[i]!;
+          l2 += lo[i]! * lo[i]!;
           pk = Math.max(pk, Math.abs(d[i]!));
         }
         const r = rpmLog.slice(Math.floor(from * FPS), Math.floor(to * FPS));
@@ -144,6 +164,7 @@ async function main(): Promise<void> {
           to,
           rms: 20 * Math.log10(Math.sqrt(s2 / (b - a)) + 1e-9),
           peak: 20 * Math.log10(pk + 1e-9),
+          low: 10 * Math.log10(l2 / (s2 + 1e-12) + 1e-12),
           rpm: [Math.round(Math.min(...r)), Math.round(Math.max(...r))] as [number, number],
         };
       });
@@ -176,7 +197,7 @@ async function main(): Promise<void> {
     console.log(`wrote ${path.relative(ROOT, OUT)}  overall peak ${res.peak.toFixed(1)} dBFS`);
     for (const s of res.sections)
       console.log(
-        `${String(s.from).padStart(5)}-${String(s.to).padEnd(5)} ${s.name.padEnd(40)} rms ${s.rms.toFixed(1).padStart(6)} dBFS  peak ${s.peak.toFixed(1).padStart(6)}  rpm ${s.rpm[0]}-${s.rpm[1]}`,
+        `${String(s.from).padStart(5)}-${String(s.to).padEnd(5)} ${s.name.padEnd(40)} rms ${s.rms.toFixed(1).padStart(6)} dBFS  peak ${s.peak.toFixed(1).padStart(6)}  <350Hz ${s.low.toFixed(1).padStart(6)} dB  rpm ${s.rpm[0]}-${s.rpm[1]}`,
       );
     console.log('shifts:', res.events.join(', '));
   } finally {

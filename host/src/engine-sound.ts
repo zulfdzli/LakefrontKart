@@ -9,6 +9,8 @@
  *   half      the flat-plane V8's half order (each bank's exhaust fires at half the rate): the rasp
  *   cycle     the once-per-cycle order (rpm / 120) pulses the level: the lumpy idle; fades out with revs
  *   grit      band-passed noise amplitude-modulated by the firing wave: combustion roughness locked to the pulses
+ *   body      the deep roar under the scream: the crank order (rpm / 60), the half and cycle orders and a rumble of
+ *             noise locked to the crank, driven hard through its own clipper and low-passed (D61)
  *
  *   -> drive (more with load and revs) -> soft-clip waveshaper -> exhaust resonance peak -> brightness low-pass
  *   -> high-pass (rises off the throttle: the hollow overrun tone) -> idle pulse -> shift cut -> limiter cut
@@ -17,6 +19,9 @@
  * downshifts, and random crackles on the overrun. A bus compressor keeps it even; Audio adds the master limiter.
  */
 import { V8, type EngineEvent, type EngineModel } from './engine-model';
+
+/** Depth of the body layer (D61): its level at no load and the extra at full load, and the rumble amount. */
+const BODY = { base: 0.3, load: 0.25, rumble: 0.35 };
 
 /** A small deterministic generator, so offline renders (tools/engine-render.ts) repeat exactly. */
 class Lcg {
@@ -82,6 +87,14 @@ export class EngineSound {
   private readonly firing: OscillatorNode;
   private readonly half: OscillatorNode;
   private readonly cycle: OscillatorNode;
+  private readonly body: OscillatorNode;
+  private readonly bodyDrive: GainNode;
+  private readonly bodyLow: BiquadFilterNode;
+  private readonly gBody: GainNode;
+  private readonly gRumble: GainNode;
+  private readonly rumbleMod: GainNode;
+  private readonly rumbleBand: BiquadFilterNode;
+  private readonly shelf: BiquadFilterNode;
   private readonly whine: OscillatorNode;
   private readonly gHalf: GainNode;
   private readonly gGrit: GainNode;
@@ -158,6 +171,8 @@ export class EngineSound {
       f0 / 2,
     );
     this.cycle = osc('sine', f0 / 8);
+    // the crank order: once per crank turn, fat low harmonics (fundamental and 2nd strongest)
+    this.body = osc(pulseWave(c, 16, [[2, 0.8, 0.9]], 37), f0 / 4);
     const sum = gain(1);
     const gFiring = gain(0.62);
     this.gHalf = gain(0.3);
@@ -174,6 +189,7 @@ export class EngineSound {
     wander.connect(wanderLp).connect(wanderDepth);
     wanderDepth.connect(this.firing.detune);
     wanderDepth.connect(this.half.detune);
+    wanderDepth.connect(this.body.detune);
     this.srcs.push(wander);
 
     // combustion grit: noise, band-passed above the firing tone, ring/amplitude-modulated by the firing wave
@@ -187,6 +203,27 @@ export class EngineSound {
     this.firing.connect(this.gritMod).connect(this.gGrit.gain);
     grit.connect(this.gritBand).connect(this.gGrit).connect(sum);
 
+    // body: crank order + half order + a crank-locked noise rumble, saturated on their own and kept low
+    const bodySum = gain(1);
+    this.body.connect(gain(0.7)).connect(bodySum);
+    this.half.connect(gain(0.45)).connect(bodySum);
+    this.cycle.connect(gain(0.4)).connect(bodySum); // the sub: once per engine cycle
+    const rumble = c.createBufferSource();
+    rumble.buffer = noise;
+    rumble.loop = true;
+    this.srcs.push(rumble);
+    this.rumbleBand = filter('bandpass', f0 * 0.7, 0.7);
+    this.gRumble = gain(0);
+    this.rumbleMod = gain(0);
+    this.body.connect(this.rumbleMod).connect(this.gRumble.gain);
+    rumble.connect(this.rumbleBand).connect(this.gRumble).connect(bodySum);
+    this.bodyDrive = gain(2);
+    const bodyShaper = c.createWaveShaper();
+    bodyShaper.curve = softClip(2.2);
+    bodyShaper.oversample = '4x';
+    this.bodyLow = filter('lowpass', 300, 0.9);
+    this.gBody = gain(0);
+
     // ---- shaping ----
     this.drive = gain(1.5);
     const shaper = c.createWaveShaper();
@@ -194,6 +231,7 @@ export class EngineSound {
     shaper.oversample = '4x';
     this.makeup = gain(0.6);
     this.peak = filter('peaking', 900, 1.3, 7);
+    this.shelf = filter('lowshelf', 260, 0.7, 3);
     this.low = filter('lowpass', 2500, 0.8);
     this.high = filter('highpass', 70, 0.7);
     const lump = gain(1);
@@ -211,9 +249,13 @@ export class EngineSound {
     limSoft.connect(this.limPitch);
     this.limPitch.connect(this.firing.detune);
     this.limPitch.connect(this.half.detune);
+    this.limPitch.connect(this.body.detune);
     this.level = gain(0);
-    sum.connect(this.drive).connect(shaper).connect(this.makeup).connect(this.peak).connect(this.low);
+    sum.connect(this.drive).connect(shaper).connect(this.makeup).connect(this.peak).connect(this.shelf);
+    this.shelf.connect(this.low);
     this.low.connect(this.high).connect(lump).connect(this.shiftGain).connect(limGain).connect(this.level);
+    // the body joins after the overrun high-pass (it has its own overrun fade) and goes through the cuts with it
+    bodySum.connect(this.bodyDrive).connect(bodyShaper).connect(this.bodyLow).connect(this.gBody).connect(lump);
 
     // gearbox whine
     this.whine = osc('triangle', 400);
@@ -261,6 +303,8 @@ export class EngineSound {
     this.firing.frequency.setTargetAtTime(fire, t, k);
     this.half.frequency.setTargetAtTime(fire / 2, t, k);
     this.cycle.frequency.setTargetAtTime(fire / 8, t, k);
+    this.body.frequency.setTargetAtTime(fire / 4, t, k);
+    this.rumbleBand.frequency.setTargetAtTime(Math.min(1200, Math.max(80, fire * 0.7)), t, k);
     this.gritBand.frequency.setTargetAtTime(Math.min(9000, fire * 3.2), t, k);
 
     // the mix of orders: lumpy and pulsing at idle, the clean firing scream at the top
@@ -269,6 +313,14 @@ export class EngineSound {
     const grit = 0.05 + 0.2 * load * (0.3 + 0.7 * n) + 0.05 * over;
     this.gGrit.gain.setTargetAtTime(grit * 0.5, t, 0.02);
     this.gritMod.gain.setTargetAtTime(grit * 0.5, t, 0.02);
+
+    // body: the roar grows with load, thins (but stays) on the overrun
+    this.bodyDrive.gain.setTargetAtTime(1.6 + 2.6 * load, t, 0.02);
+    this.bodyLow.frequency.setTargetAtTime(Math.min(1400, 160 + fire * 0.85), t, k);
+    this.gBody.gain.setTargetAtTime((BODY.base + BODY.load * load) * (1 - 0.55 * over), t, 0.03);
+    const rum = BODY.rumble * (0.25 + 0.75 * load);
+    this.gRumble.gain.setTargetAtTime(rum, t, 0.02);
+    this.rumbleMod.gain.setTargetAtTime(rum, t, 0.02);
 
     // drive and tone: harder and brighter with load and revs; boosts add a little more
     const drv = 1.1 + 3.4 * load * n ** 1.2 + (f.boost ? 0.6 : 0);

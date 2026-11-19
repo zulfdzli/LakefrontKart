@@ -813,5 +813,20 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 
 ---
 
+### D61 · Deeper, roaring engine (2026-11-19, phase 14)
+- **Q**: the user asked for the engine sound to be more "deep" and "roar".
+- **Found**: the D60 engine was nearly all scream. At full throttle the 150–400 Hz band sat 35–39 dB under the total and 30–150 Hz 28–42 dB under it. Only the idle had any body.
+- **A**: a body layer in `engine-sound.ts`. The pitch, the rpm model and the physics are unchanged.
+  - **Sources**: the crank order (rpm / 60, a PeriodicWave with a strong 2nd harmonic), the half order and the once-per-cycle order (rpm / 120, the sub).
+  - **Rumble**: a band of noise around 0.7 × the firing frequency, amplitude-locked to the crank order, so the roar pulses with the engine rather than hissing.
+  - **Shaping**: driven through its own 4× oversampled soft clipper (harder with load), then low-passed at 160 Hz + 0.85 × the firing frequency. It joins the main tone after the overrun high-pass, so the shift cuts, blips, limiter and level still apply. On the overrun it drops by about 7 dB, keeping the hollow lift-off tone.
+  - **Tone**: a +3 dB low shelf at 260 Hz on the main tone.
+- **Checked** (`tools/engine-render.ts` now also prints each section's share of energy under 350 Hz):
+  - **Full throttle**: 30–150 Hz rose from −28…−42 to about −9 dB, and 150–400 Hz from −35…−39 to about −9 dB. The 1–3 kHz scream lost under 2 dB. The spectral centroid went from about 2,700 Hz to 1,900 Hz.
+  - **Levels**: overall loudness rose about 0.4 dB (scream about −23.8 dBFS RMS) and the peak is −14.5 dBFS, so the master limiter still never engages. `docs/audio/engine-demo.wav` is re-rendered.
+  - **Tests**: Vitest 79/79; typecheck and lint pass.
+
+---
+
 ## Gate 0 status
 All decisions are settled (D1 to D16). **You confirmed a shared understanding on 2026-11-16. Gate 0 is closed.**

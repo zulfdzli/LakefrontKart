@@ -4,7 +4,7 @@
     {
       "check": "host creates a 4-letter room",
       "ok": true,
-      "note": "3FTS"
+      "note": "Q34Y"
     },
     {
       "check": "phone 1 joins and becomes leader",
@@ -56,7 +56,7 @@
     {
       "check": "a finished player sees their place and time on the phone",
       "ok": true,
-      "note": "FINISHED 6th 4:03.75 Waiting for the others…"
+      "note": "FINISHED 6th 4:12.05 Waiting for the others…"
     },
     {
       "check": "results on every phone: leader gets RACE AGAIN, others wait for the leader",
@@ -70,7 +70,7 @@
     {
       "check": "refreshing the host keeps the room and the players",
       "ok": true,
-      "note": "3FTS → 3FTS"
+      "note": "Q34Y → Q34Y"
     },
     {
       "check": "phones return to the waiting screen after a host refresh",
