@@ -117,4 +117,26 @@ describe('rooms', () => {
     expect(room.config.trackId).toBe('meadows');
     expect(room.config.aiFill).toBe(false);
   });
+
+  it('D82: takes a number of AI bots (0 turns the AI off) and ignores anything else', () => {
+    const { rm, room } = setup();
+    expect(room.config.aiCount).toBe(5);
+    rm.setConfig(room, { aiCount: 2 });
+    expect([room.config.aiCount, room.config.aiFill]).toEqual([2, true]);
+    rm.setConfig(room, { aiCount: 0 });
+    expect([room.config.aiCount, room.config.aiFill]).toEqual([0, false]);
+    for (const bad of [8, -1, 2.5, '3']) {
+      rm.setConfig(room, { aiCount: bad as never });
+      expect(room.config.aiCount).toBe(0);
+    }
+  });
+
+  it('D71: takes a known sky and ignores anything else', () => {
+    const { rm, room } = setup();
+    expect(room.config.weather).toBe('random');
+    rm.setConfig(room, { weather: 'night' });
+    expect(room.config.weather).toBe('night');
+    rm.setConfig(room, { weather: 'hail' as never });
+    expect(room.config.weather).toBe('night');
+  });
 });

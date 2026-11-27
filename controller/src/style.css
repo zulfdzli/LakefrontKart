@@ -646,7 +646,9 @@ input {
   flex-direction: column;
 }
 .rbtn.sm {
-  width: clamp(72px, calc(var(--dh) * 0.25), 92px);
+  /* three of them stack with the PAUSE label: size them from the deck height so the column always fits between
+     the top and bottom bars (a fixed 72 px minimum pushed the label under the bottom bar on most phones) */
+  width: clamp(44px, calc((var(--dh) - 66px) / 3), 92px);
   aspect-ratio: 1;
   border-radius: 50%;
   font-size: 26px;
@@ -1397,4 +1399,259 @@ body {
     font-size: 11px;
     letter-spacing: 0.04em;
   }
+}
+
+/* very short screens (a phone with the browser bars showing): no PAUSE caption, a tighter pill */
+@media (max-height: 330px) and (orientation: landscape) {
+  .mid .lbl {
+    display: none;
+  }
+  .pill.v {
+    gap: 8px;
+    padding: 6px;
+  }
+  .rbtn.sm {
+    width: clamp(44px, calc((var(--dh) - 28px) / 3), 92px);
+  }
+}
+
+/* D68: the replay card sits over the finish card while the big screen plays the highlights */
+.replayCard {
+  z-index: 16;
+  gap: 14px;
+  /* opaque: the finish card underneath must not show through */
+  background: radial-gradient(circle at 50% 40%, rgb(32, 37, 46), rgb(10, 12, 16));
+}
+.replayCard p {
+  margin: 0;
+  color: var(--label);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.replayCard .pbtn {
+  min-width: 200px;
+}
+
+/* ---------------- D72 garage ---------------- */
+#garage {
+  gap: 10px;
+}
+.gHead {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.gHead b {
+  font-family: var(--display);
+  font-size: 26px;
+  letter-spacing: 2px;
+  color: var(--soft);
+}
+.gHead .pbtn.mini {
+  min-height: 44px;
+}
+#garageView {
+  width: 100%;
+  height: 190px;
+  border-radius: 22px;
+  background: radial-gradient(120% 90% at 50% 20%, #3a4252, #161a21 75%);
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6);
+  touch-action: none;
+}
+.gHint {
+  margin: -6px 0 0;
+  font-size: 11px;
+  color: var(--label);
+}
+.gRow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--label);
+}
+.gRow > span {
+  min-width: 62px;
+}
+.gRow .seg {
+  flex: 1;
+  flex-wrap: wrap;
+  background: rgba(0, 0, 0, 0.3);
+}
+.gRow .seg button {
+  flex: 1 1 30%;
+  min-height: 38px;
+  padding: 0 6px;
+  font-size: 14px;
+}
+.swatches {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.swatches button {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.5);
+  background: var(--sw);
+  box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.3);
+}
+.swatches button.sel {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.stepper button,
+.tRow button {
+  width: 40px;
+  height: 36px;
+  border: none;
+  border-radius: 12px;
+  background: var(--raised);
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 700;
+}
+.tRow button:disabled {
+  opacity: 0.3;
+}
+.stepper b {
+  min-width: 36px;
+  text-align: center;
+  font-family: var(--display);
+  font-size: 24px;
+  color: var(--ink);
+}
+.gTune {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.gTuneHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.gTuneHead b {
+  font-family: var(--display);
+  letter-spacing: 2px;
+  color: var(--soft);
+}
+.gTuneHead span {
+  font-size: 13px;
+  font-weight: 600;
+  color: #7ee08a;
+}
+.gTuneHead span.warn {
+  color: #ffcf5a;
+}
+.tRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--label);
+}
+.tRow span {
+  width: 86px;
+}
+.pips {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+}
+.pips b {
+  flex: 1;
+  height: 10px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.pips b.on {
+  background: var(--soft);
+}
+.pips b.on.up {
+  background: #7ee08a;
+}
+.pips b.down {
+  background: rgba(255, 110, 90, 0.45);
+}
+.gNote {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--label);
+}
+.gTune .pbtn.mini {
+  min-height: 40px;
+  align-self: center;
+}
+
+/* D74: the MOVE bar under ITEM and DRIFT: the meter fills it, full it glows */
+.moveBtn {
+  position: relative;
+  overflow: hidden;
+  width: min(30vw, calc(var(--dh) * 1.1));
+  height: min(8vw, calc(var(--dh) * 0.22));
+  border: none;
+  border-radius: 999px;
+  background: var(--well);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+  color: var(--label);
+  font-family: var(--display, inherit);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+.moveBtn .mFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), color-mix(in srgb, var(--me) 55%, transparent));
+  transition: width 0.25s linear;
+}
+.moveBtn span {
+  position: relative;
+}
+.moveBtn.ready {
+  color: #fff;
+  background: color-mix(in srgb, var(--me) 70%, #000);
+  box-shadow:
+    0 0 0 3px var(--me),
+    0 0 18px var(--me);
+  animation: moveReady 0.9s ease-in-out infinite;
+}
+.moveBtn.on {
+  transform: scale(0.94);
+}
+@keyframes moveReady {
+  50% {
+    box-shadow:
+      0 0 0 3px var(--me),
+      0 0 30px var(--me);
+  }
+}
+
+/* D82: + and − on the steering sensitivity buttons */
+.rbtn .pm {
+  font:
+    800 26px/1 var(--display, system-ui),
+    sans-serif;
+  color: var(--soft);
+}
+#pauseLobby {
+  width: 100%;
 }

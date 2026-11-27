@@ -68,6 +68,7 @@ export function roadMaterial(th: Theme): THREE.MeshStandardMaterial {
     tMacro: { value: T.macro },
     tDetail: { value: T.detail },
     uPuddle: { value: th.id === 'frosty' ? 1 : 0 },
+    uWet: { value: th.wx?.wet ?? 0 },
   };
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
@@ -76,7 +77,7 @@ export function roadMaterial(th: Theme): THREE.MeshStandardMaterial {
       .replace(
         '#include <common>',
         `#include <common>
-        uniform sampler2D tMacro; uniform sampler2D tDetail; uniform float uPuddle;
+        uniform sampler2D tMacro; uniform sampler2D tDetail; uniform float uPuddle; uniform float uWet;
         varying vec3 vWP; varying vec3 vWN;
         varying float vLat; varying float vLine; varying float vHW; varying float vDist;`,
       )
@@ -103,14 +104,17 @@ export function roadMaterial(th: Theme): THREE.MeshStandardMaterial {
         float paint = max(eLine, cLine) * (1.0 - wear * 0.7);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.82, 0.82, 0.8), paint);
         float pud = smoothstep(0.66, 0.8, mac2) * smoothstep(0.3, 0.6, mac) * uPuddle * (1.0 - paint);
-        diffuseColor.rgb *= 1.0 - pud * 0.3;`,
+        diffuseColor.rgb *= 1.0 - pud * 0.3;
+        // D71 rain: the whole road wet and darker, the paint a little less so
+        diffuseColor.rgb *= 1.0 - uWet * (0.28 - paint * 0.12);`,
       )
       .replace(
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
         roughnessFactor = mix(roughnessFactor, 0.6, paint);
         roughnessFactor *= mix(1.0, 0.88, det.r) * (1.0 - rubber * 0.12);
-        roughnessFactor = mix(roughnessFactor, 0.12, pud);`,
+        roughnessFactor = mix(roughnessFactor, 0.12, pud);
+        roughnessFactor = mix(roughnessFactor, mix(0.3, 0.14, wear * 0.5 + mac2 * 0.5), uWet);`,
       )
       .replace(
         '#include <normal_fragment_maps>',
@@ -157,12 +161,14 @@ export function kerbMaterial(th: Theme): THREE.MeshStandardMaterial {
   const normal = new THREE.CanvasTexture(n);
   normal.wrapS = normal.wrapT = THREE.RepeatWrapping;
   // both sides: the left kerb's ribbon winds the other way
+  // D71: wet kerbs shine in the rain; at night they glow faintly in their own paint, so the edges read in the dark
   return new THREE.MeshStandardMaterial({
     map,
     normalMap: normal,
-    roughness: 0.55,
+    roughness: th.wx?.wet ? 0.22 : 0.55,
     metalness: 0,
     side: THREE.DoubleSide,
+    ...(th.wx?.night ? { emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.32 } : {}),
   });
 }
 

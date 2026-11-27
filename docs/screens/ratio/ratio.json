@@ -1,0 +1,44 @@
+{
+  "meadows": {
+    "mode": "race",
+    "roadWidth": 18.553500000000003,
+    "wallToWall": 42.5535,
+    "mpp": 0.054402560118083164
+  },
+  "canyon": {
+    "mode": "race",
+    "roadWidth": 18.553500000000003,
+    "wallToWall": 42.5535,
+    "mpp": 0.054402560118083164
+  },
+  "frosty": {
+    "mode": "race",
+    "roadWidth": 18.553500000000003,
+    "wallToWall": 42.5535,
+    "mpp": 0.054402560118083164
+  },
+  "sepang": {
+    "mode": "race",
+    "roadWidth": 16.600500000000004,
+    "wallToWall": 40.600500000000004,
+    "mpp": 0.054402560118083164
+  },
+  "arena-meadow": {
+    "mode": "brawl",
+    "roadWidth": 31.6,
+    "wallToWall": 39.6,
+    "mpp": 0.0803085411266942
+  },
+  "arena-canyon": {
+    "mode": "brawl",
+    "roadWidth": 31.6,
+    "wallToWall": 39.6,
+    "mpp": 0.0803085411266942
+  },
+  "arena-ice": {
+    "mode": "brawl",
+    "roadWidth": 31.6,
+    "wallToWall": 39.6,
+    "mpp": 0.0803085411266942
+  }
+}

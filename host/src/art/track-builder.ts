@@ -474,23 +474,43 @@ export function buildTrackWorld(
     pts: number[];
     half: number;
     y: number;
+    /** Road sample where the river crosses (the bridge). */
+    at: number;
     dist(x: number, z: number): number;
   }
   const rivers: River[] = [];
   for (const l of marks)
     if (l.kind === 'river') {
       const i = fracIdx(l.at),
-        pts: number[] = [];
-      for (let k = -14; k <= 14; k++) {
+        half = 9;
+      // the channel runs out from the bridge both ways, but stops before it meets any other part of the road: the
+      // water is one flat sheet at the bridge's height, so on a shorter lap (D65) a meander reaching another stretch
+      // put the road (lower there, in a dip) under water
+      const awayRoad = (x: number, z: number): number => {
+        let b = 1e9;
+        for (let j = 0; j < N; j++) {
+          const dj = Math.abs(j - i);
+          if (Math.min(dj, N - dj) < 60) continue;
+          b = Math.min(b, Math.hypot(x - CX[j]!, z - CZ[j]!) - HW[j]!);
+        }
+        return b;
+      };
+      const at = (k: number): [number, number] => {
         const d = k * 32,
           wig = Math.sin(k * 0.55) * 22 + Math.sin(k * 0.21 + 1) * 30;
-        pts.push(CX[i]! + RX[i]! * d + TX[i]! * wig, CZ[i]! + RZ[i]! * d + TZ[i]! * wig);
-      }
-      const half = 9;
+        return [CX[i]! + RX[i]! * d + TX[i]! * wig, CZ[i]! + RZ[i]! * d + TZ[i]! * wig];
+      };
+      let k0 = 0,
+        k1 = 0;
+      while (k0 > -14 && awayRoad(...at(k0 - 1)) > half + 18) k0--;
+      while (k1 < 14 && awayRoad(...at(k1 + 1)) > half + 18) k1++;
+      const pts: number[] = [];
+      for (let k = k0; k <= k1; k++) pts.push(...at(k));
       rivers.push({
         pts,
         half,
         y: H[i]! - 3.2,
+        at: i,
         dist(x, z) {
           let b = 1e9;
           for (let k = 0; k + 3 < pts.length; k += 2) {
@@ -1463,14 +1483,16 @@ export function buildTrackWorld(
     g.setIndex(idx);
     g.computeVertexNormals();
     add(new THREE.Mesh(g, solid(th.water, { transparent: true, opacity: 0.9 })));
-    // bridge over every road sample near the river
+    // bridge over the road samples at the crossing (only that one stretch: the first-to-last near sample once ran
+    // stone parapets round half the lap when the river came near the road elsewhere)
     let b0 = -1,
       b1 = -1;
-    for (let i = 0; i < N; i++)
-      if (rv.dist(CX[i]!, CZ[i]!) < rv.half + 12) {
-        if (b0 < 0) b0 = i;
-        b1 = i;
-      }
+    if (rv.dist(CX[rv.at]!, CZ[rv.at]!) < rv.half + 12) {
+      b0 = b1 = rv.at;
+      while (b0 !== (rv.at + 1) % N && rv.dist(CX[(b0 - 1 + N) % N]!, CZ[(b0 - 1 + N) % N]!) < rv.half + 12)
+        b0 = (b0 - 1 + N) % N;
+      while (b1 !== (b0 - 1 + N) % N && rv.dist(CX[(b1 + 1) % N]!, CZ[(b1 + 1) % N]!) < rv.half + 12) b1 = (b1 + 1) % N;
+    }
     if (b0 >= 0) {
       const stone = solid(0xc9bfae);
       for (const sd of [1, -1]) {
@@ -1895,13 +1917,15 @@ export function buildTrackWorld(
       true,
     ),
   );
-  // D45: holographic item boxes: a glowing "?" core inside a translucent iridescent rounded shell
+  // D45: holographic item boxes: a glowing "?" core inside a translucent iridescent rounded shell. D67: toned
+  // down: the core no longer over-brightens into the bloom (was 2.0), and the shell's rainbow rim is softer and
+  // less glossy (rim 2.4 to 1.2, opacity 0.26 to 0.2, roughness 0.08 to 0.35)
   const boxGeo = track(box(1.5, 1.5, 1.5));
   const boxMat = track(
-    new THREE.MeshBasicMaterial({ map: qTex, transparent: true, opacity: 0.95, color: new THREE.Color(2.0, 2.0, 2.0) }),
+    new THREE.MeshBasicMaterial({ map: qTex, transparent: true, opacity: 0.92, color: new THREE.Color(1.0, 1.0, 1.0) }),
   );
   const shellGeo = track(new RoundedBoxGeometry(2.4, 2.4, 2.4, 3, 0.45));
-  const shellMat = track(holoShell(0xd8f4ff, 2.4, 0.26));
+  const shellMat = track(holoShell(0xd8f4ff, 1.2, 0.2, 0.35, 0.12));
   let boxMesh: THREE.InstancedMesh | null = null;
   let shellMesh: THREE.InstancedMesh | null = null;
   let padsBuilt = false;

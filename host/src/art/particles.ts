@@ -146,19 +146,20 @@ export class SoftPool {
 
 /* ---------------- ambient air particles ---------------- */
 
-export type AmbientKind = 'leaves' | 'dust' | 'snow' | 'mist';
+export type AmbientKind = 'leaves' | 'dust' | 'snow' | 'mist' | 'rain';
 
 const AMB_VERT = /* glsl */ `
   attribute vec4 aSeed; attribute vec3 aColor;
   uniform float uTime; uniform float uScale; uniform vec3 uWind; uniform float uFall; uniform float uSize;
+  uniform float uSway;
   varying vec3 vColor; varying float vA;
   void main() {
     float t = uTime * (0.6 + aSeed.w * 0.8);
     vec3 p = position;
     // drift with the wind inside a 40 m cell, falling (snow, leaves) and swaying
     p.xz += uWind.xz * t;
-    p.x += sin(t * 1.3 + aSeed.x * 6.28) * 1.2;
-    p.z += cos(t * 1.1 + aSeed.y * 6.28) * 1.2;
+    p.x += sin(t * 1.3 + aSeed.x * 6.28) * 1.2 * uSway;
+    p.z += cos(t * 1.1 + aSeed.y * 6.28) * 1.2 * uSway;
     p.xz = position.xz + mod(p.xz - position.xz + 20.0, 40.0) - 20.0;
     float h = 18.0;
     p.y = position.y + mod(aSeed.z * h - t * uFall + sin(t + aSeed.x * 9.0) * 0.6, h);
@@ -171,9 +172,11 @@ const AMB_VERT = /* glsl */ `
   }`;
 const AMB_FRAG = /* glsl */ `
   varying vec3 vColor; varying float vA;
-  uniform float uSoft; uniform vec3 uLight;
+  uniform float uSoft; uniform vec3 uLight; uniform float uStreak;
   void main() {
     vec2 p = gl_PointCoord - 0.5;
+    // D71 rain: a thin vertical streak inside the point instead of a round flake
+    if (uStreak > 0.0) p.x *= 1.0 + uStreak * 14.0;
     float d = length(p) * 2.0;
     if (d > 1.0) discard;
     float a = mix(step(d, 0.75), pow(1.0 - d, 1.4), uSoft) * vA;
@@ -185,7 +188,8 @@ export class Ambient {
   private readonly mat: THREE.ShaderMaterial;
   private readonly geo = new THREE.BufferGeometry();
 
-  constructor(T: Track, kind: AmbientKind, count: number, light: THREE.Color) {
+  /** `range`: only over road samples [i0, i0 + len] (D73: a squall's stretch); default the whole track. */
+  constructor(T: Track, kind: AmbientKind, count: number, light: THREE.Color, range?: [number, number]) {
     const rng = new Rng(0xa1b);
     const pos = new Float32Array(count * 3),
       seed = new Float32Array(count * 4),
@@ -195,10 +199,11 @@ export class Ambient {
       dust: [0xe8c9a0, 0xd7b089, 0xf3dcc0],
       snow: [0xffffff, 0xf2f6ff],
       mist: [0xffffff, 0xf0fff4, 0xfff6d5],
+      rain: [0xd8e2ee, 0xc2cedc, 0xe8eef6],
     };
     const c = new THREE.Color();
     for (let i = 0; i < count; i++) {
-      const s = Math.floor(rng.next() * T.N),
+      const s = range ? (range[0] + Math.floor(rng.next() * range[1])) % T.N : Math.floor(rng.next() * T.N),
         lat = (rng.next() * 2 - 1) * (T.HW[s]! + 30);
       pos[i * 3] = T.CX[s]! + T.RX[s]! * lat;
       pos[i * 3 + 1] = T.H[s]! + 0.3;
@@ -211,11 +216,15 @@ export class Ambient {
     this.geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     this.geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 4));
     this.geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
-    const cfg: Record<AmbientKind, { wind: [number, number, number]; fall: number; size: number; soft: number }> = {
+    const cfg: Record<
+      AmbientKind,
+      { wind: [number, number, number]; fall: number; size: number; soft: number; sway?: number; streak?: number }
+    > = {
       leaves: { wind: [1.4, 0, 0.8], fall: 0.9, size: 0.18, soft: 0.2 },
       dust: { wind: [3.5, 0, 1.2], fall: -0.15, size: 0.55, soft: 1 },
       snow: { wind: [0.8, 0, 0.5], fall: 1.6, size: 0.14, soft: 0.6 },
       mist: { wind: [0.6, 0, 0.3], fall: -0.1, size: 0.1, soft: 0.8 },
+      rain: { wind: [1.2, 0, 0.6], fall: 16, size: 0.7, soft: 1, sway: 0.1, streak: 1 },
     };
     const k = cfg[kind];
     this.mat = new THREE.ShaderMaterial({
@@ -228,6 +237,8 @@ export class Ambient {
         uFall: { value: k.fall },
         uSize: { value: k.size },
         uSoft: { value: k.soft },
+        uSway: { value: k.sway ?? 1 },
+        uStreak: { value: k.streak ?? 0 },
         uLight: { value: light },
       },
       transparent: true,

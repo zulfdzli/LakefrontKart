@@ -44,6 +44,17 @@ export interface ItemContext {
   lap: number;
   /** A Seeker Comet is already in flight (only one at a time). */
   cometActive: boolean;
+  /** D76: false leaves out the boost items (Turbo, Triple Turbo, Rocket Booster). Default true. */
+  boosts?: boolean;
+}
+
+/** D69 Bumper Brawl boxes: fighting items only, the same odds for everyone (no comets or rockets in an arena). */
+const BRAWL_ITEMS: readonly ItemId[] = ['orb', 'orb', 'bolt', 'bolt', 'oil', 'turbo', 'turbo', 'shield'];
+/** D76: without the boost items: the turbos' share goes to orbs and discs. */
+const BRAWL_NO_BOOST: readonly ItemId[] = ['orb', 'orb', 'orb', 'bolt', 'bolt', 'bolt', 'oil', 'shield'];
+export function brawlItem(rng: Rng, boosts = true): ItemId {
+  const L = boosts ? BRAWL_ITEMS : BRAWL_NO_BOOST;
+  return L[Math.floor(rng.next() * L.length)]!;
 }
 
 export function chooseItem(rank: number, rng: Rng, ctx?: ItemContext): ItemId {
@@ -51,16 +62,19 @@ export function chooseItem(rank: number, rng: Rng, ctx?: ItemContext): ItemId {
   const extra: [ItemId, number][] = [];
   if (ctx) {
     const fromLast = ctx.total - 1 - rank; // 0 = last place
-    if (fromLast <= 1 && ctx.total >= 3) extra.push(['rocket', fromLast === 0 ? 22 : 14]);
+    if (fromLast <= 1 && ctx.total >= 3 && ctx.boosts !== false) extra.push(['rocket', fromLast === 0 ? 22 : 14]);
     if (rank >= 3 && ctx.lap >= 2 && !ctx.cometActive) extra.push(['comet', rank >= 5 ? 7 : 4]);
   }
+  const noBoost = ctx?.boosts === false;
+  const w = (it: (typeof ITEMS)[number]): number =>
+    noBoost && (it === 'turbo' || it === 'turbo3') ? 0 : WEIGHTS[it][r6]!;
   let tot = 0;
-  for (const it of ITEMS) tot += WEIGHTS[it][r6]!;
-  for (const [, w] of extra) tot += w;
+  for (const it of ITEMS) tot += w(it);
+  for (const [, x] of extra) tot += x;
   let r = rng.next() * tot;
   for (const it of ITEMS) {
-    if ((r -= WEIGHTS[it][r6]!) < 0) return it;
+    if ((r -= w(it)) < 0) return it;
   }
-  for (const [it, w] of extra) if ((r -= w) < 0) return it;
-  return 'turbo';
+  for (const [it, x] of extra) if ((r -= x) < 0) return it;
+  return noBoost ? 'oil' : 'turbo';
 }

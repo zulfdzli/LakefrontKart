@@ -1,0 +1,26 @@
+{
+  "phase": "d65-sepang",
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 (0x00001F9D) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "viewport": "1600x900",
+  "seed": 7,
+  "racePerf": {
+    "fps": 60,
+    "p50": 16.7,
+    "p95": 16.7
+  },
+  "render": {
+    "calls": 137,
+    "triangles": 740566,
+    "views": 1,
+    "pixelRatio": 1,
+    "simMs": 0.15181304990210018,
+    "tier": "high",
+    "memory": {
+      "geometries": 123,
+      "textures": 68,
+      "programs": 54
+    }
+  },
+  "split": {},
+  "errors": []
+}

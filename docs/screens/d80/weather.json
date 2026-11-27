@@ -1,0 +1,29 @@
+{
+  "report": [
+    {
+      "track": "meadows",
+      "weather": "day",
+      "fps": 60,
+      "p95": 16.7
+    },
+    {
+      "track": "canyon",
+      "weather": "day",
+      "fps": 59,
+      "p95": 16.8
+    },
+    {
+      "track": "frosty",
+      "weather": "day",
+      "fps": 60,
+      "p95": 16.7
+    },
+    {
+      "track": "sepang",
+      "weather": "day",
+      "fps": 60,
+      "p95": 16.7
+    }
+  ],
+  "errors": []
+}

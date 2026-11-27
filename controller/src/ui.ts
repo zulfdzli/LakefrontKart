@@ -3,7 +3,7 @@
  * and every held state is released on pointercancel, blur and visibilitychange (section 7.2).
  * Press feedback (animation + haptic tick) happens locally, before any network round trip (section 12.1).
  */
-import { SLOT_COLORS, type HudUpdate, type SteeringScheme } from '@tk/shared';
+import { MOVE_INFO, SLOT_COLORS, type HudUpdate, type MoveId, type SteeringScheme } from '@tk/shared';
 import { haptic } from './haptics';
 import type { InputState } from './net';
 
@@ -26,8 +26,6 @@ const fmtT = (t: number): string => {
 const ord = (n: number): string =>
   n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
 const DRIFT_COL = ['#fff3b0', '#4fc3f7', '#ffa726', '#e040fb'];
-/** Swipe distance (CSS px) on ITEM that fires it backwards. */
-const SWIPE_BACK_PX = 26;
 /** Cross pad: a press starts at this share of full lock and ramps to full over STEER_RAMP_S (D35). */
 const STEER_BASE = 0.5;
 const STEER_RAMP_S = 0.28;
@@ -42,6 +40,9 @@ export class Remote {
   sensitivity = Number(localStorage.getItem('tk_sens') ?? '1') || 1;
   assist = localStorage.getItem('tk_assist') === '1';
   onItem: ((dir: 'forward' | 'back') => void) | null = null;
+  /** D74: the MOVE button (only fires with a full meter). */
+  onMove: (() => void) | null = null;
+  private moveReady = false;
   onPause: (() => void) | null = null;
   onLeave: (() => void) | null = null;
   onSchemeChange: (() => void) | null = null;
@@ -64,6 +65,7 @@ export class Remote {
       this.state.drift = on;
     });
     this.bindItem();
+    this.bindMove();
     this.bindTap('minusBtn', () => this.nudgeSensitivity(-0.1));
     this.bindTap('plusBtn', () => this.nudgeSensitivity(0.1));
     this.bindTap('menuBtn', () => this.onPause?.());
@@ -233,42 +235,48 @@ export class Remote {
     el.addEventListener('pointerleave', up);
   }
 
-  /** ITEM: tap fires forward (backward while BRAKE is held); swiping down on it fires backward (section 12.3). */
+  /**
+   * ITEM (D65: instant): fires the moment the finger touches it, forward, or backward while BRAKE is held
+   * (section 12.3). It no longer waits for the finger to lift, so the swipe-down gesture is gone.
+   */
+  /** D74: MOVE fires on touch, like ITEM, once the meter is full. */
+  private bindMove(): void {
+    const el = $('moveBtn');
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (!this.moveReady) return;
+      this.moveReady = false;
+      el.classList.remove('ready');
+      el.classList.add('on');
+      this.onMove?.();
+      setTimeout(() => el.classList.remove('on'), 180);
+    });
+  }
+
   private bindItem(): void {
     const el = $('itemBtn');
-    let pid: number | null = null,
-      y0 = 0,
-      used = false;
+    let pid: number | null = null;
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       if (pid !== null) return;
       pid = e.pointerId;
-      y0 = e.clientY;
-      used = false;
       try {
         el.setPointerCapture(e.pointerId);
       } catch {
         /* ignore */
       }
+      const back = this.state.brake;
       el.classList.add('on');
-      haptic('tap');
+      el.classList.toggle('back', back);
+      this.onItem?.(back ? 'back' : 'forward');
     });
-    el.addEventListener('pointermove', (e) => {
-      if (e.pointerId !== pid || used) return;
-      if (e.clientY - y0 > SWIPE_BACK_PX) {
-        used = true;
-        el.classList.add('back');
-        this.onItem?.('back');
-      }
-    });
-    const end = (e: PointerEvent, fire: boolean): void => {
+    const end = (e: PointerEvent): void => {
       if (e.pointerId !== pid) return;
       pid = null;
       el.classList.remove('on', 'back');
-      if (fire && !used) this.onItem?.(this.state.brake ? 'back' : 'forward');
     };
-    el.addEventListener('pointerup', (e) => end(e, true));
-    el.addEventListener('pointercancel', (e) => end(e, false));
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
     this.releasers.push(() => {
       pid = null;
       el.classList.remove('on', 'back');
@@ -311,17 +319,40 @@ export class Remote {
       }
       this.lastPlace = h.place;
     }
+    // D74: the move's meter fills the MOVE bar; full, it glows and fires on touch
+    const mb = $('moveBtn');
+    mb.hidden = !h.move;
+    $('throwHint').hidden = !!h.move;
+    if (h.move) {
+      const info = MOVE_INFO[h.move as MoveId];
+      const full = (h.meter ?? 0) >= 1;
+      $('moveFill').style.width = `${Math.round((h.meter ?? 0) * 100)}%`;
+      $('moveLbl').textContent = `${info?.icon ?? ''} ${full ? (info?.name ?? 'MOVE').toUpperCase() : 'MOVE'}`;
+      if (full && !this.moveReady) haptic('drift1');
+      this.moveReady = full;
+      mb.classList.toggle('ready', full);
+    }
     $('wrongWay').classList.toggle('on', h.wrongWay || h.threat);
     $('wrongWay').textContent = h.threat ? '⚠ INCOMING!' : '⚠ WRONG WAY';
     const fin = $('finCard');
     if (h.finished && fin.hidden) {
+      // D69: in a brawl, "finished" means knocked out (or the last one standing)
+      fin.querySelector('small')!.textContent =
+        h.lives === undefined ? 'FINISHED' : h.lives > 0 ? 'LAST ONE STANDING' : 'KNOCKED OUT';
       $('finPlace').innerHTML = `${h.place}<sup>${ord(h.place)}</sup>`;
       $('finTime').textContent = h.finishTime === null ? '' : fmtT(h.finishTime);
       fin.hidden = false;
       $('toast').classList.remove('on');
       this.releaseAll();
     } else if (!h.finished && !fin.hidden) fin.hidden = true;
-    $('sLap').textContent = h.finished ? 'FINISHED' : `LAP ${h.lap}/${h.laps}`;
+    $('sLap').textContent =
+      h.lives !== undefined
+        ? h.lives > 0
+          ? '♥'.repeat(h.lives) + '♡'.repeat(Math.max(0, 3 - h.lives))
+          : 'OUT'
+        : h.finished
+          ? 'FINISHED'
+          : `LAP ${h.lap}/${h.laps}`;
     const ic = h.item ? (ICON[h.item] ?? '🎁') : '';
     $('sItem').textContent = ic + (h.item === 'turbo3' && h.itemUses > 1 ? `×${h.itemUses}` : '');
     const itemIc = $('itemIc');

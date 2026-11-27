@@ -4,7 +4,7 @@
     {
       "check": "host creates a 4-letter room",
       "ok": true,
-      "note": "3ETK"
+      "note": "3WRX"
     },
     {
       "check": "phone 1 joins and becomes leader",
@@ -37,6 +37,11 @@
       "ok": true
     },
     {
+      "check": "the MOVE bar lights up when full; a tap fires the move on the host",
+      "ok": true,
+      "note": "⚡ OVERCLOCK"
+    },
+    {
       "check": "a phone pauses the race for everyone; another phone resumes it",
       "ok": true,
       "note": "card: \"by Ana\""
@@ -56,12 +61,17 @@
     {
       "check": "a finished player sees their place and time on the phone",
       "ok": true,
-      "note": "FINISHED 4th 4:01.28 Waiting for the others…"
+      "note": "FINISHED 3rd 2:51.72 Waiting for the others…"
+    },
+    {
+      "check": "the race highlights replay on the host, and a phone skips to the podium",
+      "ok": true,
+      "note": "1.0 s BIG AIR!"
     },
     {
       "check": "results on every phone: leader gets RACE AGAIN, others wait for the leader",
       "ok": true,
-      "note": "You finished 4th"
+      "note": "You finished 3rd"
     },
     {
       "check": "RACE AGAIN restarts; phones count down to GO",
@@ -70,7 +80,7 @@
     {
       "check": "refreshing the host keeps the room and the players",
       "ok": true,
-      "note": "3ETK → 3ETK"
+      "note": "3WRX → 3WRX"
     },
     {
       "check": "phones return to the waiting screen after a host refresh",
@@ -81,13 +91,53 @@
       "ok": true
     },
     {
+      "check": "the phone garage styles and tunes the kart; Done waits for a balanced tune; the host has it",
+      "ok": true,
+      "note": "Take 2 points from another stat"
+    },
+    {
       "check": "the leader sets mode and laps on the phone; the host follows",
       "ok": true
+    },
+    {
+      "check": "the leader picks Night on the phone; the host preview turns to night",
+      "ok": true,
+      "note": "night"
+    },
+    {
+      "check": "Track events: the phone switch reaches the host; the race has its event",
+      "ok": true,
+      "note": "sheep"
+    },
+    {
+      "check": "the garage tune is on the kart in the race",
+      "ok": true,
+      "note": "pip: speed 3→5, handling 3→2.2"
     },
     {
       "check": "a 4-race Grand Prix: points after each race, NEXT RACE, final standings and the trophy",
       "ok": true,
       "note": "meadows → canyon → frosty → sepang"
+    },
+    {
+      "check": "Random sky: every Grand Prix race rolls its own weather",
+      "ok": true,
+      "note": "meadows day, canyon sunset, frosty sunset, sepang rain"
+    },
+    {
+      "check": "Bumper Brawl: Brawl on the phone, an arena, lives on the phones, a winner still standing",
+      "ok": true,
+      "note": "arena-meadow, phone \"♥♥♥\", winner ♥1"
+    },
+    {
+      "check": "the leader sets 2 AI bots; pause mid-race and BACK TO LOBBY on the phone",
+      "ok": true,
+      "note": "2 AI karts, back in the lobby, others told the leader can end it"
+    },
+    {
+      "check": "the leader toggles Fun zones on the phone; a race builds the slalom, jump target and draft tunnel",
+      "ok": true,
+      "note": "toggle on→off→on, 8 cones, target yes, tunnel yes, 14 meshes"
     }
   ]
 }

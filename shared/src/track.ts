@@ -149,12 +149,53 @@ export interface Track {
   boxRows: number[];
   ramps: Ramp[];
   shortcuts: Shortcut[];
+  /**
+   * D65: vertical curvature of the road per sample (1/m, d²H/ds², smoothed): negative over a crest. Speed² times
+   * this is the vertical acceleration the road asks of a kart; past gravity the kart floats off a crest.
+   */
+  VC: number[];
+  /** D65: everything that happens along the lap (pacing checks and the HUD), in lap order. */
+  beats: Beat[];
+  /**
+   * D65: where a kart may float off the road (the roller-coaster crests). Everywhere else the road holds the kart
+   * down, like a coaster's wheels, so dips, rims and slopes never throw it off at boost speed.
+   */
+  airZone: boolean[];
+}
+
+/**
+ * D65 pacing: a roller-coaster crest (airtime), a dip (drop and compression), a jump, a sharp corner (a drift), a
+ * boost pad, an item row, or a landmark you drive through or past (tunnel, arch, bridge, shortcut mouth, the line).
+ * Crests, dips, jumps and drift corners are the "ramp or slide" moments.
+ */
+export type BeatKind = 'crest' | 'dip' | 'ramp' | 'corner' | 'pad' | 'items' | 'landmark';
+export const BIG_BEATS: readonly BeatKind[] = ['crest', 'dip', 'ramp', 'corner'];
+export interface Beat {
+  idx: number;
+  kind: BeatKind;
+}
+
+/** Vertical curvature of a closed height profile, smoothed over ±2 samples (see Track.VC). */
+export function verticalCurvature(H: readonly number[], DS: number): number[] {
+  const N = H.length,
+    raw: number[] = [];
+  for (let i = 0; i < N; i++) raw.push((H[(i + 1) % N]! - 2 * H[i]! + H[(i - 1 + N) % N]!) / (DS * DS));
+  const out: number[] = [];
+  for (let i = 0; i < N; i++) {
+    let s = 0;
+    for (let o = -2; o <= 2; o++) s += raw[(i + o + N) % N]!;
+    out.push(s / 5);
+  }
+  return out;
 }
 
 /** Defaults that reproduce the prototype exactly (constant width, no banking, no gates). */
 export function prototypeExtras(
   N: number,
-): Omit<Track, 'N' | 'DS' | 'LEN' | 'CX' | 'CZ' | 'TX' | 'TZ' | 'RX' | 'RZ' | 'ANG' | 'H' | 'SL' | 'CURV' | 'RLINE'> {
+): Omit<
+  Track,
+  'N' | 'DS' | 'LEN' | 'CX' | 'CZ' | 'TX' | 'TZ' | 'RX' | 'RZ' | 'ANG' | 'H' | 'SL' | 'CURV' | 'RLINE' | 'VC'
+> {
   return {
     id: 'proto',
     HW: new Array<number>(N).fill(ROAD_HALF),
@@ -169,6 +210,8 @@ export function prototypeExtras(
     boxRows: [0.07, 0.2, 0.33, 0.47, 0.6, 0.75, 0.9].map((f) => Math.floor(f * N)),
     ramps: [],
     shortcuts: [],
+    beats: [],
+    airZone: new Array<boolean>(N).fill(false),
   };
 }
 
@@ -295,7 +338,8 @@ export function buildTrack(ctrl: readonly (readonly [number, number])[], count: 
     }
     line = nl;
   }
-  return { N: count, DS, LEN, CX, CZ, TX, TZ, RX, RZ, ANG, H, SL, CURV, RLINE: line, ...prototypeExtras(count) };
+  const VC = verticalCurvature(H, DS);
+  return { N: count, DS, LEN, CX, CZ, TX, TZ, RX, RZ, ANG, H, SL, CURV, RLINE: line, VC, ...prototypeExtras(count) };
 }
 
 /** The prototype's track (about 1.28 km). Replaced by full-length TrackDefs in phase 8. */

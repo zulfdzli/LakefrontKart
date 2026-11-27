@@ -5,7 +5,8 @@
  * Split-screen additions (phase 6): player-colour border and name chip, a FINISHED banner, a reconnecting badge,
  * mirroring for right-hand views, and the shared minimap + standings panel (SharedPanel).
  */
-import { clamp, type GameState, type Kart, type Track } from '@tk/shared';
+import { MOVE_INFO, MOVE_OF, clamp, type GameState, type Kart, type Track } from '@tk/shared';
+import { BRAWL_LIVES } from '@tk/shared';
 import { DRIFT_COL } from './art/palette';
 import { hexStr } from './art/geo';
 import type { Rect } from './renderer';
@@ -36,7 +37,7 @@ const TEMPLATE = /* html */ `
   <div class="top">
     <div class="leftCol">
       <div class="place outl"><span class="placeN">6</span><sup class="placeS">th</sup><small class="placeOf">/6</small></div>
-      <div class="itembox"><span class="itemico"></span><b class="itemcnt"></b></div>
+      <div class="itembox"><span class="itemico"></span><b class="itemcnt"></b><b class="itemguard">GUARD</b><i class="movebar"><i class="movefill"></i></i><b class="moveico"></b></div>
     </div>
     <div class="mid">
       <div class="lap pill">LAP 1/3</div>
@@ -263,11 +264,12 @@ export class PlayerHud {
   }
 
   /** Persistent banner once this player has finished (the camera switches to an orbit). */
-  setFinished(place: number | null, time = 0): void {
+  setFinished(place: number | null, time = 0, label = 'FINISHED'): void {
     if (place === null) {
       this.root.classList.remove('done');
       return;
     }
+    this.q('fin').querySelector('small')!.textContent = label;
     this.q('finPlace').innerHTML = `${place}<sup>${ord(place)}</sup>`;
     this.q('finTime').textContent = fmtT(time);
     this.root.classList.add('done');
@@ -320,7 +322,15 @@ export class PlayerHud {
       d.textContent = rk < this.lastRank ? '▲' : '▼';
     }
     this.lastRank = rk;
-    this.txt('lap', 'LAP ' + clamp(p.lap, 1, s.laps) + '/' + s.laps);
+    // D69: in a brawl the lap pill shows the kart's lives
+    this.txt(
+      'lap',
+      s.mode === 'brawl'
+        ? p.out
+          ? 'OUT'
+          : '♥'.repeat(p.lives) + '♡'.repeat(Math.max(0, BRAWL_LIVES - p.lives))
+        : 'LAP ' + clamp(p.lap, 1, s.laps) + '/' + s.laps,
+    );
     this.txt('time', fmtT(s.phase === 'countdown' || s.phase === 'grid' ? 0 : p.finished ? p.finishTime : s.raceTime));
     this.txt('spd', String(Math.round(Math.abs(p.sp) * 3.2)));
     let ico = '';
@@ -330,7 +340,21 @@ export class PlayerHud {
     this.cls('itembox', 'spin', p.roll > 0);
     const cnt = p.item === 'turbo3' ? '×' + p.itemUses : '';
     if (this.txt('itemcnt', cnt)) this.q('itemcnt').style.display = cnt ? 'block' : 'none';
-    this.cls('driftbar', 'on', p.drifting);
+    // D65 item guard: a held Oil Slick, Orb or Disc trails behind and blocks one Orb or Disc
+    this.cls('itemguard', 'on', p.roll <= 0 && (p.item === 'oil' || p.item === 'orb' || p.item === 'bolt'));
+    // D74: the signature move's meter under the item box, its icon lit when it is ready
+    const mv = s.moves ? MOVE_OF[p.ch.id] : undefined;
+    this.cls('movebar', 'on', !!mv);
+    if (mv) {
+      const pc = Math.round(p.meter * 50) * 2;
+      if (this.txt('moveico', p.meter >= 1 ? MOVE_INFO[mv].icon : '')) this.cls('moveico', 'on', p.meter >= 1);
+      if (this.cache.get('movefill') !== String(pc)) {
+        this.cache.set('movefill', String(pc));
+        this.q('movefill').style.width = pc + '%';
+      }
+    }
+    // D76: a drift charges no boost any more, so its charge bar only shows when boosts are on
+    this.cls('driftbar', 'on', p.drifting && s.handling.boosts);
     const bw = p.drifting ? (p.driftLevel >= 3 ? 100 : Math.round((p.driftT - Math.floor(p.driftT)) * 100)) : 0;
     const f = this.q('driftfill');
     f.style.width = bw + '%';
@@ -349,7 +373,8 @@ export class PlayerHud {
       const c = goOn ? 'g' : i < n ? 'r' : '';
       if (li[i]!.className !== c) li[i]!.className = c;
     }
-    this.cls('hint', 'on', s.phase === 'countdown');
+    // D76: no rocket start without the boosts, so no hint for it
+    this.cls('hint', 'on', s.phase === 'countdown' && s.handling.boosts);
     if (!this.multi) {
       this.minimap.draw(this.mini, s.karts, this.colorOf, p);
       // single player: a compact standings list under the corner minimap, refreshed at 5 Hz
@@ -375,7 +400,11 @@ export function renderStandings(
   me: Kart | null = null,
 ): string {
   const order = s.karts.slice().sort((a, b) => a.rank - b.rank);
-  const rows = order.map((k) => ({ k, right: k.finished ? '✓' : `L${clamp(k.lap, 1, s.laps)}` }));
+  const rows = order.map((k) => ({
+    k,
+    right:
+      s.mode === 'brawl' ? (k.out ? 'OUT' : '♥'.repeat(k.lives)) : k.finished ? '✓' : `L${clamp(k.lap, 1, s.laps)}`,
+  }));
   const key = rows.map((r) => `${r.k.id}:${r.right}`).join('|');
   if (key === prevKey) return key;
   ol.innerHTML = rows

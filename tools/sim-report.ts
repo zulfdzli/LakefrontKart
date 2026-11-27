@@ -5,10 +5,25 @@
  *   npm run sim-report                       (Sunny Meadows, 20 races per row)
  *   npm run sim-report -- --track canyon     (meadows | canyon | frosty | proto)
  *   npm run sim-report -- --races 50 --json docs/sim-report.json
+ *   npm run sim-report -- --track canyon --weather rain   (D71: day | sunset | night | rain | snow)
+ *   npm run sim-report -- --moves                          (D74: signature moves on)
+ *   npm run sim-report -- --events                         (D73: the track's living event on)
+ *   npm run sim-report -- --zones                          (D83: the fun zones on)
+ *   npm run sim-report -- --tune 2,0,-2                    (D72: the test driver's garage tune: speed,accel,handling)
  */
 import { writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { CHARS, createGame, getTrack, isTrackId, STEP, type Difficulty, type Game, type Track } from '@tk/shared';
+import {
+  CHARS,
+  createGame,
+  getTrack,
+  isTrackId,
+  STEP,
+  type Difficulty,
+  type Game,
+  type Track,
+  type Weather,
+} from '@tk/shared';
 
 const args = process.argv.slice(2);
 const arg = (name: string, def: string): string => {
@@ -20,6 +35,13 @@ const TRACK_ID = arg('track', 'meadows');
 const TRACK: Track | undefined = isTrackId(TRACK_ID) ? getTrack(TRACK_ID) : undefined;
 const LAPS = Number(arg('laps', TRACK ? '2' : '3'));
 const JSON_OUT = arg('json', '');
+const WEATHER = arg('weather', 'day') as Weather;
+const [tS, tA, tH] = arg('tune', '0,0,0').split(',').map(Number) as [number, number, number];
+const TUNE = { speed: tS, accel: tA, handling: tH };
+const EVENTS = args.includes('--events');
+const MOVES = args.includes('--moves');
+/** D83: the fun zones on. */
+const ZONES = args.includes('--zones');
 /** The steady test driver from section 11.1. */
 const DRIVER_SKILL = 0.93;
 
@@ -43,12 +65,16 @@ interface RaceStats {
 function race(seed: number, diff: Difficulty, itemsOn: boolean, ci: number): RaceStats {
   const g: Game = createGame({
     seed,
-    humans: [{ slot: 0, ci }],
+    humans: [{ slot: 0, ci, tune: TUNE }],
     aiFill: true,
     laps: LAPS,
     difficulty: diff,
     itemsOn,
     raceEndGrace: 1e9,
+    weather: WEATHER,
+    events: EVENTS,
+    moves: MOVES,
+    zones: ZONES,
     ...(TRACK ? { track: TRACK } : {}),
   });
   g.setHumanAi(0, true);

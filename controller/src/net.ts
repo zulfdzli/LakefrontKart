@@ -5,6 +5,7 @@
  */
 import { io, type Socket } from 'socket.io-client';
 import type {
+  KartSetup,
   ControllerToServer,
   ServerToController,
   JoinOk,
@@ -41,6 +42,7 @@ export class PhoneNet {
   private lastSent = 0;
   private lastKey = '';
   private pendingItem: 'forward' | 'back' | null = null;
+  private pendingMove = false;
   rtt: number | null = null;
   onJoinLost: ((reason: JoinErrorReason) => void) | null = null;
   onRejoined: ((j: JoinOk) => void) | null = null;
@@ -96,6 +98,10 @@ export class PhoneNet {
   select(characterId: string): void {
     this.socket.emit('player:select', { characterId });
   }
+  /** D72: the garage setup (the server ignores it outside the lobby). */
+  garage(setup: KartSetup): void {
+    if (this.joined) this.socket.emit('player:garage', setup);
+  }
   start(): void {
     this.socket.emit('player:start');
   }
@@ -113,6 +119,10 @@ export class PhoneNet {
   fireItem(dir: 'forward' | 'back'): void {
     this.pendingItem = dir;
   }
+  /** D74: queue a one-shot MOVE press, like an item. */
+  fireMove(): void {
+    this.pendingMove = true;
+  }
 
   /**
    * Called every animation frame with the held state. Sends on change, on an item press, or as a 100 ms
@@ -123,18 +133,34 @@ export class PhoneNet {
     this.socket.emit('player:pause', { paused });
   }
 
+  /** D68: skip the highlight replay on the big screen. */
+  /** D82: the leader ends the race and takes everyone back to the lobby. */
+  toLobby(): void {
+    this.socket.emit('player:lobby');
+  }
+  skip(): void {
+    this.socket.emit('player:skip');
+  }
+
   pump(st: InputState, now: number): void {
     if (!this.joined || !this.socket.connected) return;
     const key = `${st.steer.toFixed(3)}|${+st.throttle}${+st.brake}${+st.drift}`;
-    const changed = key !== this.lastKey || this.pendingItem !== null;
+    const changed = key !== this.lastKey || this.pendingItem !== null || this.pendingMove;
     if (now - this.lastSent < 1000 / 60) return;
     if (!changed && now - this.lastSent < 100) return;
     this.lastKey = key;
     this.lastSent = now;
-    const msg: PlayerInput = { ...st, item: this.pendingItem, seq: ++this.seq, t: Date.now() };
+    const msg: PlayerInput = {
+      ...st,
+      item: this.pendingItem,
+      ...(this.pendingMove ? { move: true } : {}),
+      seq: ++this.seq,
+      t: Date.now(),
+    };
     this.pendingItem = null;
+    this.pendingMove = false;
     // an item press must not be dropped; everything else is volatile (an old input is worthless)
-    if (msg.item) this.socket.emit('player:input', msg);
+    if (msg.item || msg.move) this.socket.emit('player:input', msg);
     else this.socket.volatile.emit('player:input', msg);
   }
 

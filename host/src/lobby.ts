@@ -3,13 +3,24 @@
  * five player slot cards, the race settings, and the start hint. The 3D grid preview orbits behind it.
  */
 import QRCode from 'qrcode';
-import { CHARS, MAX_PLAYERS, SLOT_COLORS, type LobbyUpdate, type NetInfo } from '@tk/shared';
+import {
+  CHARS,
+  MAX_PLAYERS,
+  SLOT_COLORS,
+  WEATHER_ICON,
+  WEATHER_NAME,
+  type LobbyUpdate,
+  type NetInfo,
+} from '@tk/shared';
 
 const TRACK_NAMES: Record<string, string> = {
   meadows: 'Sunny Meadows',
   canyon: 'Dusty Canyon',
   frosty: 'Frosty Peaks',
   sepang: 'Sepang Circuit',
+  'arena-meadow': 'Meadow Fairground',
+  'arena-canyon': 'Canyon Bowl',
+  'arena-ice': 'Frozen Lake',
 };
 const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -132,14 +143,19 @@ export class Lobby {
     const cfg = u.config;
     const diff = cfg.aiDifficulty[0]!.toUpperCase() + cfg.aiDifficulty.slice(1);
     const chips = [
-      cfg.mode === 'gp' ? 'Grand Prix' : 'Single race',
+      cfg.mode === 'gp' ? 'Grand Prix' : cfg.mode === 'brawl' ? 'Bumper Brawl' : 'Single race',
       cfg.mode === 'gp'
         ? cfg.gpOrder.map((t) => TRACK_NAMES[t] ?? t).join(' → ')
         : (TRACK_NAMES[cfg.trackId] ?? cfg.trackId),
-      `${cfg.laps} lap${cfg.laps > 1 ? 's' : ''}`,
+      cfg.mode === 'brawl' ? '3 lives' : `${cfg.laps} lap${cfg.laps > 1 ? 's' : ''}`,
       diff,
-      `AI fill ${cfg.aiFill ? 'on' : 'off'}`,
+      cfg.aiFill && cfg.aiCount > 0 ? `${cfg.aiCount} AI bot${cfg.aiCount > 1 ? 's' : ''}` : 'No AI',
       `Items ${cfg.itemsOn ? 'on' : 'off'}`,
+      `${WEATHER_ICON[cfg.weather]} ${WEATHER_NAME[cfg.weather]}`,
+      ...(cfg.mode !== 'brawl'
+        ? [`Track events ${cfg.events ? 'on' : 'off'}`, `Fun zones ${cfg.zones ? 'on' : 'off'}`]
+        : []),
+      `Moves ${cfg.moves ? 'on' : 'off'}`,
     ];
     // the track chip is a button: click it (or press T) to try another track until phase 12's leader settings
     this.q('.cfg').innerHTML = chips

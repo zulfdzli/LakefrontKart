@@ -7,10 +7,16 @@ import * as THREE from 'three';
 export const holoTime = { value: 0 };
 
 /** A glassy shell: mostly see-through, iridescent rim that shifts with view angle, position and time. */
-export function holoShell(base = 0xffffff, rim = 2.2, opacity = 0.32): THREE.MeshStandardMaterial {
+export function holoShell(
+  base = 0xffffff,
+  rim = 2.2,
+  opacity = 0.32,
+  roughness = 0.08,
+  glow = 0.25,
+): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({
     color: base,
-    roughness: 0.08,
+    roughness,
     metalness: 0.1,
     transparent: true,
     opacity,
@@ -20,6 +26,7 @@ export function holoShell(base = 0xffffff, rim = 2.2, opacity = 0.32): THREE.Mes
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = holoTime;
     sh.uniforms.uRim = { value: rim };
+    sh.uniforms.uGlow = { value: glow };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vHoloW;').replace(
       '#include <worldpos_vertex>',
       `#include <worldpos_vertex>
@@ -30,7 +37,10 @@ export function holoShell(base = 0xffffff, rim = 2.2, opacity = 0.32): THREE.Mes
         #endif`,
     );
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uRim; varying vec3 vHoloW;')
+      .replace(
+        '#include <common>',
+        '#include <common>\nuniform float uTime; uniform float uRim; uniform float uGlow; varying vec3 vHoloW;',
+      )
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
@@ -39,10 +49,10 @@ export function holoShell(base = 0xffffff, rim = 2.2, opacity = 0.32): THREE.Mes
         float hue = fract(fr * 0.8 + uTime * 0.25 + dot(vHoloW, vec3(0.05, 0.08, 0.05)));
         vec3 rainbow = 0.5 + 0.5 * cos(6.2831 * (hue + vec3(0.0, 0.33, 0.67)));
         float scan = 0.85 + 0.15 * sin(vHoloW.y * 18.0 - uTime * 6.0);
-        totalEmissiveRadiance += rainbow * (0.25 + fr * uRim) * scan;
+        totalEmissiveRadiance += rainbow * (uGlow + fr * uRim) * scan;
         diffuseColor.a = clamp(diffuseColor.a + fr * 0.35, 0.0, 1.0);`,
       );
   };
-  m.customProgramCacheKey = () => 'tk-holo-' + rim + '-' + opacity;
+  m.customProgramCacheKey = () => 'tk-holo-' + rim + '-' + opacity + '-' + glow;
   return m;
 }

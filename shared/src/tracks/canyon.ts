@@ -5,7 +5,8 @@
  */
 import type { TrackDef, TrackPoint } from './def';
 
-const S = 1.25;
+/** D65: 1.25 to 0.69, a lap about half as long. */
+const S = 0.69;
 const P = (x: number, z: number, h = 0, bank = 0, w?: number): TrackPoint => ({
   x: x * S,
   z: z * S,
@@ -19,8 +20,8 @@ export const CANYON_DEF: TrackDef = {
   name: 'Dusty Canyon',
   theme: 'canyon',
   points: [
-    P(-300, -200, 10, 0, 14), // start line
-    P(-120, -205, 10, 0, 14),
+    P(-300, -200, 10, 0, 10.5), // start line
+    P(-120, -205, 10, 0, 10.5),
     P(-10, -190, 10, -3), // D64: mesa esses instead of a 900 m straight
     P(90, -236, 10, 4),
     P(200, -194, 10, -4),
@@ -32,8 +33,8 @@ export const CANYON_DEF: TrackDef = {
     P(540, 90, 4, 4), // S-bend
     P(430, 70, 4, -3),
     P(330, 100, 5),
-    P(240, 160, 6, 0, 11), // rock tunnel
-    P(120, 170, 6, 0, 11),
+    P(240, 160, 6, 0, 8.5), // rock tunnel
+    P(120, 170, 6, 0, 8.5),
     P(0, 130, 5),
     P(-90, 55, 6), // ravine jump
     P(-200, 52, 3),
@@ -69,19 +70,19 @@ export const CANYON_DEF: TrackDef = {
     { at: 0.494, kind: 'launch', len: 14, lift: 1.8, pop: 0.17 },
     { at: 0.649, kind: 'whoops', count: 3, gap: 24 },
     { at: 0.762, kind: 'table' },
-    { at: 0.872, kind: 'lane', lat: [-13, -1.5] },
+    { at: 0.872, kind: 'lane', lat: [-9, -1.5] },
   ],
   zones: [
-    { from: 0.227, to: 0.256, latMin: -26, latMax: -15.2, surface: 'gravel' },
-    { from: 0.578, to: 0.613, latMin: 15.2, latMax: 26, surface: 'gravel' },
+    { from: 0.227, to: 0.256, latMin: -18, latMax: -11.7, surface: 'gravel' },
+    { from: 0.578, to: 0.613, latMin: 11.7, latMax: 18, surface: 'gravel' },
   ],
-  shortcuts: [{ from: 0.681, to: 0.731, via: [], half: 6, surface: 'sand' }],
+  shortcuts: [{ from: 0.681, to: 0.731, via: [], half: 5, surface: 'sand' }],
   landmarks: [
     { kind: 'arch', at: 0.05, side: 0, dist: 0 },
     { kind: 'arch', at: 0.122, side: 0, dist: 0 },
     { kind: 'tunnel', at: 0.39, side: 0, dist: 0, len: 0.034 },
     { kind: 'ravine', at: 0.504, side: 0, dist: 0 },
-    { kind: 'mesa', at: 0.207, side: 1, dist: 160 },
+    { kind: 'mesa', at: 0.207, side: 1, dist: 90 },
   ],
   music: 'canyon',
 };

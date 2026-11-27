@@ -25,6 +25,11 @@ export class Keyboard {
         this.itemPressed = true;
         e.preventDefault();
       }
+      // D74: the signature move
+      if (['q', 'Q', 'c', 'C'].includes(e.key) && !e.repeat) {
+        this.movePressed = true;
+        e.preventDefault();
+      }
     });
     window.addEventListener('keyup', (e) => {
       const m = KMAP[e.key];
@@ -35,10 +40,20 @@ export class Keyboard {
     });
   }
 
-  read(): { steer: number; throttle: boolean; brake: boolean; drift: boolean; item: 'forward' | 'back' | null } {
+  private movePressed = false;
+  read(): {
+    steer: number;
+    throttle: boolean;
+    brake: boolean;
+    drift: boolean;
+    item: 'forward' | 'back' | null;
+    move: boolean;
+  } {
     const k = this.keys;
     const item = this.itemPressed ? (k.down ? 'back' : 'forward') : null;
     this.itemPressed = false;
-    return { steer: (k.right ? 1 : 0) - (k.left ? 1 : 0), throttle: k.up, brake: k.down, drift: k.drift, item };
+    const move = this.movePressed;
+    this.movePressed = false;
+    return { steer: (k.right ? 1 : 0) - (k.left ? 1 : 0), throttle: k.up, brake: k.down, drift: k.drift, item, move };
   }
 }

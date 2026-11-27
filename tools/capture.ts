@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import './tk-hook';
 import { chromium, type Page } from 'playwright-core';
-import { TRACKS, isTrackId } from '@tk/shared';
+import { TRACKS, getTrack, isTrackId } from '@tk/shared';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const args = process.argv.slice(2);
@@ -196,6 +196,17 @@ async function main(): Promise<void> {
           .slice(0, 1)
           .map((z) => ['ice', z.from, false] as [string, number, boolean]),
       ];
+      // D65 --beats: the roller-coaster pass's crests (in the air too), dips and jumps, three of each
+      if (args.includes('--beats')) {
+        const T = getTrack(TRACK);
+        for (const kind of ['crest', 'dip', 'ramp'] as const) {
+          const bs = T.beats.filter((b) => b.kind === kind).slice(0, 3);
+          for (const b of bs) {
+            feats.push([`beat-${kind}`, b.idx / T.N - 0.01, false]);
+            if (kind !== 'dip') feats.push([`beat-${kind}-air`, b.idx / T.N, true]);
+          }
+        }
+      }
       for (const [kind, at, air] of feats) {
         await page.evaluate((seed) => window.__tk.race({ seed, ci: 1, laps: 2, autopilot: true }), SEED);
         await page.waitForFunction(() => (window.__tk.state() as { raceTime: number }).raceTime > 0.5, null, {

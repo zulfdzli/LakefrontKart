@@ -24,6 +24,15 @@ declare global {
         humans?: number;
         track?: string;
         intro?: boolean;
+        mode?: 'race' | 'brawl';
+        weather?: string;
+        setups?: unknown[];
+        events?: boolean;
+        pole?: boolean;
+        moves?: boolean;
+        zones?: boolean;
+        comm?: boolean;
+        diff?: string;
       }): void;
       advance(s: number): void;
       state(): { phase: string; raceTime: number; stage: string; inRace: boolean; room: string | null };

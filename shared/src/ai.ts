@@ -6,6 +6,10 @@
 import { clamp, wrapA, BOOSTSP } from './constants';
 import { SURF } from './track';
 import type { GameState, Kart } from './game';
+import { WEATHER_GRIP } from './weather';
+import { SQUALL_GRIP, hazardBrake, hazardLane, inSquall } from './hazards';
+import { zoneLane } from './zones';
+import { aiMove } from './moves';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
@@ -50,7 +54,8 @@ export const DIFF: Record<Difficulty, DifficultyTable> = {
     rb: [0.93, 1.03],
     mistake: [13, 1.6],
     shortcut: 0,
-    cornerV2: 1.15,
+    // D65: corner caution 1.15 to 1.4 (pace stays 1): on the short, busy coaster tracks Easy kept within 2% of Normal
+    cornerV2: 1.4,
     pace: 1,
   },
   normal: {
@@ -74,7 +79,7 @@ export const DIFF: Record<Difficulty, DifficultyTable> = {
     rb: [0.97, 1.05],
     mistake: [70, 0.6],
     shortcut: 0.85,
-    cornerV2: 0.78,
+    cornerV2: 0.76, // D70: was 0.78 (the narrower road squeezed Normal→Hard on Sepang under 3%)
     pace: 1,
   },
 };
@@ -186,6 +191,8 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
     const di = (sl.idx - k.idx + N) % N;
     if (di < 14 && Math.abs(sl.lat - lane) < 5.5) lane = sl.lat + (sl.lat > 0 ? -7 : 7);
   }
+  // D73: round the rubble or through the flock
+  if (s.hazards.length) lane = hazardLane(s, k, lane);
   for (const c of s.karts) {
     if (c === k || c.rescue > 0) continue;
     const d = c.prog - k.prog;
@@ -194,6 +201,9 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
       break;
     }
   }
+  // D83: through the slalom gates, onto the jump target (over overtaking: a kart going for it commits)
+  const zl = s.zones ? zoneLane(s, k, j) : null;
+  if (zl !== null) lane = zl.lane;
   const v2 = s.handling.v2;
   lane = v2 ? clamp(lane, -(T.HW[j]! - 3), T.HW[j]! - 3) : clamp(lane, -10, 10);
   let tx = CX[j]! + RX[j]! * lane,
@@ -209,7 +219,14 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
   const mistake = v2 && k.slot === null && (s.time + a.ph * 9.7) % mk[0] < mk[1] && s.phase === 'race' && !sct;
   inp.steer = clamp(-diff * (mistake ? 1.3 : 2.6), -1, 1);
 
-  const ahead = Math.round((8 + Math.max(0, sp) * 1.0) / DS);
+  let ahead = Math.round((8 + Math.max(0, sp) * 1.0) / DS);
+  // D65: a jump or crest coming up: there is no braking in the air, so judge the corner beyond the landing too
+  if (s.handling.coaster && !k.air) {
+    let jump = false;
+    for (let o = 0; o < ahead && !jump; o += 2) if (T.airZone[(k.idx + o) % N]) jump = true;
+    for (const r of T.ramps) if (!jump && (r.i1 - k.idx + N) % N < ahead) jump = true;
+    if (jump) ahead += Math.round((Math.max(0, sp) * 0.8) / DS);
+  }
   const turnAng = Math.abs(wrapA(ANG[(k.idx + ahead) % N]! - ANG[k.idx]!));
   // humans never rubber-band; AI compares with the humans' average progress
   if (k.slot === null && s.humans.length) {
@@ -225,21 +242,45 @@ export function aiInput(s: GameState, k: Kart, dt: number): void {
   // v2: better handling carries more speed through corners (balances the speed stat); mistakes brake late
   // D62: the corner penalty was tuned at speedMul 1.3, but grip does not scale with speed, so above that the AI
   // brakes harder (squared: the grip a corner needs grows with speed squared); exactly 1 at 1.3 and in the prototype
-  const cornerScale = v2 ? (s.handling.speedMul / 1.3) ** 2 : 1;
+  // D71: on a wet or snowy road the tyres hold a little less, so the AI brakes a little earlier
+  const cornerScale =
+    ((v2 ? (s.handling.speedMul / 1.3) ** 2 : 1) / WEATHER_GRIP[s.weather]) *
+    (s.hazards.some((h) => inSquall(T, h, j)) ? 1 / SQUALL_GRIP : 1);
   const cornerK = (v2 ? (38 * a.corner) / k.P.turn : 38 * a.corner) * cornerScale;
-  target = Math.min(target, Math.max(17 * s.handling.speedMul, k.P.top - turnAng * cornerK * (mistake ? 0.75 : 1)));
-  if (k.boost > 0) target = BOOSTSP * s.handling.speedMul;
+  // D65: the floor is lower on the coaster tracks (their hairpins are tighter): 14 m/s × speedMul instead of 17
+  const floorV = (s.handling.coaster ? 14 : 17) * s.handling.speedMul;
+  target = Math.min(target, Math.max(floorV, k.P.top - turnAng * cornerK * (mistake ? 0.75 : 1)));
+  // a boost is used flat out, except (D65, the shorter coaster tracks) where a corner needs a lift
+  if (k.boost > 0)
+    target = s.handling.coaster && turnAng > 0.35 ? Math.max(target, k.P.top) : BOOSTSP * s.handling.speedMul;
   if (Math.abs(diff) > 1.0) target = Math.min(target, 9); // target far off the nose: slow down so the turn tightens
   // v2: brake for a shortcut's turn-in, harder the sharper it leaves the road, so the car stays inside the corridor
   if (sct && !k.inSc) target = Math.min(target, Math.max(12, 30 - Math.abs(diff) * 28));
+  // D83: easing off through the slalom, so the weave makes every gate
+  if (zl?.weave) target = Math.min(target, k.P.top * 0.7);
   inp.throttle = sp < target;
   inp.brake = sp > target + 5;
+  // D74: the signature move, when the moment suits it
+  if (s.moves && aiMove(s, k)) inp.move = true;
+  // D73: let the snowball roll past
+  if (s.hazards.length && hazardBrake(s, k)) {
+    inp.throttle = false;
+    inp.brake = true;
+  }
   const Hd = s.handling;
   if (a.drifts)
     inp.drift = k.drifting ? turnAng > Hd.aiDriftHold : turnAng > Hd.aiDriftIn && sp > 22 && Math.abs(inp.steer) > 0.5;
   else inp.drift = false;
+  // D83: no drifting through the slalom or onto the jump target
+  if (zl !== null) inp.drift = false;
   // D62: a drift that slides off onto sand or grass is let go, so the tyres grip and the car steers back to the road
   if (v2 && k.offroad && !k.inSc) inp.drift = false;
+  // D65: on the narrower road, let go of a drift when steering hard against it (it wants out) or when it is sliding
+  // towards the road edge within 1.5 m of it
+  if (s.handling.coaster && k.drifting && !k.inSc) {
+    const towardEdge = (k.vx * RX[k.idx]! + k.vz * RZ[k.idx]!) * k.lat > 0;
+    if (inp.steer * k.driftDir < -0.6 || (towardEdge && Math.abs(k.lat) > T.HW[k.idx]! - 1.5)) inp.drift = false;
+  }
 
   if (k.item && k.roll <= 0 && k.itemWait <= 0) {
     let use = false,

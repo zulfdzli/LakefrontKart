@@ -8,6 +8,8 @@
   <body>
     <canvas id="c"></canvas>
     <div id="huds"></div>
+    <!-- D67: scene changes fade through this veil (above the views and HUDs, under the menus) -->
+    <div id="veil" class="veil on"></div>
     <div id="debug" class="debug"></div>
 
     <div id="lobby" class="overlay lobby"></div>
@@ -33,7 +35,7 @@
       </div>
     </div>
 
-    <div id="introCard" class="introCard"><b></b><span></span></div>
+    <div id="introCard" class="introCard"><b></b><span></span><i></i></div>
 
     <div id="netDown" class="netDown hidden">Connection to the game server lost. Reconnecting…</div>
 

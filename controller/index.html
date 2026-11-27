@@ -51,14 +51,14 @@
             <span>Mode</span>
             <div class="seg" id="cfgMode">
               <button data-v="single" type="button">Single race</button
-              ><button data-v="gp" type="button">Grand Prix</button>
+              ><button data-v="gp" type="button">Grand Prix</button><button data-v="brawl" type="button">Brawl</button>
             </div>
           </div>
           <div class="cfgRow" id="cfgTrackRow">
             <span>Track</span>
             <div class="seg wrap" id="cfgTrack"></div>
           </div>
-          <div class="cfgRow">
+          <div class="cfgRow" id="cfgLapsRow">
             <span>Laps</span>
             <div class="seg" id="cfgLaps">
               <button data-v="1" type="button">1</button><button data-v="2" type="button">2</button
@@ -73,8 +73,28 @@
             </div>
           </div>
           <div class="cfgRow">
-            <span>AI racers</span><button class="tog" id="cfgFill" type="button"></button><span>Items</span
-            ><button class="tog" id="cfgItems" type="button"></button>
+            <span>Sky</span>
+            <div class="seg wrap" id="cfgSky">
+              <button data-v="random" type="button">🎲 Random</button><button data-v="day" type="button">☀️ Day</button
+              ><button data-v="sunset" type="button">🌇 Sunset</button
+              ><button data-v="night" type="button">🌙 Night</button><button data-v="rain" type="button">🌧️ Rain</button
+              ><button data-v="snow" type="button">❄️ Snow</button>
+            </div>
+          </div>
+          <div class="cfgRow">
+            <span>AI bots</span>
+            <div class="stepper">
+              <button type="button" id="cfgAiDn" aria-label="Fewer AI bots">−</button><b id="cfgAi">5</b
+              ><button type="button" id="cfgAiUp" aria-label="More AI bots">+</button>
+            </div>
+            <span>Items</span><button class="tog" id="cfgItems" type="button"></button>
+          </div>
+          <div class="cfgRow">
+            <span id="cfgEventsLbl">Track events</span><button class="tog" id="cfgEvents" type="button"></button
+            ><span>Moves</span><button class="tog" id="cfgMoves" type="button"></button>
+          </div>
+          <div class="cfgRow" id="cfgZonesRow">
+            <span>Fun zones</span><button class="tog" id="cfgZones" type="button"></button>
           </div>
         </div>
         <p class="cfgSummary" id="cfgSummary"></p>
@@ -82,8 +102,52 @@
         <button id="startBtn" class="pbtn primary" type="button" hidden>START RACE</button>
         <p class="note" id="waitNote">Waiting for the leader to start…</p>
         <div class="row small">
+          <button class="pbtn mini" id="garageBtn" type="button">🎨 Garage</button>
           <button class="pbtn mini" id="waitSettings" type="button">Controls</button>
           <button class="pbtn mini" id="leaveBtn" type="button">Leave</button>
+        </div>
+      </section>
+
+      <section id="garage" class="screen" hidden>
+        <div class="gHead">
+          <b>GARAGE</b><button class="pbtn mini primary" id="garageDone" type="button">Done</button>
+        </div>
+        <canvas id="garageView"></canvas>
+        <p class="gHint">Drag to turn it</p>
+        <div class="gRow">
+          <span>Paint</span>
+          <div class="swatches" id="gPaint"></div>
+        </div>
+        <div class="gRow">
+          <span>Accent</span>
+          <div class="swatches" id="gAccent"></div>
+        </div>
+        <div class="gRow">
+          <span>Livery</span>
+          <div class="seg wrap" id="gLivery"></div>
+        </div>
+        <div class="gRow">
+          <span>Number</span>
+          <div class="stepper">
+            <button type="button" id="gNumDn">−</button><b id="gNum">1</b><button type="button" id="gNumUp">+</button>
+          </div>
+        </div>
+        <div class="gRow">
+          <span>Sticker</span>
+          <div class="seg wrap" id="gSticker"></div>
+        </div>
+        <div class="gRow">
+          <span>Rims</span>
+          <div class="swatches" id="gRims"></div>
+        </div>
+        <div class="gTune">
+          <div class="gTuneHead"><b>TUNING</b><span id="gFree"></span></div>
+          <div id="gTuneRows"></div>
+          <p class="gNote">
+            Move up to 2 points between stats: every point you add has to come from another one, so no setup is faster
+            overall, just different to drive.
+          </p>
+          <button class="pbtn mini" id="gTuneReset" type="button">Reset tuning</button>
         </div>
       </section>
 
@@ -126,10 +190,7 @@
         <div class="zone mid">
           <div class="pill v">
             <button class="rbtn sm" id="minusBtn" type="button" aria-label="Gentler steering">
-              <svg class="svg" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M3 16c4-1 7-3 9-6s5-4 9-4" />
-                <path d="M17 3l4 3-4 3" />
-              </svg>
+              <span class="pm">−</span>
             </button>
             <button class="rbtn sm glow" id="menuBtn" type="button" aria-label="Pause the race">
               <svg class="svg" viewBox="0 0 24 24" aria-hidden="true">
@@ -138,10 +199,7 @@
               </svg>
             </button>
             <button class="rbtn sm" id="plusBtn" type="button" aria-label="Sharper steering">
-              <svg class="svg" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 20V10c0-4 3-6 7-6h6" />
-                <path d="M14 1l4 3-4 3" />
-              </svg>
+              <span class="pm">+</span>
             </button>
           </div>
           <small class="lbl">PAUSE</small>
@@ -165,7 +223,10 @@
               ><small>DRIFT</small>
             </button>
           </div>
-          <small class="lbl">swipe ITEM down to throw back</small>
+          <button class="moveBtn" id="moveBtn" type="button" aria-label="Signature move" hidden>
+            <i class="mFill" id="moveFill"></i><span id="moveLbl">MOVE</span>
+          </button>
+          <small class="lbl" id="throwHint">hold BRAKE + ITEM to throw back</small>
         </div>
         <div class="zone a">
           <div class="ring">
@@ -193,6 +254,12 @@
         <span id="finTime"></span>
         <p>Waiting for the others…</p>
       </div>
+      <!-- D68: the highlight replay plays on the big screen; any racer can skip it -->
+      <div class="finCard replayCard" id="replayCard" hidden>
+        <small>🎬 REPLAY</small>
+        <p>Race highlights on the big screen</p>
+        <button class="pbtn primary" id="skipBtn" type="button">SKIP ▸</button>
+      </div>
       <div class="toast" id="toast"></div>
     </main>
 
@@ -216,6 +283,8 @@
           <button class="pbtn" id="pauseControls" type="button">CONTROLS</button
           ><button class="pbtn danger" id="pauseLeave" type="button">LEAVE</button>
         </div>
+        <button class="pbtn" id="pauseLobby" type="button" hidden>BACK TO LOBBY</button>
+        <p class="note" id="pauseLobbyNote" hidden>The party leader can end the race.</p>
       </div>
     </div>
     <div id="sheet" class="sheet" hidden>
@@ -246,6 +315,59 @@
     </div>
     <div id="tip" class="tip" hidden><span id="tipText"></span><button id="tipClose" type="button">OK</button></div>
 
+    <!-- D79: if the controller's scripts never start (a phone that loaded the page while the server was restarting),
+         reload once by itself, then offer a retry button instead of a bare, unstyled page -->
+    <div
+      id="bootFail"
+      hidden
+      style="
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        background: #14181f;
+        color: #e9edf4;
+        font:
+          600 17px system-ui,
+          sans-serif;
+        text-align: center;
+        padding: 24px;
+        z-index: 99;
+      "
+    >
+      <div>The controller didn't load.<br />Check you're on the same Wi-Fi as the big screen.</div>
+      <button
+        type="button"
+        onclick="location.reload()"
+        style="
+          font:
+            700 18px system-ui,
+            sans-serif;
+          padding: 14px 34px;
+          border-radius: 999px;
+          border: 0;
+          background: #3fa9f5;
+          color: #fff;
+        "
+      >
+        Tap to retry
+      </button>
+    </div>
+    <script>
+      setTimeout(function () {
+        if (window.__tkCtl) return;
+        var tried = false;
+        try {
+          tried = sessionStorage.getItem('tk_boot_retry') === '1';
+          sessionStorage.setItem('tk_boot_retry', '1');
+        } catch (e) {}
+        if (!tried) location.reload();
+        else document.getElementById('bootFail').hidden = false;
+      }, 6000);
+    </script>
     <script type="module" src="/controller/src/main.ts"></script>
   </body>
 </html>

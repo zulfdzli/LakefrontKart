@@ -31,9 +31,15 @@ import {
   type SurfaceId,
   type Track,
 } from './track';
-import { chooseItem, type ItemId } from './items';
+import { brawlItem, chooseItem, type ItemId } from './items';
 import { Rng } from './rng';
 import { aiInput, DIFF, HUMAN_AUTOPILOT, type AiConfig, type Difficulty } from './ai';
+import { brawlAiInput } from './brawl-ai';
+import { tunedCharacter, type Tune } from './garage';
+import { SQUALL_GRIP, inSquall, planHazards, stepHazards, type Hazard } from './hazards';
+import { EYES_GRIP, OVERCLOCK_ACC, decoyOf, stepMoves, type Decoy } from './moves';
+import { TUNNEL_DRAFT, inTunnel, planZones, stepZones, type Zones } from './zones';
+import { PUDDLE_GRIP, PUDDLE_WET, WEATHER_GRIP, puddlesFor, type Puddle, type Weather } from './weather';
 
 /* ---------------- types ---------------- */
 
@@ -49,6 +55,8 @@ export interface KartInput {
   item: boolean;
   /** Fire the item backwards. */
   itemBack: boolean;
+  /** D74: one-shot signature-move press. */
+  move?: boolean;
 }
 
 export interface Kart {
@@ -101,6 +109,29 @@ export interface Kart {
   wall: boolean;
   slope: number;
   rbMul: number;
+  /** D71: seconds of puddle-wet tyres left, and the puddle the kart is in (-1 none). */
+  wet: number;
+  inPud: number;
+  /** D73: seconds before a track event can hit this kart again. */
+  hazCool: number;
+  /** D74 signature move: the meter (full at 1), how long it has been full, and the effects running (s). */
+  meter: number;
+  moveHold: number;
+  slideT: number;
+  overT: number;
+  eyesT: number;
+  eyesDodge: boolean;
+  decoy: Decoy | null;
+  /**
+   * D83 fun zones: the road sample at the last zone step, slalom gates cleared on this run (and whether the run is
+   * spoilt), off the launch ramp for the target (and in the air last step), and the place on entering the tunnel.
+   */
+  zPrev: number;
+  zGate: number;
+  zFail: boolean;
+  zAim: boolean;
+  zAir: boolean;
+  zTun: number;
   idx: number;
   lastIdx: number;
   lat: number;
@@ -128,6 +159,10 @@ export interface Kart {
   vy: number;
   /** Seconds in the air on the current jump (D64: bigger air, bigger landing boost). */
   airT: number;
+  /** D65: absolute height of the kart while airborne (the road under it can rise and fall). */
+  ay: number;
+  /** D65: vertical load on the tyres (1 = flat road; more in a dip's compression, less over a crest). */
+  load: number;
   /** Next checkpoint gate to pass (index into track.gates); a lap counts only when all are passed. */
   gate: number;
   /** Inside a shortcut corridor, off the road. */
@@ -144,6 +179,15 @@ export interface Kart {
   prevDrift: boolean;
   input: KartInput;
   aiCfg: AiConfig;
+  /** D69 Bumper Brawl: lives left (0 in a race), knocked out, and the arena AI's current target and retarget timer. */
+  lives: number;
+  out: boolean;
+  /** D69: hits this kart has landed (the tie-break when the clock runs out). */
+  hits: number;
+  aiTgt: number;
+  aiRe: number;
+  /** D78 brawl AI: seconds locked nose to nose with its target (positive), or of backing off (negative). */
+  aiStall: number;
 }
 
 export interface ItemBox {
@@ -247,7 +291,32 @@ export type GameEventType =
   | 'cometmiss'
   | 'warn'
   | 'finish'
-  | 'raceover';
+  | 'raceover'
+  | 'slingshot'
+  | 'guard'
+  | 'float'
+  /* D69 Bumper Brawl */
+  | 'lifelost'
+  | 'ko'
+  | 'steal'
+  | 'suddendeath'
+  /* D71 weather */
+  | 'splash'
+  /* D73 living tracks */
+  | 'hazardwarn'
+  | 'hazard'
+  | 'baa'
+  | 'rockhit'
+  | 'squash'
+  /* D74 signature moves */
+  | 'move'
+  | 'shoved'
+  | 'decoypop'
+  | 'dodge'
+  /* D83 fun zones */
+  | 'zone'
+  | 'zonemiss'
+  | 'cone';
 
 /** Events drive the renderer, audio and phone feedback. `kart` is the kart id, or -1. */
 export interface GameEvent {
@@ -259,7 +328,7 @@ export interface GameEvent {
   z?: number;
   /** Boost duration. */
   t?: number;
-  src?: 'drift' | 'pad' | 'item' | 'start' | 'jump';
+  src?: 'drift' | 'pad' | 'item' | 'start' | 'jump' | 'draft' | 'move';
   lvl?: number;
   power?: number;
   box?: number;
@@ -272,10 +341,14 @@ export interface HumanSpec {
   /** Index into CHARS. */
   ci: number;
   name?: string;
+  /** D72: stat points moved in the phone garage (they add up to 0). */
+  tune?: Tune;
 }
 
 export interface GameOptions {
   seed: number;
+  /** D69: 'brawl' plays Bumper Brawl on an arena (default 'race'). */
+  mode?: PlayMode;
   humans: HumanSpec[];
   /** Fill the field with AI karts up to `totalKarts`. */
   aiFill: boolean;
@@ -293,6 +366,14 @@ export interface GameOptions {
   raceEndGrace?: number;
   /** Handling tune. Default DEFAULT_HANDLING; the parity test uses PROTOTYPE_HANDLING. */
   handling?: Handling;
+  /** D71: the sky the race runs under (default 'day'); rain and snow take a little grip, rain adds puddles. */
+  weather?: Weather;
+  /** D73: the track's living event (sheep, rockfall, snowball, squall); off unless asked for, races only. */
+  events?: boolean;
+  /** D74: signature moves (off unless asked for). */
+  moves?: boolean;
+  /** D83: the track's fun zones (slalom, jump target, draft tunnel). */
+  zones?: boolean;
 }
 
 /**
@@ -327,8 +408,47 @@ export interface Handling {
   tyreFall: number;
   /** How strongly the speed stat changes top speed (1 = prototype). */
   statSpeed: number;
+  /** D65: how strongly the acceleration stat changes acceleration (1 = prototype); the hairpin-heavy short tracks
+   * made it decisive. */
+  statAccel: number;
   /** Extra boost (s) for releasing a drift right as a tier is reached. */
   driftBonus: number;
+  /**
+   * D65: the most sideways acceleration steering may ask for outside a drift (m/s²; 0 = no limit). At speed the
+   * turn rate is capped at yawGrip / speed, so the car never turns in harder than its tyres hold: it grips
+   * instead of stepping out, and full lock at 180 km/h is as controllable as at 60.
+   */
+  yawGrip: number;
+  /** D65: steering expo for human drivers (0 = linear): small inputs turn gently, full lock is unchanged. */
+  steerExpo: number;
+  /** D65: how strongly slopes speed the kart up and slow it down (m/s² per unit slope; 9 = prototype). */
+  slopeG: number;
+  /** D65: item roulette time (s) after a pickup (1 = prototype; 0 = the item is ready at once). */
+  itemRoll: number;
+  /**
+   * D65 roller coaster: karts float off crests, tyre grip follows the vertical load (more in a dip's compression,
+   * less over a crest), banked turns grip harder, and air time follows the real road height under the kart.
+   */
+  coaster: boolean;
+  /** Slipstream: reach behind a kart (samples), lateral tolerance (m), charge rate (1/s), extra top speed and acceleration. */
+  draftReach: number;
+  draftLat: number;
+  draftCharge: number;
+  draftTop: number;
+  draftAcc: number;
+  /** D65: boost (s) for pulling out of a charged slipstream (the slingshot); 0 = none. */
+  slingshot: number;
+  /** Kart-to-kart bump restitution (1.35 = prototype). */
+  bumpRest: number;
+  /** D65: a held (unused) Oil Slick, Homing Orb or Bounce Disc soaks up one Orb or Disc hit from behind. */
+  itemGuard: boolean;
+  /**
+   * D76: the driving boosts: a drift's release, a jump's landing, the rocket start, and the boost items (Turbo,
+   * Triple Turbo, Rocket) in the item boxes. Off at the user's request; the prototype keeps them.
+   */
+  boosts: boolean;
+  /** D78: item boxes per row (4 = prototype; 2 since D78, at the user's request). */
+  boxesPerRow: number;
 }
 export const PROTOTYPE_HANDLING: Readonly<Handling> = {
   driftLatGrip: 4.5,
@@ -344,23 +464,55 @@ export const PROTOTYPE_HANDLING: Readonly<Handling> = {
   tyrePeak: 0,
   tyreFall: 1,
   statSpeed: 1,
+  statAccel: 1,
   driftBonus: 0,
+  yawGrip: 0,
+  steerExpo: 0,
+  slopeG: 9,
+  itemRoll: 1,
+  coaster: false,
+  draftReach: 5,
+  draftLat: 2.6,
+  draftCharge: 1,
+  draftTop: 4,
+  draftAcc: 6,
+  slingshot: 0,
+  bumpRest: 1.35,
+  itemGuard: false,
+  boosts: true,
+  boxesPerRow: 4,
 };
 export const DEFAULT_HANDLING: Readonly<Handling> = {
-  driftLatGrip: 3.1, // D64: was 2.4 (drifts slid out too far)
+  driftLatGrip: 4.2, // D65: was 3.1 (D64: was 2.4)
   driftDrag: 0.22,
-  driftKick: 2.5, // D64: was 3.2
+  driftKick: 1.4, // D65: was 2.5 (D64: was 3.2)
   driftHop: 0.16,
-  speedMul: 1.45, // D62: was 1.3
+  speedMul: 1.2683, // D81: 3% faster (D78: 1.2314; D77: 1.2827; D75: 1.3224; D67: 1.3775; D62: 1.45, was 1.3)
   turnRate: 2.15,
   turnFalloff: 0.22,
   aiDriftIn: 0.32,
   aiDriftHold: 0.14,
   v2: true,
-  tyrePeak: 52, // D64: was 34; grip to match the D62 speed (sliding too much)
-  tyreFall: 0.88, // D64: was 0.72
+  tyrePeak: 80, // D65: was 52 (D64: was 34)
+  tyreFall: 0.94, // D65: was 0.88 (D64: was 0.72)
   statSpeed: 0.45,
+  statAccel: 0.6,
   driftBonus: 0.35,
+  yawGrip: 74, // just under the tyre peak: the car turns as hard as it grips, never harder
+  steerExpo: 0.45,
+  slopeG: 15,
+  itemRoll: 0,
+  coaster: true,
+  draftReach: 10,
+  draftLat: 3.6,
+  draftCharge: 1.8,
+  draftTop: 7,
+  draftAcc: 10,
+  slingshot: 0, // D76: no slingshot (the slipstream's tow stays)
+  bumpRest: 1.12,
+  itemGuard: true,
+  boosts: false, // D76: no drift, landing or start boosts, no boost items
+  boxesPerRow: 2, // D78: two boxes a row (was 4)
 };
 
 export interface GameState {
@@ -390,7 +542,26 @@ export interface GameState {
   /** Final order once phase is 'finished'. */
   standings: Kart[] | null;
   handling: Readonly<Handling>;
+  /** D69: a race, or a Bumper Brawl (last kart standing in an arena). */
+  mode: PlayMode;
+  /** D69: sudden death has started (every kart down to its last life). */
+  suddenDeath: boolean;
+  /** D71: the weather, and the puddles on the road (rain only). */
+  weather: Weather;
+  puddles: Puddle[];
+  /** D73: the race's track events. */
+  hazards: Hazard[];
+  /** D74: signature moves are on. */
+  moves: boolean;
+  /** D83: the track's fun zones (slalom, jump target, draft tunnel), or null. */
+  zones: Zones | null;
 }
+
+export type PlayMode = 'race' | 'brawl';
+/** D69 Bumper Brawl: lives per kart, when sudden death starts, and the hard time limit (s). */
+export const BRAWL_LIVES = 3;
+export const BRAWL_SUDDEN = 90;
+export const BRAWL_LIMIT = 150;
 
 /* ---------------- setup ---------------- */
 
@@ -418,13 +589,21 @@ export function defaultGrid(humanCount: number, total: number): number[] {
   return grid;
 }
 
-function makeKart(T: Track, i: number, gridPos: number, ci: number, slot: number | null, aiCfg: AiConfig): Kart {
+function makeKart(
+  T: Track,
+  i: number,
+  gridPos: number,
+  ci: number,
+  slot: number | null,
+  aiCfg: AiConfig,
+  tune?: Tune,
+): Kart {
   const { N, CX, CZ, RX, RZ, ANG } = T;
   const row = gridPos >> 1,
     col = gridPos & 1;
   const gi = (N - 3 - row * 3 + N) % N,
     lat = col ? 5.5 : -5.5;
-  const ch = CHARS[ci]!;
+  const ch = tunedCharacter(CHARS[ci]!, tune);
   const k: Kart = {
     id: i,
     ci,
@@ -464,6 +643,22 @@ function makeKart(T: Track, i: number, gridPos: number, ci: number, slot: number
     shield: 0,
     stall: 0,
     draft: 0,
+    wet: 0,
+    inPud: -1,
+    hazCool: 0,
+    meter: 0,
+    moveHold: 0,
+    slideT: 0,
+    overT: 0,
+    eyesT: 0,
+    eyesDodge: false,
+    decoy: null,
+    zPrev: gi,
+    zGate: 0,
+    zFail: true,
+    zAim: false,
+    zAir: false,
+    zTun: -1,
     drafting: false,
     rescue: 0,
     stuckT: 0,
@@ -492,6 +687,8 @@ function makeKart(T: Track, i: number, gridPos: number, ci: number, slot: number
     alt: 0,
     vy: 0,
     airT: 0,
+    ay: 0,
+    load: 1,
     gate: T.gates.length,
     inSc: false,
     offT: 0,
@@ -504,6 +701,12 @@ function makeKart(T: Track, i: number, gridPos: number, ci: number, slot: number
     prevDrift: false,
     input: { steer: 0, throttle: false, brake: false, drift: false, item: false, itemBack: false },
     aiCfg,
+    lives: 0,
+    out: false,
+    hits: 0,
+    aiTgt: -1,
+    aiRe: 0,
+    aiStall: 0,
   };
   locate(T, k, true);
   k.gpx = k.x;
@@ -522,6 +725,7 @@ function makeKart(T: Track, i: number, gridPos: number, ci: number, slot: number
 /** Pending phone input per slot (latest wins). */
 interface SlotInput extends KartInput {
   itemPending: boolean;
+  movePending?: boolean;
 }
 
 export class Game {
@@ -557,6 +761,13 @@ export class Game {
       raceEndGrace: opts.raceEndGrace ?? RACE_END_GRACE,
       standings: null,
       handling: opts.handling ?? DEFAULT_HANDLING,
+      mode: opts.mode ?? 'race',
+      suddenDeath: false,
+      weather: opts.weather ?? 'day',
+      puddles: opts.weather === 'rain' ? puddlesFor(track) : [],
+      hazards: opts.events && (opts.mode ?? 'race') === 'race' ? planHazards(track, opts.seed, opts.laps) : [],
+      moves: !!opts.moves,
+      zones: null,
     };
     this.s = s;
     this.handling = s.handling;
@@ -573,7 +784,7 @@ export class Game {
     // humans first (join order), then AI. RNG draw order matches the prototype: one draw per AI kart, in order.
     let i = 0;
     for (const h of opts.humans) {
-      const k = makeKart(track, i, grid[i]!, h.ci, h.slot, { ...HUMAN_AUTOPILOT });
+      const k = makeKart(track, i, grid[i]!, h.ci, h.slot, { ...HUMAN_AUTOPILOT }, h.tune);
       if (h.name) k.name = h.name;
       s.karts.push(k);
       s.humans.push(k);
@@ -597,13 +808,19 @@ export class Game {
     // D46: the speed stat matters less on these long, fast tracks, so every character stays within 4%
     if (s.handling.v2)
       for (const k of s.karts)
-        k.P = { ...k.P, top: k.P.top - (k.ch.stats.speed - 3) * 0.8 * (1 - s.handling.statSpeed) };
+        k.P = {
+          ...k.P,
+          top: k.P.top - (k.ch.stats.speed - 3) * 0.8 * (1 - s.handling.statSpeed),
+          // D65: likewise acceleration (3.2 per accel point) on the short, hairpin-heavy tracks
+          acc: k.P.acc - (k.ch.stats.accel - 3) * 3.2 * (1 - s.handling.statAccel),
+        };
     if (m !== 1) for (const k of s.karts) k.P = { ...k.P, top: k.P.top * m, acc: k.P.acc * m };
 
     if (opts.itemsOn) {
       for (const bi of track.boxRows) {
         const sc = track.HW[bi]! / 13;
-        for (const l of [-9, -3, 3, 9]) {
+        // D78: two boxes a row in a race; a brawl's arena keeps four (its fights run on items)
+        for (const l of s.handling.boxesPerRow === 2 && s.mode === 'race' ? [-4.5, 4.5] : [-9, -3, 3, 9]) {
           const lat = l * sc;
           s.boxes.push({ x: CX[bi]! + RX[bi]! * lat, z: CZ[bi]! + RZ[bi]! * lat, y: H[bi]!, idx: bi, lat, cool: 0 });
         }
@@ -613,7 +830,57 @@ export class Game {
       const pi = p.idx;
       s.pads.push({ x: CX[pi]! + RX[pi]! * p.lat, z: CZ[pi]! + RZ[pi]! * p.lat, y: H[pi]!, idx: pi });
     }
+    // D83: the fun zones (a race only; where the launch ramp comes down follows the game's speed)
+    if (opts.zones && s.mode === 'race') s.zones = planZones(track, s.handling.speedMul / DEFAULT_HANDLING.speedMul);
+    if (s.mode === 'brawl') this.brawlStart();
     this.updateRanks();
+    for (const k of s.karts) k.zPrev = k.idx;
+  }
+
+  /**
+   * D69: Bumper Brawl start: every kart gets its lives and a spot spread evenly round the arena ring, every other
+   * one facing the other way, so the round opens with karts driving at each other.
+   */
+  private brawlStart(): void {
+    const s = this.s,
+      T = s.track,
+      n = s.karts.length;
+    s.karts.forEach((k, i) => {
+      k.lives = BRAWL_LIVES;
+      const idx = (Math.round((i * T.N) / n) + 4) % T.N,
+        lat = (i % 3) - 1;
+      k.x = k.px = k.gpx = T.CX[idx]! + T.RX[idx]! * lat * 6;
+      k.z = k.pz = k.gpz = T.CZ[idx]! + T.RZ[idx]! * lat * 6;
+      k.h = k.ph = wrapA(T.ANG[idx]! + (i % 2 ? Math.PI : 0));
+      locate(T, k, true);
+      k.py = k.y;
+      k.lastIdx = k.idx;
+      k.lap = 1;
+      k.prog = k.lap * T.N + k.idx + k.frac;
+    });
+  }
+
+  /** D69: a hit costs a life in a brawl; the last one knocks the kart out of the round. */
+  private loseLife(k: Kart): void {
+    if (this.s.mode !== 'brawl' || k.out) return;
+    k.lives = Math.max(0, k.lives - 1);
+    // D80: the last kart standing cannot be knocked out (when the last two go down in the same moment, the second
+    // keeps one life and wins, instead of a round with nobody left)
+    if (k.lives <= 0 && !this.s.karts.some((c) => c !== k && !c.out)) k.lives = 1;
+    this.emit({ type: 'lifelost', kart: k.id, n: k.lives });
+    if (k.lives <= 0) {
+      const s = this.s;
+      k.out = true;
+      k.finished = true;
+      k.finishTime = s.raceTime;
+      k.spin = 0;
+      k.boost = 0;
+      k.vx = k.vz = k.sp = 0;
+      k.item = null;
+      k.roll = 0;
+      k.drifting = false;
+      this.emit({ type: 'ko', kart: k.id, x: k.x, y: k.y, z: k.z });
+    }
   }
 
   /* ---- public API ---- */
@@ -629,7 +896,14 @@ export class Game {
   /** Latest controller input for a slot. `item` is a one-shot press that is held until the next step consumes it. */
   setInput(
     slot: number,
-    inp: { steer: number; throttle: boolean; brake: boolean; drift: boolean; item?: 'forward' | 'back' | null },
+    inp: {
+      steer: number;
+      throttle: boolean;
+      brake: boolean;
+      drift: boolean;
+      item?: 'forward' | 'back' | null;
+      move?: boolean;
+    },
   ): void {
     let si = this.slotInputs.get(slot);
     if (!si) {
@@ -644,6 +918,7 @@ export class Game {
       si.itemPending = true;
       si.itemBack = inp.item === 'back';
     }
+    if (inp.move) si.movePending = true;
   }
 
   /** Hand a human's kart to the AI (phone disconnected) or back to the phone. */
@@ -689,6 +964,10 @@ export class Game {
         inp.itemBack = si.itemBack;
         si.itemPending = false;
       }
+      if (si.movePending) {
+        inp.move = true;
+        si.movePending = false;
+      }
     }
   }
 
@@ -697,6 +976,19 @@ export class Game {
   }
 
   updateRanks(): Kart[] {
+    if (this.s.mode === 'brawl') {
+      // D69: still in the round first (most lives), then the knocked-out karts, the last one out best
+      const o = this.s.karts
+        .slice()
+        .sort(
+          (a, b) =>
+            Number(a.out) - Number(b.out) ||
+            (a.out && b.out ? b.finishTime - a.finishTime : b.lives - a.lives || b.hits - a.hits) ||
+            a.id - b.id,
+        );
+      o.forEach((k, i) => (k.rank = i));
+      return o;
+    }
     const o = this.s.karts
       .slice()
       .sort(
@@ -716,7 +1008,7 @@ export class Game {
   }
 
   private endDrift(k: Kart): void {
-    if (k.drifting && k.driftLevel > 0) {
+    if (k.drifting && k.driftLevel > 0 && this.handling.boosts) {
       // D46: releasing within a moment of reaching a tier earns a little extra
       const perfect = this.handling.driftBonus > 0 && k.driftT - k.driftLevel < 0.2;
       this.giveBoost(k, [0, 0.7, 1.2, 1.9][k.driftLevel]! + (perfect ? this.handling.driftBonus : 0), 'drift');
@@ -727,8 +1019,8 @@ export class Game {
     k.driftLevel = 0;
   }
 
-  spinOut(k: Kart): boolean {
-    if (k.spin > 0 || k.invuln > 0 || k.rescue > 0) return false;
+  spinOut(k: Kart, by?: Kart): boolean {
+    if (k.spin > 0 || k.invuln > 0 || k.rescue > 0 || k.out) return false;
     if (k.shield > 0) {
       k.shield = 0;
       k.invuln = 0.6;
@@ -743,6 +1035,8 @@ export class Game {
     k.vx *= 0.35;
     k.vz *= 0.35;
     this.emit({ type: 'hit', kart: k.id });
+    if (by && by !== k && this.s.mode === 'brawl') by.hits++;
+    this.loseLife(k);
     return true;
   }
 
@@ -774,43 +1068,111 @@ export class Game {
   }
 
   /**
+   * D65: tyre grip multiplier from the road's shape: the vertical load (a dip's compression presses the tyres down,
+   * a crest lightens them) and banking into the corner. 1 with the coaster mechanics off.
+   */
+  private gripBoost(k: Kart): number {
+    if (!this.handling.coaster) return 1;
+    const c = this.s.track.CURV[k.idx]!;
+    const bank = c === 0 ? 0 : Math.max(0, k.bank * Math.sign(c));
+    return k.load * (1 + 1.4 * bank);
+  }
+
+  /** D71: tyre grip from the weather, and less again while the tyres are wet from a puddle. */
+  private wxGrip(k: Kart): number {
+    let g = WEATHER_GRIP[this.s.weather] * (k.wet > 0 ? PUDDLE_GRIP : 1);
+    // D73: a squall's soaked stretch
+    for (const h of this.s.hazards) if (inSquall(this.s.track, h, k.idx)) g *= SQUALL_GRIP;
+    // D74: Luna's Night Eyes
+    if (k.eyesT > 0) g *= EYES_GRIP;
+    return g;
+  }
+
+  /** D74: Luna's Night Eyes sees the first Orb or Disc coming and slips it. */
+  private dodged(k: Kart, x: number, y: number, z: number): boolean {
+    if (k.eyesT <= 0 || !k.eyesDodge) return false;
+    k.eyesDodge = false;
+    this.emit({ type: 'dodge', kart: k.id, x, y, z });
+    return true;
+  }
+
+  /** Is sample i on (or just past) a full-width jump ramp, whose lip launches karts by itself? */
+  private onRamp(i: number): boolean {
+    const T = this.s.track;
+    for (const r of T.ramps) {
+      if (r.kind === 'lane') continue;
+      if ((i - r.i0 + T.N) % T.N <= ((r.i1 - r.i0 + T.N) % T.N) + 5) return true;
+    }
+    return false;
+  }
+
+  /**
    * Jump ramps (section 11.2, D64 kinds): launch off the lip, fly ballistically, land. Landing straight gives a
    * boost that grows with the time in the air (0.6 s for a hop, up to 1.4 s for big air).
+   * D65 roller coaster: a crest that falls away faster than gravity floats the kart off the road too, and in the
+   * air the kart's own height is followed, so the road can drop away under it (or rise to meet it).
    */
   private stepAir(k: Kart, dt: number, sp: number): void {
-    const T = this.s.track;
+    const T = this.s.track,
+      coaster = this.handling.coaster;
+    const GRAV = 30;
     if (k.air) {
-      k.vy -= 30 * dt;
-      k.alt += k.vy * dt;
+      k.vy -= GRAV * dt;
       k.airT += dt;
+      if (coaster) {
+        k.ay += k.vy * dt;
+        k.alt = k.ay - k.y;
+      } else k.alt += k.vy * dt;
       if (k.alt <= 0) {
         k.air = false;
         k.alt = 0;
         k.vy = 0;
         const slip = Math.abs(wrapA(Math.atan2(k.vx, k.vz) - k.h));
-        const straight = slip < 0.22 && k.spin <= 0;
-        if (straight) this.giveBoost(k, 0.6 + clamp((k.airT - 0.45) * 1.1, 0, 0.8), 'jump');
+        // D65: a quick float over a crest (under 0.3 s) is a thrill, not a jump: no landing boost
+        const straight = slip < 0.22 && k.spin <= 0 && (!coaster || k.airT >= 0.3);
+        if (straight && this.handling.boosts) this.giveBoost(k, 0.6 + clamp((k.airT - 0.45) * 1.1, 0, 0.8), 'jump');
         this.emit({ type: 'land', kart: k.id, power: straight ? 1 : 0, t: k.airT });
         k.airT = 0;
       }
-    } else if (T.ramps.length && sp > 10) {
-      for (const r of T.ramps) {
-        const before = (r.i1 - k.lastIdx + T.N) % T.N,
-          after = (k.idx - r.i1 + T.N) % T.N;
-        if (
-          before <= 3 &&
-          after >= 1 &&
-          after <= 4 &&
-          Math.abs(k.lat) <= T.HW[r.i1]! + KERB_W &&
-          k.lat >= r.latMin &&
-          k.lat <= r.latMax
-        ) {
+    } else {
+      if (T.ramps.length && sp > 10) {
+        for (const r of T.ramps) {
+          const before = (r.i1 - k.lastIdx + T.N) % T.N,
+            after = (k.idx - r.i1 + T.N) % T.N;
+          if (
+            before <= 3 &&
+            after >= 1 &&
+            after <= 4 &&
+            Math.abs(k.lat) <= T.HW[r.i1]! + KERB_W &&
+            k.lat >= r.latMin &&
+            k.lat <= r.latMax
+          ) {
+            k.air = true;
+            k.alt = r.lift;
+            k.ay = k.y + r.lift;
+            // D67: a stronger pop off every ramp, for more airtime (was + 1.5)
+            k.vy = sp * r.pop + 2;
+            k.airT = 0;
+            this.emit({ type: 'jump', kart: k.id, lvl: r.kind === 'launch' || r.kind === 'table' ? 2 : 1 });
+            break;
+          }
+        }
+      }
+      if (coaster && !k.air) {
+        // the vertical acceleration the road asks for at this speed: past gravity over a crest, the kart floats
+        const acc = T.VC[k.idx]! * sp * sp;
+        // lighter over a rim or crest (at most 15% less grip, so a dip exit into a corner stays controllable),
+        // heavier in a compression
+        k.load = clamp(1 + acc / GRAV, 0.85, 1.5);
+        if (acc < -GRAV && sp > 15 && k.spin <= 0 && !k.inSc && T.airZone[k.idx] && !this.onRamp(k.idx)) {
           k.air = true;
-          k.alt = r.lift;
-          k.vy = sp * r.pop + 1.5;
+          k.alt = 0;
+          k.ay = k.y;
+          // a floater, not a launch: capped so a boosted kart over a crest still lands on the road beyond it
+          k.vy = Math.min(T.SL[k.idx]! * sp, 3.5);
           k.airT = 0;
-          this.emit({ type: 'jump', kart: k.id, lvl: r.kind === 'launch' || r.kind === 'table' ? 2 : 1 });
-          break;
+          k.load = 1;
+          this.emit({ type: 'float', kart: k.id });
         }
       }
     }
@@ -824,6 +1186,7 @@ export class Game {
     k.alt = 0;
     k.vy = 0;
     k.airT = 0;
+    k.load = 1;
     k.offT = 0;
     k.inSc = false;
     k.drifting = false;
@@ -834,6 +1197,9 @@ export class Game {
     k.stuckT = 0;
     k.wrongT = 0;
     k.lostT = 0;
+    // a slipstream charge does not survive the drone: it fired a slingshot from a standstill on the drop
+    k.draft = 0;
+    k.drafting = false;
     k.vx = 0;
     k.vz = 0;
     k.sp = 0;
@@ -877,6 +1243,35 @@ export class Game {
     }
   }
 
+  /**
+   * D71 rain: driving into a puddle wets the tyres for a moment (less grip) and twitches the kart sideways a little,
+   * more at speed. The twitch side is fixed per kart and puddle, so a race replays exactly.
+   */
+  private puddle(k: Kart, dt: number): void {
+    if (k.wet > 0) k.wet -= dt;
+    if (k.air) return;
+    const T = this.s.track,
+      N = T.N;
+    let hit = -1;
+    this.s.puddles.forEach((p, j) => {
+      let di = (k.idx - p.i) % N;
+      if (di > N / 2) di -= N;
+      if (di < -N / 2) di += N;
+      const a = (di + k.frac) * T.DS,
+        l = k.lat - p.lat;
+      if (a * a + l * l < p.r * p.r) hit = j;
+    });
+    if (hit >= 0 && hit !== k.inPud && Math.abs(k.sp) > 12) {
+      k.wet = PUDDLE_WET;
+      const side = (k.id * 7 + hit * 3) % 2 ? 1 : -1,
+        tw = side * Math.min(1.8, Math.abs(k.sp) * 0.045);
+      k.vx += T.RX[k.idx]! * tw;
+      k.vz += T.RZ[k.idx]! * tw;
+      this.emit({ type: 'splash', kart: k.id, x: k.x, y: k.y, z: k.z });
+    }
+    k.inPud = hit;
+  }
+
   /** Is this kart driven by the AI right now? AI karts, disconnected humans and finished humans. */
   static autoDriven(k: Kart): boolean {
     return k.ai || k.finished;
@@ -911,9 +1306,16 @@ export class Game {
     if (k.shield > 0) k.shield -= dt;
     if (k.stall > 0) k.stall -= dt;
     const P = k.P,
-      thr = inp.throttle && k.stall <= 0;
+      // D65: BRAKE always wins over the (automatic) throttle, so a boosted kart can still slow for a corner
+      thr = inp.throttle && k.stall <= 0 && !(this.handling.coaster && inp.brake);
 
-    const dS = inp.steer - k.steerS,
+    const Hd = this.handling;
+    // D65: a little expo on human steering, so small corrections on the phone are gentle and full lock is unchanged
+    const want =
+      Hd.steerExpo > 0 && !Game.autoDriven(k)
+        ? inp.steer * (1 - Hd.steerExpo + Hd.steerExpo * Math.abs(inp.steer))
+        : inp.steer;
+    const dS = want - k.steerS,
       mr = 7 * dt;
     k.steerS += Math.abs(dS) < mr ? dS : Math.sign(dS) * mr;
     const steer = k.steerS;
@@ -933,7 +1335,13 @@ export class Game {
       air = k.air;
     const m = this.handling.speedMul;
     const top =
-      k.boost > 0 ? (off ? 32 * m : BOOSTSP * m) : off ? (S.cap ?? 15) * m : P.top * k.rbMul + (k.drafting ? 4 : 0);
+      k.boost > 0
+        ? off
+          ? 32 * m
+          : BOOSTSP * m
+        : off
+          ? (S.cap ?? 15) * m
+          : P.top * k.rbMul + (k.drafting ? Hd.draftTop : 0);
 
     if (air) {
       // airborne: no drive, no brakes; the kart carries its speed until it lands
@@ -941,14 +1349,22 @@ export class Game {
       if (sp < top)
         sp = Math.min(
           top,
-          sp + (k.boost > 0 ? 70 * m : Math.max(5, (P.acc + (k.drafting ? 6 : 0)) * (1 - Math.max(0, sp) / top))) * dt,
+          sp +
+            (k.boost > 0
+              ? 70 * m
+              : Math.max(
+                  5,
+                  (P.acc * (k.overT > 0 ? OVERCLOCK_ACC : 1) + (k.drafting ? Hd.draftAcc : 0)) *
+                    (1 - Math.max(0, sp) / top),
+                )) *
+              dt,
         );
     } else if (k.spin <= 0) {
       const d = 7 * dt;
       sp = Math.abs(sp) <= d ? 0 : sp - Math.sign(sp) * d;
     }
     if (inp.brake && !air) sp = sp > 0 ? Math.max(0, sp - 48 * dt) : Math.max(-10, sp - 16 * dt);
-    if (racing && !air) sp -= k.slope * 9 * dt;
+    if (racing && !air) sp -= k.slope * Hd.slopeG * dt;
     if (sp > top && !air) sp -= (sp - top) * Math.min(1, 2.2 * dt);
     if (off && !air) sp *= Math.exp(-S.drag * dt);
     if (k.spin > 0) {
@@ -983,6 +1399,13 @@ export class Game {
       sf = Math.min(1, spAbs / 7);
     let rate = this.handling.turnRate * sf * (1 - this.handling.turnFalloff * Math.min(1, spAbs / 40)) * P.turn;
     if (k.drifting) rate *= 1.3;
+    // D65: never turn in harder than the tyres hold (a drift may ask a third more, it is meant to slide); the
+    // handling stat counts by its square root here, or the best-handling kart outcornered the rest by 17%
+    if (Hd.yawGrip > 0 && spAbs > 1)
+      rate = Math.min(
+        rate,
+        (Hd.yawGrip * Math.sqrt(P.turn) * (k.drifting ? 1.35 : 1) * this.gripBoost(k) * this.wxGrip(k)) / spAbs,
+      );
     if (k.spin > 0) rate = 0;
     if (air) rate *= 0.25;
     const vx = fx * sp + rx * lat,
@@ -992,20 +1415,25 @@ export class Game {
     fz = Math.cos(k.h);
     rx = -fz;
     rz = fx;
-    sp = vx * fx + vz * fz;
-    lat = vx * rx + vz * rz;
+    // D65 air steering: in the air the velocity turns with the car (an arcade jump), so steering mid-air lines the
+    // car up for the landing instead of setting up a slide
+    if (!(air && Hd.coaster)) {
+      sp = vx * fx + vz * fz;
+      lat = vx * rx + vz * rz;
+    }
     {
       // sideways grip turns the slide back into forward motion instead of bleeding speed away
       const H = this.handling;
       // ice limits drift grip too; in the air there is no grip at all
-      const grip = k.drifting ? (S.slick ? Math.min(H.driftLatGrip, S.grip) : H.driftLatGrip) : S.grip;
+      const wg = this.wxGrip(k);
+      const grip = (k.drifting ? (S.slick ? Math.min(H.driftLatGrip, S.grip) : H.driftLatGrip) : S.grip) * wg;
       let newLat = air ? lat : lat * Math.exp(-grip * dt);
       if (H.v2 && !air && !k.drifting) {
         // D46 tyre model: grip follows the slip angle, rising to a peak and then falling off softly, so a big
         // slide saturates and recovers predictably instead of snapping straight
         const alpha = Math.atan2(Math.abs(lat), Math.max(1, Math.abs(sp)));
         const f = alpha < 0.12 ? 1 : H.tyreFall + (1 - H.tyreFall) * Math.exp(-(alpha - 0.12) / 0.35);
-        const maxDrop = H.tyrePeak * f * (S.grip / 9) * dt;
+        const maxDrop = H.tyrePeak * f * (S.grip / 9) * this.gripBoost(k) * wg * dt;
         const drop = Math.abs(lat - newLat);
         if (drop > maxDrop) newLat = lat - Math.sign(lat) * maxDrop;
       }
@@ -1073,9 +1501,10 @@ export class Game {
     k.surf = k.inSc ? sc!.sc.surface : surfaceAt(T, k.idx, k.lat);
     k.offroad = SURF[k.surf].off;
     k.bank = T.BT[k.idx]!;
+    if (s.puddles.length) this.puddle(k, dt);
     this.stepAir(k, dt, sp);
 
-    const G = T.gates;
+    const G = s.mode === 'brawl' ? [] : T.gates;
     if (G.length) {
       // ordered checkpoint gates (section 12.4): a lap counts only after passing every gate in order
       if (k.gate < G.length && this.crossGate(G[k.gate]!, k.gpx, k.gpz, k.x, k.z) === 1) {
@@ -1089,6 +1518,8 @@ export class Game {
     const lineFwd = k.lastIdx > N * 0.75 && k.idx < N * 0.25;
     if (lineFwd && G.length && k.gate < G.length) {
       this.emit({ type: 'missedgate', kart: k.id });
+    } else if (lineFwd && s.mode === 'brawl') {
+      k.lap++; // D69: an arena has no laps; the count only keeps prog continuous round the ring
     } else if (lineFwd) {
       if (G.length) {
         k.gate = 0;
@@ -1117,16 +1548,20 @@ export class Game {
 
     if (racing) {
       const fd = fx * TX[k.idx]! + fz * TZ[k.idx]!;
-      if (fd < -0.25 && Math.abs(sp) > 2) k.wrongT += dt;
+      if (s.mode === 'brawl')
+        k.wrongT = 0; // D69: either way round the arena is fine
+      else if (fd < -0.25 && Math.abs(sp) > 2) k.wrongT += dt;
       else k.wrongT = Math.max(0, k.wrongT - dt * 2);
-      if (thr && k.spin <= 0 && Math.abs(sp) < 3) k.stuckT += dt;
+      // wants to go (throttle held, not stalled) but cannot move; D65: braking does not hide it
+      if (inp.throttle && k.stall <= 0 && k.spin <= 0 && Math.abs(sp) < 3) k.stuckT += dt;
       else k.stuckT = Math.max(0, k.stuckT - dt);
       // an AI on a shortcut points away from the road it skips: that is not being lost
       const bot = Game.autoDriven(k) && k.aiSc < 0 && !k.inSc;
-      if (bot && k.spin <= 0 && Math.abs(wrapA(k.h - ANG[k.idx]!)) > 1.4) k.lostT += dt;
+      if (bot && s.mode !== 'brawl' && k.spin <= 0 && Math.abs(wrapA(k.h - ANG[k.idx]!)) > 1.4) k.lostT += dt;
       else k.lostT = 0;
       // off the track for 4 s (not in a shortcut) also calls the drone; the prototype track keeps its own rules
-      if (T.id !== 'proto') {
+      // D69: in an arena the run-off is part of the battlefield, so only a stuck kart calls the drone
+      if (T.id !== 'proto' && s.mode !== 'brawl') {
         if (k.offroad && !k.inSc && !k.air) k.offT += dt;
         else k.offT = 0;
       }
@@ -1170,7 +1605,9 @@ export class Game {
       s.slicks.push(sl);
       this.emit({ type: 'useoil', kart: k.id });
     } else if (it === 'orb') {
-      const dir = back ? -1 : 1;
+      // orbs run along the road; in a brawl karts drive either way, so "forward" is the way this kart faces
+      const facing = s.mode === 'brawl' && fx * T.TX[k.idx]! + fz * T.TZ[k.idx]! < 0 ? -1 : 1;
+      const dir = (back ? -1 : 1) * facing;
       s.orbs.push({
         prog: k.prog + dir * 1.2,
         lat: k.lat,
@@ -1234,6 +1671,21 @@ export class Game {
     }
   }
 
+  /**
+   * D65 item guard: a kart holding an Oil Slick, Homing Orb or Bounce Disc (not using it) trails it behind, and it
+   * soaks up one Orb or Disc that hits from behind or the side. Holding an item is a choice: defence or attack.
+   */
+  private guarded(c: Kart, px: number, pz: number): boolean {
+    if (!this.handling.itemGuard || c.roll > 0 || c.shield > 0) return false;
+    if (c.item !== 'oil' && c.item !== 'orb' && c.item !== 'bolt') return false;
+    const ahead = (px - c.x) * Math.sin(c.h) + (pz - c.z) * Math.cos(c.h);
+    if (ahead > 1.2) return false;
+    c.item = null;
+    c.invuln = Math.max(c.invuln, 0.5);
+    this.emit({ type: 'guard', kart: c.id, x: px, z: pz, y: c.y });
+    return true;
+  }
+
   /** Start (or extend) an incoming-projectile warning; the first moment emits a 'warn' event for the phone and HUD. */
   private threaten(k: Kart, t: number): void {
     if (k.threat <= 0) this.emit({ type: 'warn', kart: k.id });
@@ -1259,7 +1711,11 @@ export class Game {
       g.threat = Math.max(g.threat, 0.1);
       if (c.t > 0) continue;
       s.comets.splice(n, 1);
-      if (g.boost > 0) this.emit({ type: 'cometmiss', kart: g.id, x: g.x, y: g.y, z: g.z });
+      if (g.decoy) {
+        // D74: the comet strikes the Mirage decoy instead
+        this.emit({ type: 'decoypop', kart: g.id, x: g.decoy.x, y: g.decoy.y, z: g.decoy.z });
+        g.decoy = null;
+      } else if (g.boost > 0) this.emit({ type: 'cometmiss', kart: g.id, x: g.x, y: g.y, z: g.z });
       else {
         const hit = this.spinOut(g);
         if (hit) {
@@ -1291,18 +1747,28 @@ export class Game {
       // warn the target once the orb is close behind it (section 12.3 fairness)
       if (tgt && this.handling.v2 && (tgt.prog - o.prog) * o.dir * T.DS < 70) this.threaten(tgt, 0.25);
       o.prog += (o.dir * 80 * dt) / T.DS;
-      if (tgt) o.lat += (tgt.lat - o.lat) * Math.min(1, 5 * dt);
+      // D74: Mochi's Mirage: an orb after her goes for her decoy while it is still ahead of the orb
+      const dc = decoyOf(tgt);
+      const toDecoy = dc && (((dc.idx - o.prog) % T.N) + T.N) % T.N < T.N / 2 ? dc : null;
+      if (toDecoy) o.lat += (toDecoy.lat - o.lat) * Math.min(1, 5 * dt);
+      else if (tgt) o.lat += (tgt.lat - o.lat) * Math.min(1, 5 * dt);
       posOnTrack(T, o.prog, o.lat, o);
       let dead = o.age > 7;
+      if (toDecoy && tgt && Math.hypot(toDecoy.x - o.x, toDecoy.z - o.z) < 3.4) {
+        dead = true;
+        tgt.decoy = null;
+        this.emit({ type: 'decoypop', kart: tgt.id, x: o.x, y: o.y, z: o.z });
+      }
       for (const c of s.karts) {
         if (dead) break;
         if (c === o.owner && o.age < 1) continue;
-        if (c.invuln > 0 || c.spin > 0 || c.rescue > 0) continue;
+        if (c.invuln > 0 || c.spin > 0 || c.rescue > 0 || c.out) continue;
         const dx = c.x - o.x,
           dz = c.z - o.z;
         if (dx * dx + dz * dz < 3.4 * 3.4) {
           dead = true;
-          if (this.spinOut(c)) this.emit({ type: 'orbhit', kart: c.id, x: o.x, z: o.z, y: o.y });
+          if (this.guarded(c, o.x, o.z) || this.dodged(c, o.x, o.y, o.z)) continue;
+          if (this.spinOut(c, o.owner)) this.emit({ type: 'orbhit', kart: c.id, x: o.x, z: o.z, y: o.y });
           else this.emit({ type: 'orbpop', kart: -1, x: o.x, z: o.z, y: o.y });
         }
       }
@@ -1333,15 +1799,25 @@ export class Game {
         this.emit({ type: 'boltbounce', kart: -1, x: b.x, z: b.z, y: b.y });
       }
       let dead = b.bounces > 3 || b.age > 5;
+      // D74: a Disc runs into a Mirage decoy and is spent on it
+      for (const c of s.karts) {
+        if (dead || !c.decoy || c === b.owner) continue;
+        if (Math.hypot(c.decoy.x - b.x, c.decoy.z - b.z) < 2.7) {
+          dead = true;
+          c.decoy = null;
+          this.emit({ type: 'decoypop', kart: c.id, x: b.x, y: b.y, z: b.z });
+        }
+      }
       for (const c of s.karts) {
         if (dead) break;
         if (c === b.owner && b.age < 0.35) continue;
-        if (c.invuln > 0 || c.spin > 0 || c.rescue > 0) continue;
+        if (c.invuln > 0 || c.spin > 0 || c.rescue > 0 || c.out) continue;
         const dx = c.x - b.x,
           dz = c.z - b.z;
         if (dx * dx + dz * dz < 2.7 * 2.7) {
           dead = true;
-          if (this.spinOut(c)) this.emit({ type: 'bolthit', kart: c.id, x: b.x, z: b.z, y: b.y });
+          if (this.guarded(c, b.x, b.z) || this.dodged(c, b.x, b.y, b.z)) continue;
+          if (this.spinOut(c, b.owner)) this.emit({ type: 'bolthit', kart: c.id, x: b.x, z: b.z, y: b.y });
         }
       }
       if (dead) s.bolts.splice(n, 1);
@@ -1357,15 +1833,48 @@ export class Game {
       for (const c of s.karts) {
         if (dead) break;
         if (c === sl.owner && sl.age < 0.8) continue;
+        // D74: Pip's Belly Slide slides over oil; a kart high in the air (Gus's Hop) passes over it
+        if (c.slideT > 0 || (c.air && c.alt > 0.5)) continue;
         const dx = c.x - sl.x,
           dz = c.z - sl.z;
-        if (dx * dx + dz * dz < sl.r * sl.r && this.spinOut(c)) dead = true;
+        if (dx * dx + dz * dz < sl.r * sl.r && this.spinOut(c, sl.owner)) dead = true;
       }
       if (dead) s.slicks.splice(n, 1);
     }
   }
 
+  /** A race item from the boxes' pool, by the kart's place. */
+  private rollItem(k: Kart): ItemId {
+    const s = this.s,
+      H = this.handling;
+    return chooseItem(
+      k.rank,
+      s.rng,
+      H.v2 ? { total: s.karts.length, lap: k.lap, cometActive: s.comets.length > 0, boosts: H.boosts } : undefined,
+    );
+  }
+
+  /** D83: a fun zone's free item, as if from a box. */
+  private zoneItem(k: Kart): void {
+    k.roll = this.handling.itemRoll;
+    k.pending = this.rollItem(k);
+    if (k.roll <= 0) this.grantItem(k);
+  }
+
+  /** The item roulette is done: the kart holds its item. */
+  private grantItem(k: Kart): void {
+    const s = this.s;
+    k.roll = 0;
+    k.item = k.pending;
+    k.pending = null;
+    k.itemUses = k.item === 'turbo3' ? 3 : 1;
+    k.itemWait = s.rng.range(1.5, 4) / (k.slot !== null ? 1 : DIFF[s.diff].items);
+    this.emit({ type: 'item', kart: k.id });
+  }
+
   private rocketStart(k: Kart, t: number): void {
+    // D76: no rocket start (and no early-press stall either) without the boosts
+    if (!this.handling.boosts) return;
     this.giveBoost(k, t, 'start');
     k.kick += 8;
     k.startDone = true;
@@ -1405,7 +1914,7 @@ export class Game {
             if (sp !== null) {
               k.startDone = true;
               if (sp <= 0.35) this.rocketStart(k, 1.3);
-              else if (sp > 0.9) {
+              else if (sp > 0.9 && this.handling.boosts) {
                 k.stall = 0.7;
                 this.emit({ type: 'stall', kart: k.id });
               }
@@ -1424,16 +1933,24 @@ export class Game {
       P.prevDrift = P.input.drift;
     }
 
+    const brawl = s.mode === 'brawl';
     for (const k of s.karts) {
-      if (Game.autoDriven(k)) aiInput(s, k, dt);
+      if (k.out) continue;
+      if (Game.autoDriven(k)) (brawl ? brawlAiInput : aiInput)(s, k, dt);
       this.stepKart(k, dt);
     }
+    // D73: the track's living event
+    stepHazards(s, dt, { emit: (e) => this.emit(e), spinOut: (k) => this.spinOut(k) });
+    // D83: the fun zones
+    if (s.zones) stepZones(s, dt, { emit: (e) => this.emit(e), giveItem: (k) => this.zoneItem(k) });
+    // D74: signature moves
+    if (s.moves) stepMoves(s, dt, { emit: (e) => this.emit(e), giveBoost: (k, t) => this.giveBoost(k, t, 'move') });
     const karts = s.karts;
     for (let i = 0; i < karts.length; i++)
       for (let j = i + 1; j < karts.length; j++) {
         const a = karts[i]!,
           b = karts[j]!;
-        if (a.rescue > 0 || b.rescue > 0 || Math.abs(a.y - b.y) > 1.6) continue;
+        if (a.rescue > 0 || b.rescue > 0 || a.out || b.out || Math.abs(a.y - b.y) > 1.6) continue;
         let dx = a.x - b.x,
           dz = a.z - b.z;
         let d2 = dx * dx + dz * dz;
@@ -1470,26 +1987,26 @@ export class Game {
           b.z -= (dz * pen * ma) / tot;
           const rv = (a.vx - b.vx) * dx + (a.vz - b.vz) * dz;
           if (rv < 0) {
-            const jimp = (-1.35 * rv) / (1 / ma + 1 / mb);
+            const jimp = (-this.handling.bumpRest * rv) / (1 / ma + 1 / mb);
             a.vx += (dx * jimp) / ma;
             a.vz += (dz * jimp) / ma;
             b.vx -= (dx * jimp) / mb;
             b.vz -= (dz * jimp) / mb;
             if (-rv > 6) this.emit({ type: 'bump', kart: a.id, other: b.id, power: Math.min(1, -rv / 20) });
+            // D69 brawl: a boosting kart that rams one that is not knocks off a life and takes it
+            if (brawl && -rv > 7) {
+              if (a.boost > 0 && b.boost <= 0) this.ram(a, b);
+              else if (b.boost > 0 && a.boost <= 0) this.ram(b, a);
+            }
           }
         }
       }
+    const H = this.handling;
     for (const k of karts) {
+      if (k.out) continue;
       if (k.roll > 0) {
         k.roll -= dt;
-        if (k.roll <= 0) {
-          k.roll = 0;
-          k.item = k.pending;
-          k.pending = null;
-          k.itemUses = k.item === 'turbo3' ? 3 : 1;
-          k.itemWait = s.rng.range(1.5, 4) / (k.slot !== null ? 1 : DIFF[s.diff].items);
-          this.emit({ type: 'item', kart: k.id });
-        }
+        if (k.roll <= 0) this.grantItem(k);
       }
       if (k.rescue > 0) continue;
       for (let bi = 0; bi < s.boxes.length; bi++) {
@@ -1498,14 +2015,13 @@ export class Game {
         const dx = k.x - b.x,
           dz = k.z - b.z;
         if (dx * dx + dz * dz < 3.8 * 3.8) {
-          b.cool = 4;
-          k.roll = 1.0;
-          k.pending = chooseItem(
-            k.rank,
-            s.rng,
-            this.handling.v2 ? { total: s.karts.length, lap: k.lap, cometActive: s.comets.length > 0 } : undefined,
-          );
+          // D69: arena boxes come back faster, and only hold fighting items
+          b.cool = brawl ? 2.5 : 4;
+          k.roll = H.itemRoll;
+          k.pending = brawl ? brawlItem(s.rng, H.boosts) : this.rollItem(k);
           this.emit({ type: 'pickup', kart: k.id, box: bi });
+          // D65: no roulette, the item is ready the moment the box is hit
+          if (k.roll <= 0) this.grantItem(k);
         }
       }
       for (const p of s.pads) {
@@ -1518,19 +2034,28 @@ export class Game {
           this.emit({ type: 'pad', kart: k.id });
         }
       }
-      // slipstream: tuck in right behind another kart
+      // slipstream: tuck in right behind another kart (D65: a longer, wider wake that charges faster)
       let behind = false;
       if (k.sp > 24 && k.boost <= 0) {
         for (const c of karts) {
-          if (c === k || c.rescue > 0) continue;
+          if (c === k || c.rescue > 0 || c.out) continue;
           const d = c.prog - k.prog;
-          if (d > 0.6 && d < 5 && Math.abs(c.lat - k.lat) < 2.6) {
+          if (d > 0.6 && d < H.draftReach && Math.abs(c.lat - k.lat) < H.draftLat) {
             behind = true;
             break;
           }
         }
       }
-      k.draft = behind ? Math.min(1.6, k.draft + dt) : Math.max(0, k.draft - dt * 1.5);
+      // D65 slingshot: pulling out of a charged slipstream fires a short boost, to get past
+      if (H.slingshot > 0 && !behind && k.drafting && k.boost <= 0 && k.spin <= 0 && !k.air) {
+        this.giveBoost(k, H.slingshot, 'draft');
+        this.emit({ type: 'slingshot', kart: k.id });
+        k.drafting = false;
+        k.draft = 0;
+      }
+      // D83: the draft tunnel charges the slipstream twice as fast
+      const tow = s.zones && inTunnel(s.track, s.zones.tunnel, k.idx) ? TUNNEL_DRAFT : 1;
+      k.draft = behind ? Math.min(1.6, k.draft + dt * H.draftCharge * tow) : Math.max(0, k.draft - dt * 1.5);
       if (k.draft >= 1 && !k.drafting) {
         k.drafting = true;
         this.emit({ type: 'draft', kart: k.id });
@@ -1543,7 +2068,47 @@ export class Game {
     this.stepBolts(dt);
     this.stepSlicks(dt);
     const order = this.updateRanks();
-    if (s.phase === 'race') this.checkRaceEnd(order);
+    if (s.phase === 'race') {
+      if (brawl) this.checkBrawlEnd();
+      else this.checkRaceEnd(order);
+    }
+  }
+
+  /** D69: a boosted ram knocks a life off the rammed kart and gives it to the rammer (up to the starting lives). */
+  private ram(att: Kart, vic: Kart): void {
+    if (!this.spinOut(vic, att)) return;
+    if (att.lives < BRAWL_LIVES) {
+      att.lives++;
+      this.emit({ type: 'steal', kart: att.id, other: vic.id });
+    }
+  }
+
+  /**
+   * D69: the round ends with one kart left, when every player is out, or at the time limit (most lives wins).
+   * Sudden death first: at BRAWL_SUDDEN s every kart still in drops to its last life.
+   */
+  private checkBrawlEnd(): void {
+    const s = this.s;
+    const alive = s.karts.filter((k) => !k.out);
+    if (!s.suddenDeath && s.raceTime >= BRAWL_SUDDEN && alive.length > 1) {
+      s.suddenDeath = true;
+      for (const k of alive) k.lives = Math.min(k.lives, 1);
+      this.emit({ type: 'suddendeath', kart: -1 });
+    }
+    const humansOut = s.humans.length > 0 && s.humans.every((h) => h.out);
+    if (alive.length <= 1 || humansOut || s.raceTime >= BRAWL_LIMIT) {
+      for (const k of alive) {
+        k.finished = true;
+        k.finishTime = s.raceTime;
+      }
+      s.phase = 'finished';
+      // D80: rank again now: the order passed in was taken before this step's last hits, so a kart knocked out in
+      // this very step could still have stood first
+      const final = this.updateRanks();
+      s.standings = final;
+      if (alive[0]) this.emit({ type: 'finish', kart: final[0]!.id });
+      this.emit({ type: 'raceover', kart: -1 });
+    }
   }
 
   /** Section 6.4: the race ends when all humans have finished, or RACE_END_GRACE s after the first human finishes. */

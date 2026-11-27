@@ -4,7 +4,8 @@
  */
 import type { TrackDef, TrackPoint } from './def';
 
-const S = 1.29;
+/** D65: 1.29 to 0.71, a lap about half as long. */
+const S = 0.71;
 const P = (x: number, z: number, h = 0, bank = 0, w?: number): TrackPoint => ({
   x: x * S,
   z: z * S,
@@ -18,8 +19,8 @@ export const FROSTY_DEF: TrackDef = {
   name: 'Frosty Peaks',
   theme: 'frosty',
   points: [
-    P(0, -350, 20, 0, 14), // start line
-    P(170, -352, 19.5, 0, 14),
+    P(0, -350, 20, 0, 10.5), // start line
+    P(170, -352, 19.5, 0, 10.5),
     P(265, -388, 18.5, 3), // D64: esses down from the start
     P(365, -338, 17.5, -3),
     P(455, -322, 16),
@@ -53,8 +54,8 @@ export const FROSTY_DEF: TrackDef = {
     P(-280, -240, 21),
     P(-380, -300, 21, -5),
     P(-330, -380, 20, -6),
-    P(-215, -398, 20, -3, 14), // D64: a kink before the grid
-    P(-100, -362, 20, 0, 14),
+    P(-215, -398, 20, -3, 10.5), // D64: a kink before the grid
+    P(-100, -362, 20, 0, 10.5),
   ],
   offroad: 'snow',
   sectors: [
@@ -68,22 +69,22 @@ export const FROSTY_DEF: TrackDef = {
   // D64 jumps: a lane kicker after the start, snow moguls by the lake, a launch off the pass's boost pad and a
   // village tabletop off its boost pad
   ramps: [
-    { at: 0.02, kind: 'lane', lat: [1.5, 13] },
+    { at: 0.02, kind: 'lane', lat: [1.5, 9] },
     { at: 0.391, kind: 'whoops', count: 3, gap: 24 },
     { at: 0.712, kind: 'launch' },
     { at: 0.832, kind: 'table' },
   ],
   zones: [
-    { from: 0.373, to: 0.388, latMin: -13, latMax: -2, surface: 'ice' },
-    { from: 0.408, to: 0.423, latMin: 1, latMax: 13, surface: 'ice' },
-    { from: 0.442, to: 0.457, latMin: -8, latMax: 6, surface: 'ice' },
-    { from: 0.105, to: 0.144, latMin: -26, latMax: -15.2, surface: 'gravel' },
+    { from: 0.373, to: 0.388, latMin: -9.5, latMax: -1.5, surface: 'ice' },
+    { from: 0.408, to: 0.423, latMin: 1, latMax: 9.5, surface: 'ice' },
+    { from: 0.442, to: 0.457, latMin: -6, latMax: 4.5, surface: 'ice' },
+    { from: 0.105, to: 0.144, latMin: -18, latMax: -11.7, surface: 'gravel' },
   ],
-  shortcuts: [{ from: 0.558, to: 0.604, via: [], half: 6, surface: 'snow' }],
+  shortcuts: [{ from: 0.558, to: 0.604, via: [], half: 5, surface: 'snow' }],
   landmarks: [
-    { kind: 'lake', at: 0.333, side: -1, dist: 90 },
-    { kind: 'village', at: 0.82, side: 1, dist: 60 },
-    { kind: 'lodge', at: 0.601, side: -1, dist: 70 },
+    { kind: 'lake', at: 0.333, side: -1, dist: 55 },
+    { kind: 'village', at: 0.82, side: 1, dist: 38 },
+    { kind: 'lodge', at: 0.601, side: -1, dist: 42 },
   ],
   music: 'frosty',
 };

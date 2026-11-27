@@ -11,6 +11,10 @@ const root = fileURLToPath(new URL('.', import.meta.url));
 export default defineConfig({
   root,
   publicDir: 'host/public',
+  // D79: bundle the dependencies up front, so the dev server never re-bundles (and reloads) while a phone is loading
+  optimizeDeps: {
+    include: ['three', 'three/examples/jsm/environments/RoomEnvironment.js', 'socket.io-client', 'qrcode'],
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

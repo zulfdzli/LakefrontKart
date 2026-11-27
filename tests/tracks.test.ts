@@ -1,7 +1,6 @@
 /** Phase 8: the three tracks (section 11) and the race rules that depend on them (section 12.4, section 15). */
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_HANDLING,
   TRACK_IDS,
   TRACKS,
   STEP,
@@ -54,19 +53,24 @@ describe('track layouts', () => {
       const def = TRACKS[id],
         T = getTrack(id),
         st = trackStats(T);
-      expect(st.len).toBeGreaterThan(3200);
-      expect(st.len).toBeLessThan(5300); // the lap-time target decides the length (D41, D43)
+      // D65: about half the old length (3.2-5.3 km), for laps of about a minute
+      expect(st.len).toBeGreaterThan(2500);
+      expect(st.len).toBeLessThan(3500);
       // the inside road edge never folds over; invented tracks keep wide corners (traced ones keep the real ones)
       const hwAt = T.HW[Math.round(st.minRadiusAt * T.N) % T.N]!;
-      expect(st.minRadius).toBeGreaterThan(def.traced ? hwAt + 2 : 25);
+      expect(st.minRadius).toBeGreaterThan(def.traced ? hwAt + 2 : 20);
       // unrelated road sections keep their walls apart (walls close in where the road runs close by)
-      expect(st.minSep).toBeGreaterThan(def.traced ? 30 : 55);
+      expect(st.minSep).toBeGreaterThan(def.traced ? 25 : 50);
+      // D65: a narrower road (half-width 9.5 m, was 13); D67: 5% wider (start straights 10.5 to 11 m)
+      // D77/D78: the road was widened twice (10% each)
+      expect(Math.max(...T.HW)).toBeLessThanOrEqual(13);
       for (let i = 0; i < T.N; i++) expect(T.WALLD[i]!).toBeGreaterThan(T.HW[i]! + 3);
       expect(def.sectors.length).toBeGreaterThanOrEqual(3);
       expect(def.sectors.length).toBeLessThanOrEqual(4);
       // section 11.2: a risk/reward shortcut on every invented track (a traced circuit has none)
       if (!def.traced) expect(T.shortcuts.length).toBeGreaterThanOrEqual(1);
-      expect(T.pads.length).toBeGreaterThanOrEqual(1);
+      // D76: no boost pads on any track
+      expect(T.pads).toEqual([]);
       // a hairpin: somewhere the road turns through at least 160° within 200 m
       let hair = 0;
       const w = Math.round(200 / T.DS);
@@ -78,19 +82,20 @@ describe('track layouts', () => {
       expect(hair).toBeGreaterThan((160 * Math.PI) / 180);
       // no gate inside a shortcut's skipped stretch, or the shortcut could never count
       for (const sc of T.shortcuts) for (const g of T.gates) expect(g > sc.i0 && g < sc.i1).toBe(false);
-      // item rows every 350-450 m on average
-      expect(T.LEN / T.boxRows.length).toBeGreaterThan(300);
-      expect(T.LEN / T.boxRows.length).toBeLessThan(500);
+      // item rows about every 170 m (D81: was 260 m; D65: 400 m)
+      expect(T.LEN / T.boxRows.length).toBeGreaterThan(150);
+      expect(T.LEN / T.boxRows.length).toBeLessThan(200);
+      expect(T.LEN / T.boxRows.length).toBeLessThan(350);
     });
   }
 });
 
 describe('lap length (section 11.1)', () => {
-  // section 11.1's 115-125 s band was met at speedMul 1.3. D62 raised the speed at the user's request, which
-  // shortens every lap by the same ratio (the lower bound follows it: about 103 s at 1.45); D64 reshaped the long
-  // straights into esses, which brings Meadows back to about 115 s, so the upper bound stays the spec's 125 s
-  const lo = (115 * 1.3) / DEFAULT_HANDLING.speedMul,
-    hi = 125;
+  // section 11.1 asked for about 2-minute laps (115-125 s). D65: the user asked for shorter tracks, so laps are now
+  // about a minute (Normal AI 61-71 s); this band keeps them there. D75: karts 4% slower; D76: no boosts, so laps are
+  // about 16% longer again (Sepang about 94 s)
+  const lo = 60,
+    hi = 100;
   for (const id of TRACK_IDS) {
     it(`${id}: Normal AI median lap is ${lo.toFixed(0)}-${hi.toFixed(0)} s and every kart finishes`, () => {
       const laps: number[] = [];
@@ -105,6 +110,25 @@ describe('lap length (section 11.1)', () => {
       expect(m).toBeGreaterThan(lo);
       expect(m).toBeLessThan(hi);
     }, 60000);
+  }
+});
+
+describe('pacing on the flat tracks (D80)', () => {
+  // D65 asked for something every 3 s; D80 made the tracks flat at the user's request (no crests or dips), so the
+  // moments left are the corners worth a drift, the jumps, item rows and landmarks: check they still come round often
+  for (const id of TRACK_IDS) {
+    it(`${id}: a drift corner, jump, item row or landmark at least every 15 s of the lap`, () => {
+      const T = getTrack(id);
+      const v = 40; // a rough lap speed (m/s); the check is on spacing, not on exact times
+      const idx = T.beats.map((b) => b.idx).sort((a, b) => a - b);
+      expect(idx.length).toBeGreaterThan(5);
+      let worst = 0;
+      for (let k = 0; k < idx.length; k++) {
+        const gap = (((idx[(k + 1) % idx.length]! - idx[k]! + T.N) % T.N) * T.DS) / v;
+        worst = Math.max(worst, gap);
+      }
+      expect(worst).toBeLessThan(15);
+    });
   }
 });
 
@@ -226,7 +250,7 @@ describe('race rules on gated tracks (section 12.4)', () => {
     expect(SURF[k.surf].off).toBe(false);
   });
 
-  it('the canyon ramp launches karts into the air; a straight landing gives a small boost', () => {
+  it('the canyon ramp launches karts into the air; landing gives no boost (D76)', () => {
     const { g, k, T } = manual('canyon');
     g.setInput(0, { steer: 0, throttle: true, brake: false, drift: false });
     const r = T.ramps[0]!;
@@ -248,6 +272,6 @@ describe('race rules on gated tracks (section 12.4)', () => {
     }
     expect(jumped).toBe(true);
     expect(landed).toBe(true);
-    expect(boosted).toBe(true);
+    expect(boosted).toBe(false);
   });
 });

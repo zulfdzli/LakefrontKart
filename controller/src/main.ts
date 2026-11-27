@@ -15,12 +15,36 @@ import {
   type Phase,
   type GpInfo,
   type Standing,
+  CHARS as CHAR_LIST,
+  AI_MAX,
+  LIVERIES,
+  LIVERY_NAME,
+  PAINTS,
+  RIMS,
+  STICKERS,
+  STICKER_GLYPH,
+  TUNE_KEYS,
+  TUNE_MAX,
+  TUNE_NAME,
+  cleanSetup,
+  defaultSetup,
+  tuneBalance,
+  type KartSetup,
 } from '@tk/shared';
 import { PhoneNet } from './net';
 import { Remote } from './ui';
 import { haptic, hapticsOn, setHaptics } from './haptics';
 
 const $ = (id: string): HTMLElement => document.getElementById(id)!;
+// D79: the controller started (the page's boot watchdog stands down)
+(window as unknown as { __tkCtl: boolean }).__tkCtl = true;
+try {
+  sessionStorage.removeItem('tk_boot_retry');
+} catch {
+  /* private mode */
+}
+// a lazily loaded part (the garage's 3D view) that fails to fetch: reload rather than break
+window.addEventListener('vite:preloadError', () => location.reload());
 const params = new URLSearchParams(location.search);
 const BOT = params.has('bot');
 
@@ -32,13 +56,14 @@ let ready = false;
 let results: { standings: Standing[]; isLeader: boolean; gp?: GpInfo } | null = null;
 
 /* ---------------- screens ---------------- */
-type Screen = 'join' | 'wait' | 'drive' | 'results';
+type Screen = 'join' | 'wait' | 'drive' | 'results' | 'garage';
 let current: Screen = 'join';
 function show(s: Screen): void {
   current = s;
   $('card').hidden = s === 'drive';
   $('drive').hidden = s !== 'drive';
-  for (const id of ['join', 'wait', 'results'] as const) $(id).hidden = s !== id;
+  for (const id of ['join', 'wait', 'results', 'garage'] as const) $(id).hidden = s !== id;
+  if (s !== 'garage') garageView?.stop();
   if (s !== 'drive') remote.releaseAll();
   updateRotate();
   // tips never cover the driving controls: hold them until a card screen is showing
@@ -137,6 +162,7 @@ function onJoined(): void {
   $('meName').textContent = j.name;
   document.documentElement.style.setProperty('--me', SLOT_COLORS[j.slot] ?? '#888');
   sendSettings();
+  sendSavedSetup();
   routePhase();
   if (BOT && !ready) {
     ready = true;
@@ -145,6 +171,7 @@ function onJoined(): void {
 }
 net.onRejoined = () => {
   busy(null);
+  sendSavedSetup();
   routePhase();
 };
 net.onJoinLost = (reason) => {
@@ -162,7 +189,11 @@ const TRACK_NAMES: Record<string, string> = {
   canyon: 'Dusty Canyon',
   frosty: 'Frosty Peaks',
   sepang: 'Sepang Circuit',
+  'arena-meadow': 'Meadow Fairground',
+  'arena-canyon': 'Canyon Bowl',
+  'arena-ice': 'Frozen Lake',
 };
+const isArena = (id: string): boolean => id.startsWith('arena-');
 
 /** The leader's race settings (section 12.6): mode, track, laps, AI difficulty, AI fill, items. */
 function renderConfig(leader: boolean): void {
@@ -180,17 +211,48 @@ function renderConfig(leader: boolean): void {
   const sel = (id: string, v: string): void => {
     for (const b of Array.from($(id).children) as HTMLElement[]) b.classList.toggle('sel', b.dataset.v === v);
   };
+  // D69: a brawl picks from the arenas and has no laps
+  for (const b of Array.from(track.children) as HTMLElement[])
+    b.hidden = isArena(b.dataset.v!) !== (c.mode === 'brawl');
+  $('cfgLapsRow').hidden = c.mode === 'brawl';
   sel('cfgMode', c.mode);
   sel('cfgTrack', c.trackId);
   sel('cfgLaps', String(c.laps));
   sel('cfgDiff', c.aiDifficulty);
+  sel('cfgSky', c.weather);
   $('cfgTrackRow').hidden = c.mode === 'gp';
-  $('cfgFill').classList.toggle('on', c.aiFill);
+  // D82: the number of AI bots (the race holds 8 karts in all)
+  const ai = c.aiFill ? c.aiCount : 0;
+  $('cfgAi').textContent = String(ai);
+  ($('cfgAiDn') as HTMLButtonElement).disabled = ai <= 0;
+  ($('cfgAiUp') as HTMLButtonElement).disabled = ai >= AI_MAX;
   $('cfgItems').classList.toggle('on', c.itemsOn);
+  $('cfgEvents').classList.toggle('on', c.events);
+  $('cfgEvents').hidden = $('cfgEventsLbl').hidden = c.mode === 'brawl';
+  $('cfgMoves').classList.toggle('on', c.moves);
+  // D83: the slalom gates, jump target and draft tunnel (races only)
+  $('cfgZones').classList.toggle('on', c.zones);
+  $('cfgZonesRow').hidden = c.mode === 'brawl';
   const where =
-    c.mode === 'gp' ? `Grand Prix: ${c.gpOrder.map((t) => TRACK_NAMES[t] ?? t).join(' → ')}` : TRACK_NAMES[c.trackId];
+    c.mode === 'gp'
+      ? `Grand Prix: ${c.gpOrder.map((t) => TRACK_NAMES[t] ?? t).join(' → ')}`
+      : c.mode === 'brawl'
+        ? `Bumper Brawl: ${TRACK_NAMES[c.trackId]}`
+        : TRACK_NAMES[c.trackId];
   $('cfgSummary').textContent =
-    `${where} · ${c.laps} lap${c.laps > 1 ? 's' : ''} · ${c.aiDifficulty} AI${c.aiFill ? '' : ' (off)'} · items ${c.itemsOn ? 'on' : 'off'}`;
+    `${where} · ${c.mode === 'brawl' ? '3 lives' : `${c.laps} lap${c.laps > 1 ? 's' : ''}`} · ${c.aiFill && c.aiCount > 0 ? `${c.aiCount} ${c.aiDifficulty} AI` : 'no AI'} · items ${c.itemsOn ? 'on' : 'off'}${c.mode !== 'brawl' && !c.events ? ' · no track events' : ''}${c.moves ? '' : ' · no moves'}${c.mode !== 'brawl' && !c.zones ? ' · no fun zones' : ''} · ${skyText(c)}`;
+}
+/** D71: the sky setting in words (snow only falls on the frosty tracks; elsewhere it rains). */
+function skyText(c: LeaderConfig): string {
+  if (c.weather === 'random') return 'random sky';
+  if (c.weather !== 'snow') return c.weather === 'day' ? 'daytime' : c.weather;
+  const tracks = c.mode === 'gp' ? c.gpOrder : [c.trackId];
+  const frosty = tracks.filter((t) => t === 'frosty' || t === 'arena-ice').length;
+  return frosty === tracks.length
+    ? 'snow'
+    : frosty
+      ? 'snow (rain off the frosty tracks)'
+      : 'rain (snow is frosty-only)';
 }
 function sendConfig(patch: Partial<LeaderConfig>): void {
   if (!lobby) return;
@@ -201,13 +263,19 @@ for (const [id, key] of [
   ['cfgMode', 'mode'],
   ['cfgLaps', 'laps'],
   ['cfgDiff', 'aiDifficulty'],
+  ['cfgSky', 'weather'],
 ] as const)
   for (const b of Array.from($(id).children) as HTMLElement[])
     b.addEventListener('click', () =>
       sendConfig({ [key]: key === 'laps' ? Number(b.dataset.v) : b.dataset.v } as Partial<LeaderConfig>),
     );
-$('cfgFill').addEventListener('click', () => sendConfig({ aiFill: !lobby?.config.aiFill }));
+const aiNow = (): number => (lobby?.config.aiFill ? lobby.config.aiCount : 0);
+$('cfgAiDn').addEventListener('click', () => sendConfig({ aiCount: Math.max(0, aiNow() - 1) }));
+$('cfgAiUp').addEventListener('click', () => sendConfig({ aiCount: Math.min(AI_MAX, aiNow() + 1) }));
 $('cfgItems').addEventListener('click', () => sendConfig({ itemsOn: !lobby?.config.itemsOn }));
+$('cfgEvents').addEventListener('click', () => sendConfig({ events: !lobby?.config.events }));
+$('cfgMoves').addEventListener('click', () => sendConfig({ moves: !lobby?.config.moves }));
+$('cfgZones').addEventListener('click', () => sendConfig({ zones: !lobby?.config.zones }));
 
 function renderWait(): void {
   const j = net.joined;
@@ -261,6 +329,165 @@ $('leaveBtn').addEventListener('click', () => {
 });
 $('waitSettings').addEventListener('click', () => openSettings());
 
+/* ---------------- D72 garage ---------------- */
+const GARAGE_KEY = 'tk_garage';
+let draft: KartSetup | null = null;
+let garageView: import('./garage-view').GarageView | null = null;
+function savedSetup(): KartSetup | null {
+  try {
+    return cleanSetup(JSON.parse(localStorage.getItem(GARAGE_KEY) ?? 'null'));
+  } catch {
+    return null;
+  }
+}
+/** A returning player's kart comes back as they left it. */
+function sendSavedSetup(): void {
+  const s = savedSetup();
+  if (s && !BOT) net.garage(s);
+}
+function myLobby(): LobbyUpdate['players'][number] | undefined {
+  const j = net.joined;
+  return lobby?.players.find((p) => p.slot === j?.slot);
+}
+function openGarage(): void {
+  const j = net.joined;
+  if (!j) return;
+  haptic('tap');
+  draft = structuredClone(myLobby()?.setup ?? defaultSetup(j.slot));
+  show('garage');
+  renderGarage();
+  void import('./garage-view').then((m) => {
+    if (current !== 'garage') return;
+    garageView ??= new m.GarageView($('garageView') as HTMLCanvasElement);
+    garageView.start();
+    updateGarageView();
+  });
+}
+function updateGarageView(): void {
+  const j = net.joined;
+  if (garageView && draft && j) garageView.set(myLobby()?.characterId ?? null, j.slot, draft);
+}
+/** Apply a change: redraw, and save and send it whenever the tuning adds up. */
+function change(f: (d: KartSetup) => void): void {
+  if (!draft) return;
+  haptic('tap');
+  f(draft);
+  renderGarage();
+  updateGarageView();
+  if (tuneBalance(draft.tune) === 0) {
+    localStorage.setItem(GARAGE_KEY, JSON.stringify(draft));
+    net.garage(draft);
+  }
+}
+function swatches(id: string, colors: readonly string[], key: 'paint' | 'accent' | 'rims'): void {
+  const el = $(id);
+  if (!el.children.length)
+    colors.forEach((c, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.style.setProperty('--sw', c);
+      b.setAttribute('aria-label', c);
+      b.addEventListener('click', () => change((d) => (d[key] = i)));
+      el.appendChild(b);
+    });
+  Array.from(el.children).forEach((b, i) => b.classList.toggle('sel', draft?.[key] === i));
+}
+function chips<T extends string>(
+  id: string,
+  values: readonly T[],
+  label: (v: T) => string,
+  pick: (d: KartSetup, v: T) => void,
+  cur: T,
+): void {
+  const el = $(id);
+  if (!el.children.length)
+    for (const v of values) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.v = v;
+      b.textContent = label(v);
+      b.addEventListener('click', () => change((d) => pick(d, v)));
+      el.appendChild(b);
+    }
+  for (const b of Array.from(el.children) as HTMLElement[]) b.classList.toggle('sel', b.dataset.v === cur);
+}
+function renderGarage(): void {
+  const d = draft;
+  if (!d) return;
+  swatches('gPaint', PAINTS, 'paint');
+  swatches('gAccent', PAINTS, 'accent');
+  swatches('gRims', RIMS, 'rims');
+  chips(
+    'gLivery',
+    LIVERIES,
+    (v) => LIVERY_NAME[v],
+    (dd, v) => (dd.livery = v),
+    d.livery,
+  );
+  chips(
+    'gSticker',
+    STICKERS,
+    (v) => (v === 'none' ? 'None' : STICKER_GLYPH[v]),
+    (dd, v) => (dd.sticker = v),
+    d.sticker,
+  );
+  $('gNum').textContent = String(d.num);
+  // tuning: the character's own stat and the points moved, as pips (7 at most)
+  const ch = CHAR_LIST.find((c) => c.id === myLobby()?.characterId) ?? CHAR_LIST[0]!;
+  const rows = $('gTuneRows');
+  if (!rows.children.length)
+    for (const k of TUNE_KEYS) {
+      const r = document.createElement('div');
+      r.className = 'tRow';
+      r.dataset.k = k;
+      r.innerHTML = `<span>${TUNE_NAME[k]}</span><button type="button" data-d="-1">−</button><i class="pips"></i><button type="button" data-d="1">+</button>`;
+      for (const b of Array.from(r.querySelectorAll('button')))
+        b.addEventListener('click', () =>
+          change((dd) => {
+            dd.tune[k] = Math.max(-TUNE_MAX, Math.min(TUNE_MAX, dd.tune[k] + Number(b.dataset.d)));
+          }),
+        );
+      rows.appendChild(r);
+    }
+  for (const r of Array.from(rows.children) as HTMLElement[]) {
+    const k = r.dataset.k as (typeof TUNE_KEYS)[number];
+    const base = ch.stats[k],
+      t = d.tune[k],
+      now = Math.max(0, base + t);
+    let html = '';
+    for (let i = 1; i <= 7; i++) {
+      const cls = i <= Math.min(base, now) ? 'on' : i <= now ? 'on up' : i <= base ? 'down' : '';
+      html += `<b class="${cls}"></b>`;
+    }
+    r.querySelector('.pips')!.innerHTML = html;
+    const [dn, up] = Array.from(r.querySelectorAll('button')) as [HTMLButtonElement, HTMLButtonElement];
+    dn.disabled = t <= -TUNE_MAX || now <= 0;
+    up.disabled = t >= TUNE_MAX;
+  }
+  const bal = tuneBalance(d.tune);
+  const free = $('gFree');
+  free.textContent =
+    bal > 0
+      ? `${bal} point${bal > 1 ? 's' : ''} to place`
+      : bal < 0
+        ? `Take ${-bal} point${bal < -1 ? 's' : ''} from another stat`
+        : TUNE_KEYS.some((k) => d.tune[k] !== 0)
+          ? 'Balanced ✓'
+          : 'Standard setup';
+  free.classList.toggle('warn', bal !== 0);
+  ($('garageDone') as HTMLButtonElement).disabled = bal !== 0;
+}
+$('garageBtn').addEventListener('click', openGarage);
+$('garageDone').addEventListener('click', () => {
+  haptic('tap');
+  draft = null;
+  show('wait');
+  renderWait();
+});
+$('gNumDn').addEventListener('click', () => change((d) => (d.num = (d.num + 99) % 100)));
+$('gNumUp').addEventListener('click', () => change((d) => (d.num = (d.num + 1) % 100)));
+$('gTuneReset').addEventListener('click', () => change((d) => (d.tune = { speed: 0, accel: 0, handling: 0 })));
+
 /* ---------------- phase routing ---------------- */
 function routePhase(): void {
   if (!net.joined) {
@@ -282,6 +509,12 @@ net.socket.on('phase', (p) => {
   // every phone shows the pause card while the race is paused; anyone can resume
   $('pauseSheet').hidden = phase !== 'paused';
   $('pauseBy').textContent = phase === 'paused' && p.pausedBy ? `by ${p.pausedBy}` : '';
+  // D82: the leader can end the race from here and take everyone back to the lobby
+  const leads = !!lobby?.players.find((x) => x.slot === net.joined?.slot)?.isLeader;
+  $('pauseLobby').hidden = !leads;
+  $('pauseLobbyNote').hidden = leads;
+  $('replayCard').hidden = phase !== 'replay';
+  if (phase === 'replay') remote.releaseAll();
   if (phase === 'paused') remote.releaseAll();
   if (phase === 'countdown') remote.resetRace();
   if (phase === 'lobby' && !BOT) ready = false;
@@ -294,6 +527,11 @@ net.socket.on('phase', (p) => {
 net.socket.on('lobby:update', (u) => {
   lobby = u;
   if (current === 'wait') renderWait();
+  // D72: a new character shows in the garage too
+  if (current === 'garage') {
+    renderGarage();
+    updateGarageView();
+  }
 });
 net.socket.on('hud', (h) => remote.setHud(h));
 net.socket.on('haptic', (h) => {
@@ -304,6 +542,9 @@ net.socket.on('haptic', (h) => {
   if (h.kind === 'go') remote.count('GO!');
   if (h.kind === 'lap') remote.toast('FINAL LAP!');
   if (h.kind === 'warn') remote.flash('hit');
+  if (h.kind === 'hazard') remote.toast('⚠ TRACK EVENT AHEAD');
+  // D83: a fun zone done well
+  if (h.kind === 'zone') remote.toast(['⛷️ SLALOM CLEAN!', '🎯 BULLSEYE!', '💨 NICE PASS!'][h.n ?? 0] ?? 'NICE!');
 });
 net.socket.on('results', (r) => {
   results = r;
@@ -394,12 +635,24 @@ remote.onItem = (dir) => {
   net.fireItem(dir);
   haptic('item');
 };
+remote.onMove = () => {
+  net.fireMove();
+  haptic('boost');
+};
 remote.onPause = () => {
   if (phase === 'race' || phase === 'countdown') net.pause(true);
   else if (phase === 'paused') $('pauseSheet').hidden = false;
 };
 $('resumeBtn').addEventListener('click', () => net.pause(false));
+$('skipBtn').addEventListener('click', () => {
+  haptic('tap');
+  net.skip();
+});
 $('pauseControls').addEventListener('click', () => openSettings());
+$('pauseLobby').addEventListener('click', () => {
+  haptic('tap');
+  net.toLobby();
+});
 $('pauseLeave').addEventListener('click', () => {
   $('confirm').hidden = false;
 });

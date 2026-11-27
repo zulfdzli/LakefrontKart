@@ -30,6 +30,11 @@ export class ChaseCam {
   private spinBack = 0;
   introT = 0;
   private readonly fly = { x: 0, y: 0, z: 0 };
+  /** D65 roller coaster: smoothed look pitch (road height ahead minus here, m) and the drop / air FOV kick. */
+  private pitchY = 0;
+  private dropFov = 0;
+  private readonly ahead = { x: 0, y: 0, z: 0 };
+  private readonly here = { x: 0, y: 0, z: 0 };
   private readonly flyLook = { x: 0, y: 0, z: 0 };
   private readonly target = new THREE.Vector3();
   private readonly look = new THREE.Vector3();
@@ -54,6 +59,8 @@ export class ChaseCam {
     this.fovKick = 0;
     this.shake = 0;
     this.podT = 0;
+    this.pitchY = 0;
+    this.dropFov = 0;
   }
 
   private setFov(f: number, dt: number): void {
@@ -170,7 +177,17 @@ export class ChaseCam {
       cam.position.copy(this.target);
       this.init = true;
     } else cam.position.lerp(this.target, 1 - Math.exp(-8 * dt));
-    this.look.set(ix + Math.sin(this.camH) * 12 * intro, iy + 0.9, iz + Math.cos(this.camH) * 12 * intro);
+    // D65 roller coaster: look where the road goes, so the view tips down over a crest into a drop and up into a
+    // climb; and widen the lens on a fast descent and in the air (the stomach-drop), shake a little in compressions
+    const T = s.track;
+    posOnTrack(T, k.idx + (14 + Math.max(0, k.sp) * 0.3) / T.DS, k.lat, this.ahead);
+    posOnTrack(T, k.idx, k.lat, this.here);
+    const kp = 1 - Math.exp(-5 * dt);
+    this.pitchY += (clamp((this.ahead.y - this.here.y) * 0.75, -9, 7) * intro - this.pitchY) * kp;
+    const drop = clamp(-k.slope * Math.max(0, k.sp) * 0.45, 0, 7) + (k.air ? 4 : 0);
+    this.dropFov += (drop * intro - this.dropFov) * (1 - Math.exp(-(drop > this.dropFov ? 6 : 2.5) * dt));
+    if (k.load > 1.3 && k.sp > 25 && s.phase === 'race') this.shake = Math.max(this.shake, (k.load - 1.3) * 0.9);
+    this.look.set(ix + Math.sin(this.camH) * 12 * intro, iy + 0.9 + this.pitchY, iz + Math.cos(this.camH) * 12 * intro);
     cam.lookAt(this.look);
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt * 2.2);
@@ -181,7 +198,7 @@ export class ChaseCam {
       cam.position.z += Math.cos(t * 47) * sk;
     }
     // a slightly narrower lens than before (baseFov - 6), widening with speed and boost
-    this.setFov(this.baseFov - 6 + Math.max(0, k.sp) * 0.15 + this.fovKick * 6, dt);
+    this.setFov(this.baseFov - 6 + Math.max(0, k.sp) * 0.15 + this.fovKick * 6 + this.dropFov, dt);
     this.focus.set(ix, iy, iz);
   }
 }

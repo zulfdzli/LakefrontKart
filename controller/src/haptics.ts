@@ -18,6 +18,9 @@ const PATTERNS: Record<HapticKind | 'tap', number[]> = {
   go: [120, 70, 180],
   lap: [30, 70, 30, 70, 30],
   warn: [60, 50, 60, 50, 60, 50, 60],
+  splash: [22, 30, 14],
+  hazard: [70, 60, 70],
+  zone: [20, 40, 20, 40, 60],
 };
 
 let label: HTMLLabelElement | null = null;

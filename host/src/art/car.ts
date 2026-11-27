@@ -129,7 +129,7 @@ export function mergePbr(groups: { parts: Part[]; fin: Finish }[]): THREE.Buffer
 }
 
 /** Split car parts by their colour into finishes. */
-function byFinish(parts: Part[], paint: number): { parts: Part[]; fin: Finish }[] {
+function byFinish(parts: Part[], paint: number, metal = RIM): { parts: Part[]; fin: Finish }[] {
   const g = {
     paint: [] as Part[],
     pearl: [] as Part[],
@@ -143,7 +143,7 @@ function byFinish(parts: Part[], paint: number): { parts: Part[]; fin: Finish }[
     const c = p.color;
     if (c === BLACK || c === CARBON) g.carbon.push(p);
     else if (c === TYRE) g.rubber.push(p);
-    else if (c === RIM || c === NUT) g.metal.push(p);
+    else if (c === RIM || c === NUT || c === metal) g.metal.push(p);
     else if (c === LIGHT) g.light.push(p);
     else if (c === SIDEWALL) g.band.push(p);
     else if (c === NEON) g.pearl.push(p);
@@ -297,7 +297,7 @@ export function buildCar(paint: number): THREE.BufferGeometry {
 }
 
 /** A slick tyre with a coloured sidewall band, a dark rim and a centre lock nut, axis along x. */
-function wheel(r: number, w: number, band: number): Part[] {
+function wheel(r: number, w: number, band: number, rim = RIM): Part[] {
   const R = Math.PI / 2;
   // sidewall lettering: short yellow arcs around the band (both sides)
   const marks: Part[] = [];
@@ -314,7 +314,7 @@ function wheel(r: number, w: number, band: number): Part[] {
     P_(cyl(r * 0.86, r * 0.86, w + 0.012, 22), TYRE, 0, 0, 0, 0, 0, R),
     ...marks,
     P_(cyl(r * 0.8, r * 0.8, w + 0.016, 22), band, 0, 0, 0, 0, 0, R),
-    P_(cyl(r * 0.74, r * 0.74, w + 0.02, 18), RIM, 0, 0, 0, 0, 0, R),
+    P_(cyl(r * 0.74, r * 0.74, w + 0.02, 18), rim, 0, 0, 0, 0, 0, R),
     // five spokes and the centre lock nut, machined metal
     ...[0, 1, 2, 3, 4].map((k) => P_(box(w + 0.03, r * 0.1, r * 1.3), NUT, 0, 0, 0, (k * Math.PI * 2) / 5, 0, 0)),
     P_(cyl(r * 0.2, r * 0.2, w + 0.06, 6), NUT, 0, 0, 0, 0, 0, R),
@@ -322,17 +322,17 @@ function wheel(r: number, w: number, band: number): Part[] {
 }
 
 /** Rear axle (both wheels, one mesh, spun together) and one front wheel (steered on its pivot). */
-export function buildWheels(): { rear: THREE.BufferGeometry; front: THREE.BufferGeometry } {
+export function buildWheels(rim = RIM): { rear: THREE.BufferGeometry; front: THREE.BufferGeometry } {
   const band = SIDEWALL;
   const rear: Part[] = [];
   for (const s of [1, -1])
-    for (const p of wheel(CAR.rearR, 0.86, band)) {
+    for (const p of wheel(CAR.rearR, 0.86, band, rim)) {
       p.m.premultiply(new THREE.Matrix4().makeTranslation(s * CAR.rearX, 0, 0));
       rear.push(p);
     }
   return {
-    rear: mergePbr(byFinish(rear, -1)),
-    front: mergePbr(byFinish(wheel(CAR.frontR, 0.7, band), -1)),
+    rear: mergePbr(byFinish(rear, -1, rim)),
+    front: mergePbr(byFinish(wheel(CAR.frontR, 0.7, band, rim), -1, rim)),
   };
 }
 
@@ -340,7 +340,11 @@ export function buildWheels(): { rear: THREE.BufferGeometry; front: THREE.Buffer
  * Livery decals for one car (number and fictional sponsors), drawn into one small atlas and placed on the body
  * as slightly raised quads: one extra draw call per car.
  */
-export function buildDecals(number: number, _paint: number): { geo: THREE.BufferGeometry; map: THREE.CanvasTexture } {
+export function buildDecals(
+  number: number,
+  _paint: number,
+  sticker = '',
+): { geo: THREE.BufferGeometry; map: THREE.CanvasTexture } {
   const S = 512;
   const c = document.createElement('canvas');
   c.width = c.height = S;
@@ -371,6 +375,11 @@ export function buildDecals(number: number, _paint: number): { geo: THREE.Buffer
   g.fillStyle = '#1c1d22';
   g.font = 'italic 800 48px "Barlow Condensed", sans-serif';
   g.fillText('TK', 192, 66);
+  // D72 sticker cell (256, 0, 128, 128): the player's garage sticker
+  if (sticker) {
+    g.font = '96px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+    g.fillText(sticker, 320, 72);
+  }
   // sponsor rows (y = 128 + k * 64): white text on clear, except row 4 (on white panels: paint-coloured text)
   const rows = ['VELOCITY', 'HYPER', 'KARTRONIX', 'RAPID TYRES', 'AGILE', 'NEXTGEN'];
   rows.forEach((t, k) => {
@@ -391,7 +400,8 @@ export function buildDecals(number: number, _paint: number): { geo: THREE.Buffer
 
   type Cell = [number, number, number, number];
   const NUM: Cell = [0, 0, 128, 128],
-    BADGE: Cell = [128, 0, 128, 128];
+    BADGE: Cell = [128, 0, 128, 128],
+    STICKER: Cell = [256, 0, 128, 128];
   const row = (k: number): Cell => [0, 128 + k * 64, 512, 64];
   const pos: number[] = [],
     uv: number[] = [];
@@ -431,8 +441,11 @@ export function buildDecals(number: number, _paint: number): { geo: THREE.Buffer
   // number: engine cover top (read from behind), both sides of the engine cover, and the nose top
   quad(NUM, 0.42, 0.42, [0, 0.92, -1.7], [UP + 0.27, Math.PI, 0]);
   quad(NUM, 0.34, 0.34, [0, 0.705, 1.55], [UP + 0.12, 0, 0]);
-  // badge on the nose
-  quad(BADGE, 0.2, 0.2, [0, 0.58, 2.25], [UP + 0.12, 0, 0]);
+  // badge on the nose, or the garage sticker there and on both sides of the shark fin (D72)
+  if (sticker) {
+    quad(STICKER, 0.24, 0.24, [0, 0.585, 2.25], [UP + 0.12, 0, 0]);
+    for (const s of [1, -1]) quad(STICKER, 0.28, 0.28, [s * 0.045, 1.07, -1.38], [0, (s * Math.PI) / 2, 0]);
+  } else quad(BADGE, 0.2, 0.2, [0, 0.58, 2.25], [UP + 0.12, 0, 0]);
   // sponsors, placed as the reference: VELOCITY big on the sidepods, AGILE high on the engine cover,
   // HYPER low on the sidepod, KARTRONIX on the rear wing, RAPID TYRES on the front wing, NEXTGEN on the beam wing
   for (const s of [1, -1]) {

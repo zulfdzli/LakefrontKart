@@ -4,6 +4,9 @@
  */
 
 export const MAX_PLAYERS = 5;
+/** D82: AI karts the leader can add, and the most karts a race holds (players and AI). */
+export const AI_MAX = 7;
+export const MAX_KARTS = 8;
 export const ROOM_CODE_LENGTH = 4;
 /** Room code alphabet: uppercase, without I, O, 0 and 1 so codes are easy to read and type. */
 export const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -13,11 +16,15 @@ export const NAME_MAX_LENGTH = 10;
 export const SLOT_COLORS = ['#e53935', '#1e88e5', '#fdd835', '#43a047', '#8e24aa'] as const;
 export const AI_COLOR = '#fb8c00';
 
-export type Phase = 'lobby' | 'countdown' | 'race' | 'paused' | 'results';
+/** D68: 'replay' is the highlight reel between the finish and the podium. */
+export type Phase = 'lobby' | 'countdown' | 'race' | 'paused' | 'replay' | 'results';
 export type SteeringScheme = 'buttons' | 'slider';
 export type ItemFire = 'forward' | 'back' | null;
-export type GameMode = 'single' | 'gp';
+/** D69: 'brawl' is Bumper Brawl (an arena, last kart standing). */
+export type GameMode = 'single' | 'gp' | 'brawl';
 import type { Difficulty } from './ai';
+import type { WeatherSetting } from './weather';
+import type { KartSetup } from './garage';
 /** Phone feedback kinds. 'cd' (n = 3, 2, 1) and 'go' drive the phone's countdown; 'lap' (n = lap) the FINAL LAP alert. */
 export const HAPTIC_KINDS = [
   'hit',
@@ -31,6 +38,12 @@ export const HAPTIC_KINDS = [
   'go',
   'lap',
   'warn',
+  /** D71: a puddle. */
+  'splash',
+  /** D73: a track event ahead. */
+  'hazard',
+  /** D83: a fun zone done well (n: 0 slalom, 1 jump target, 2 draft tunnel). */
+  'zone',
 ] as const;
 export type HapticKind = (typeof HAPTIC_KINDS)[number];
 export const isHapticKind = (v: unknown): v is HapticKind => (HAPTIC_KINDS as readonly unknown[]).includes(v);
@@ -55,6 +68,8 @@ export interface PlayerInput {
   drift: boolean;
   /** One-shot: set on the message that carries the press, null otherwise. */
   item: ItemFire;
+  /** D74: one-shot signature-move press (only on the message that carries it). */
+  move?: boolean;
   /** Phone clock (ms) when the input was produced, for latency measurement. */
   t: number;
 }
@@ -72,8 +87,18 @@ export interface LeaderConfig {
   gpOrder: string[];
   laps: 1 | 2 | 3;
   aiFill: boolean;
+  /** D82: how many AI karts join (0 to AI_MAX); the race holds at most MAX_KARTS karts in all. */
+  aiCount: number;
   aiDifficulty: Difficulty;
   itemsOn: boolean;
+  /** D71: the sky for every race, or 'random' for a fresh roll per race. */
+  weather: WeatherSetting;
+  /** D73: the tracks' living events (sheep, rockfall, snowball, squall). */
+  events: boolean;
+  /** D74: signature moves. */
+  moves: boolean;
+  /** D83: the tracks' fun zones (slalom gates, jump target, draft tunnel). */
+  zones: boolean;
 }
 
 /* ---------------- server → controller ---------------- */
@@ -95,6 +120,8 @@ export interface LobbyPlayer {
   connected: boolean;
   characterId: string | null;
   isLeader: boolean;
+  /** D72: the kart as styled and tuned in the phone garage. */
+  setup: KartSetup;
 }
 
 export interface LobbyUpdate {
@@ -120,6 +147,11 @@ export interface HudUpdate {
   wrongWay: boolean;
   /** A projectile is closing in (homing orb, Seeker Comet). */
   threat: boolean;
+  /** D69 Bumper Brawl: lives left (absent in a race). */
+  lives?: number;
+  /** D74: the kart's signature move and its meter (0 to 1; full = ready), when moves are on. */
+  move?: string;
+  meter?: number;
 }
 
 /** Grand Prix progress sent with each race's results (D48). */
@@ -193,10 +225,16 @@ export interface ControllerToServer {
   'player:start': () => void;
   'player:rematch': (p: { toLobby: boolean }) => void;
   'player:select': (p: { characterId: string }) => void;
+  /** D72: the phone garage's setup (sent on joining and on every change, lobby only). */
+  'player:garage': (p: KartSetup) => void;
   'player:settings': (p: PlayerSettings) => void;
   'player:leave': () => void;
   /** Any racer can pause or resume the race for everyone (D37). */
   'player:pause': (p: { paused: boolean }) => void;
+  /** D68: any racer can skip the highlight replay. */
+  'player:skip': () => void;
+  /** D82: the leader ends the race mid-way and takes everyone back to the lobby. */
+  'player:lobby': () => void;
   'leader:config': (p: LeaderConfig) => void;
   ping: (t: number, ack: Ack<number>) => void;
   /** The phone reports its measured round-trip time so the host's debug overlay can show it. */
@@ -232,6 +270,7 @@ export interface ServerToHost {
   'player:start': (p: { slot: number }) => void;
   'player:rematch': (p: { slot: number; toLobby: boolean }) => void;
   'player:pause': (p: { slot: number; paused: boolean }) => void;
+  'player:skip': (p: { slot: number }) => void;
   'player:settings': (p: { slot: number; settings: PlayerSettings }) => void;
   'player:latency': (p: { slot: number; rttMs: number }) => void;
   'leader:config': (p: LeaderConfig) => void;
@@ -275,6 +314,7 @@ export function sanitizeInput(v: unknown): PlayerInput | null {
     brake: o.brake,
     drift: o.drift,
     item,
+    ...(o.move === true ? { move: true } : {}),
     t: isNum(o.t) ? o.t : 0,
   };
 }

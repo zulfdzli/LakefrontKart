@@ -3,6 +3,7 @@
  * refines them.
  */
 import { AI_COLOR, SLOT_COLORS } from '@tk/shared';
+import type { WeatherFx } from './weather';
 
 const hex = (s: string): number => parseInt(s.slice(1), 16);
 
@@ -56,6 +57,8 @@ export interface Theme {
   boostPadDark: string;
   /** D45 cinematic look: post-processing fog, flare and grade (host/src/post.ts). */
   look: ThemeLook;
+  /** D71: the weather this theme has been dressed for (absent = plain day). */
+  wx?: WeatherFx;
 }
 
 /** Plain-number version of PostLook, so palettes stay data. */

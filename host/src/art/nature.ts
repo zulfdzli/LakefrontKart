@@ -154,11 +154,19 @@ export function buildNature(T: Track, terrain: TerrainInfo, th: Theme, lite: boo
     g.fillRect(0, 0, 256, 256);
     const tex = keep(new THREE.CanvasTexture(cv));
     tex.colorSpace = THREE.SRGBColorSpace;
-    const tint = new THREE.Color(th.horizon).lerp(new THREE.Color(0xffffff), 0.55);
+    // D71: moonlit clouds at night, grey rain clouds, pale snow clouds
+    const k = th.wx?.kind;
+    const tint = th.wx?.night
+      ? new THREE.Color(0x3b4672)
+      : k === 'rain'
+        ? new THREE.Color(0x949ca8)
+        : k === 'snow'
+          ? new THREE.Color(0xcfd6e2)
+          : new THREE.Color(th.horizon).lerp(new THREE.Color(0xffffff), 0.55);
     const mat = keep(
       new THREE.SpriteMaterial({ map: tex, color: tint, transparent: true, depthWrite: false, fog: false }),
     );
-    const n = th.id === 'canyon' ? 8 : 22;
+    const n = k === 'rain' || k === 'snow' ? 34 : th.id === 'canyon' ? 8 : 22;
     const clouds: { s: THREE.Sprite; a: number; r: number; v: number }[] = [];
     for (let i = 0; i < n; i++) {
       const s = new THREE.Sprite(mat);

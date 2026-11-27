@@ -1,0 +1,17 @@
+{
+  "report": [
+    {
+      "track": "meadows",
+      "weather": "rain",
+      "fps": 60,
+      "p95": 16.7
+    },
+    {
+      "track": "meadows",
+      "weather": "night",
+      "fps": 60,
+      "p95": 16.8
+    }
+  ],
+  "errors": []
+}

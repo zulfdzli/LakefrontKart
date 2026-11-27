@@ -189,6 +189,10 @@ ctrlNs.on('connection', (socket) => {
     if (res === 'ok') broadcastLobby(room);
     else socket.emit('select:error', { reason: res });
   });
+  socket.on('player:garage', (g) => {
+    const pl = me();
+    if (room && pl && rooms.setSetup(room, pl, g)) broadcastLobby(room);
+  });
   socket.on('player:settings', (s) => {
     if (!room || slot < 0 || typeof s !== 'object' || s === null) return;
     const settings: PlayerSettings = {
@@ -223,6 +227,17 @@ ctrlNs.on('connection', (socket) => {
     if (!room || slot < 0 || !me()) return;
     if (room.phase !== 'countdown' && room.phase !== 'race' && room.phase !== 'paused') return;
     toHost()?.emit('player:pause', { slot, paused: p?.paused === true });
+  });
+  socket.on('player:lobby', () => {
+    // D82: only the leader can end a race and take everyone back to the lobby
+    const pl = me();
+    if (!room || !pl || !rooms.isLeader(room, pl)) return;
+    if (!['countdown', 'race', 'paused', 'replay', 'results'].includes(room.phase)) return;
+    toHost()?.emit('player:rematch', { slot, toLobby: true });
+  });
+  socket.on('player:skip', () => {
+    if (!room || slot < 0 || !me() || room.phase !== 'replay') return;
+    toHost()?.emit('player:skip', { slot });
   });
   socket.on('player:leave', () => {
     if (!room || slot < 0) return;
@@ -299,6 +314,17 @@ if (PROD) {
 }
 
 /* ---------------- start ---------------- */
+
+// D79: a second copy of the server (another terminal still running `npm run dev`) cannot take the port: say so
+// plainly instead of a stack trace, so the stale copy gets closed
+httpServer.on('error', (e: NodeJS.ErrnoException) => {
+  if (e.code !== 'EADDRINUSE') throw e;
+  console.error(
+    `\n  ⚠ Port ${PORT} is already in use: another Turbo Karts server is still running (another terminal with` +
+      ` npm run dev?).\n    Close it (Ctrl+C in that window), then start this one again.\n`,
+  );
+  process.exit(1);
+});
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   const base = publicUrl ?? candidates[0]?.url ?? null;

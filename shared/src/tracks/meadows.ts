@@ -4,7 +4,8 @@
  */
 import type { TrackDef, TrackPoint } from './def';
 
-const S = 1.22;
+/** D65: 1.22 to 0.67, a lap about half as long. */
+const S = 0.67;
 const P = (x: number, z: number, h = 0, bank = 0, w?: number): TrackPoint => ({
   x: x * S,
   z: z * S,
@@ -18,8 +19,8 @@ export const MEADOWS_DEF: TrackDef = {
   name: 'Sunny Meadows',
   theme: 'meadows',
   points: [
-    P(-150, -330, 0, 0, 14), // start line
-    P(40, -330, 0, 0, 14),
+    P(-150, -330, 0, 0, 10.5), // start line
+    P(40, -330, 0, 0, 10.5),
     P(140, -306, 0.5, 3), // D64: esses instead of a long straight
     P(240, -352, 1, -3),
     P(340, -318, 1.5),
@@ -56,7 +57,7 @@ export const MEADOWS_DEF: TrackDef = {
     P(-398, -20, 9),
     P(-390, -150, 7),
     P(-350, -280, 4, -6),
-    P(-260, -330, 1, -2, 14),
+    P(-260, -330, 1, -2, 10.5),
   ],
   offroad: 'grass',
   sectors: [
@@ -70,19 +71,19 @@ export const MEADOWS_DEF: TrackDef = {
   // D64 jumps: riverside whoops, a lane kicker after the bridge, a big launch off the lakeside boost pad
   ramps: [
     { at: 0.362, kind: 'whoops', count: 3, gap: 30 },
-    { at: 0.625, kind: 'lane', lat: [1.5, 13] },
+    { at: 0.625, kind: 'lane', lat: [1.5, 9] },
     { at: 0.866, kind: 'launch' },
   ],
   zones: [
-    { from: 0.081, to: 0.133, latMin: -25, latMax: -15.2, surface: 'gravel' },
-    { from: 0.379, to: 0.419, latMin: -25, latMax: -15.2, surface: 'gravel' },
+    { from: 0.081, to: 0.133, latMin: -18, latMax: -11.7, surface: 'gravel' },
+    { from: 0.379, to: 0.419, latMin: -18, latMax: -11.7, surface: 'gravel' },
   ],
-  shortcuts: [{ from: 0.732, to: 0.808, via: [], half: 7.5, surface: 'dirt' }],
+  shortcuts: [{ from: 0.732, to: 0.808, via: [], half: 6, surface: 'dirt' }],
   landmarks: [
-    { kind: 'windmill', at: 0.104, side: -1, dist: 70 },
+    { kind: 'windmill', at: 0.104, side: -1, dist: 45 },
     { kind: 'river', at: 0.596, side: 0, dist: 0 },
-    { kind: 'barn', at: 0.774, side: 1, dist: 60 },
-    { kind: 'lake', at: 0.921, side: 1, dist: 110 },
+    { kind: 'barn', at: 0.774, side: 1, dist: 38 },
+    { kind: 'lake', at: 0.921, side: 1, dist: 70 },
   ],
   music: 'meadows',
 };

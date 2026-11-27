@@ -3,7 +3,7 @@
  * in sync with the simulation, and renders each player's camera into its own scissored rectangle.
  */
 import * as THREE from 'three';
-import type { GameState, Kart } from '@tk/shared';
+import type { GameState, Kart, KartSetup } from '@tk/shared';
 import { createMaterials, type Materials } from './art/materials';
 import { createSky } from './art/sky';
 import { buildTrackWorld, type TrackWorld } from './art/track-builder';
@@ -16,6 +16,10 @@ import { MAX_MOVERS, Post, type Mover, type PostLook, type Tier } from './post';
 import { Ambient, type AmbientKind } from './art/particles';
 import { buildNature, type Nature } from './art/nature';
 import { Celebration } from './art/celebration';
+import { edgeLamps, puddleMesh, weatherTheme } from './art/weather';
+import { HazardFx } from './art/hazards';
+import { MoveFx } from './art/moves-fx';
+import { ZoneFx } from './art/zones';
 import { TRACKS, isTrackId } from '@tk/shared';
 
 /** A viewport in CSS pixels, top-left origin (layout space). */
@@ -70,6 +74,8 @@ export class World {
   effects: Effects | null = null;
   private assets: KartAssetProvider | null = null;
   views: KartView[] = [];
+  /** D72: each player's garage setup, by slot (set before a race is built). */
+  setups = new Map<number, KartSetup>();
   /** Device pixel ratio actually used (adaptive). */
   pixelRatio: number;
   /** D45 cinematic post-processing; ?nopost renders straight to the screen as before. */
@@ -119,6 +125,17 @@ export class World {
   }
 
   private builtTrack: GameState['track'] | null = null;
+  private builtWeather = '';
+  /** D71: what only some weathers add to the track (edge lamps at night, puddles in the rain). */
+  private wxGroup: THREE.Group | null = null;
+  private night = false;
+  /** D73: the race's track event on screen (rebuilt every race). */
+  private hazardFx: HazardFx | null = null;
+  /** D74: decoys, the Night Eyes line, slide and overclock effects (rebuilt every race). */
+  private moveFx: MoveFx | null = null;
+  /** D83: the fun zones (slalom cones, jump target, draft tunnel; rebuilt every race). */
+  zoneFx: ZoneFx | null = null;
+  private theme: Theme = MEADOWS;
 
   /**
    * Build the world for a race. The track (terrain, props, scenery) is only rebuilt when the track changes;
@@ -154,8 +171,9 @@ export class World {
 
   /** Sky, fog and light for a track's theme (phase 8). */
   private applyTheme(th: Theme): void {
-    if (th.id === this.themeId) return;
-    this.themeId = th.id;
+    const key = `${th.id}:${th.wx?.kind ?? 'day'}`;
+    if (key === this.themeId) return;
+    this.themeId = key;
     const s = this.scene;
     (s.background as THREE.Color).setHex(th.horizon);
     (s.fog as THREE.Fog | null)?.color.setHex(th.horizon);
@@ -171,7 +189,7 @@ export class World {
     const scale = this.sky.scale.x;
     // D55: a softer sun everywhere: the disc and its glow at 70%, the haze at 75%, the lens flare at 55%
     const glow = th.sunGlow.map((v) => v * SUN_SOFT.glow) as unknown as Theme['sunGlow'];
-    this.sky = createSky(th.zenith, th.horizon, this.sunDir, glow);
+    this.sky = createSky(th.zenith, th.horizon, this.sunDir, glow, th.wx?.stars ?? 0);
     this.sky.scale.setScalar(scale);
     s.add(this.sky);
     this.makeEnvironment();
@@ -195,10 +213,12 @@ export class World {
   }
 
   build(s: Readonly<GameState>, names: Map<number, string>): void {
-    if (this.builtTrack !== s.track) {
+    if (this.builtTrack !== s.track || this.builtWeather !== s.weather) {
       this.disposeTrack();
       const def = isTrackId(s.track.id) ? TRACKS[s.track.id] : null;
-      const th = THEMES[def?.theme ?? 'meadows'];
+      // D71: the theme dressed for the race's weather
+      const th = weatherTheme(THEMES[def?.theme ?? 'meadows'], s.weather);
+      this.theme = th;
       this.applyTheme(th);
       const M = (this.M = createMaterials());
       // D47: the car paint reflects the sky at its own strength (scene.environment would override it)
@@ -214,21 +234,93 @@ export class World {
       this.scene.add(this.scenery.group);
       this.effects = new Effects(M);
       this.effects.theme = th.id;
+      this.effects.rain = s.weather === 'rain';
+      this.effects.setPuffLight(th.wx?.night ? 0x4a5677 : 0xffffff);
       this.scene.add(this.effects.group);
       // D45 air: leaves and pollen, desert dust, falling snow, or mist motes
       const kind: AmbientKind =
-        th.id === 'frosty' ? 'snow' : th.id === 'canyon' ? 'dust' : th.id === 'tropical' ? 'mist' : 'leaves';
+        s.weather === 'rain'
+          ? 'rain'
+          : th.id === 'frosty' || s.weather === 'snow'
+            ? 'snow'
+            : th.id === 'canyon'
+              ? 'dust'
+              : th.id === 'tropical'
+                ? 'mist'
+                : 'leaves';
+      // D71: a snowstorm has twice the flakes; rain is fewer, longer streaks
+      const count =
+        kind === 'snow'
+          ? s.weather === 'snow'
+            ? 18000
+            : 9000
+          : kind === 'rain'
+            ? 9000
+            : kind === 'dust'
+              ? 2600
+              : 3200;
       const light = new THREE.Color(th.hemiSky)
         .multiplyScalar(0.55)
         .add(new THREE.Color(th.sunLight).multiplyScalar(0.6));
-      this.ambient = new Ambient(s.track, kind, kind === 'snow' ? 9000 : kind === 'dust' ? 2600 : 3200, light);
+      this.ambient = new Ambient(s.track, kind, count, light);
       this.scene.add(this.ambient.points);
+      this.wxGroup = new THREE.Group();
+      this.night = !!th.wx?.night;
+      if (this.night) this.wxGroup.add(edgeLamps(s.track));
+      if (s.puddles.length) this.wxGroup.add(puddleMesh(s.track, s.puddles, this.envRT?.texture ?? null));
+      this.scene.add(this.wxGroup);
       this.assets = new ProceduralKartProvider();
       this.builtTrack = s.track;
+      this.builtWeather = s.weather;
     }
     this.disposeKarts();
-    this.views = s.karts.map((k) => new KartView(k.id, k.ch, k.slot, names.get(k.id) ?? k.name, this.assets!, this.M!));
-    for (const v of this.views) this.scene.add(v.root);
+    if (this.hazardFx) {
+      this.scene.remove(this.hazardFx.group);
+      this.hazardFx.dispose();
+      this.hazardFx = null;
+    }
+    if (this.moveFx) {
+      this.scene.remove(this.moveFx.group);
+      this.moveFx.dispose();
+      this.moveFx = null;
+    }
+    if (this.zoneFx) {
+      this.scene.remove(this.zoneFx.group);
+      this.zoneFx.dispose();
+      this.zoneFx = null;
+    }
+    if (s.zones) {
+      this.zoneFx = new ZoneFx(s.track, s.zones, this.theme);
+      this.scene.add(this.zoneFx.group);
+    }
+    if (s.moves) {
+      this.moveFx = new MoveFx(s);
+      this.scene.add(this.moveFx.group);
+    }
+    if (s.hazards.length) {
+      const th = this.theme;
+      const light = new THREE.Color(th.hemiSky)
+        .multiplyScalar(0.55)
+        .add(new THREE.Color(th.sunLight).multiplyScalar(0.6));
+      this.hazardFx = new HazardFx(s.track, s.hazards, th, light, s.weather, this.envRT?.texture ?? null);
+      this.scene.add(this.hazardFx.group);
+    }
+    this.views = s.karts.map(
+      (k) =>
+        new KartView(
+          k.id,
+          k.ch,
+          k.slot,
+          names.get(k.id) ?? k.name,
+          this.assets!,
+          this.M!,
+          k.slot !== null ? this.setups.get(k.slot) : undefined,
+        ),
+    );
+    for (const v of this.views) {
+      this.scene.add(v.root);
+      v.setLights(this.night);
+    }
     this.trackWorld!.resetBoxes();
     this.effects!.clearAll(this.views);
     this.syncKarts(s, 1, 0, []);
@@ -256,6 +348,7 @@ export class World {
     const racing = s.phase !== 'grid';
     for (const k of s.karts) {
       const v = this.views[k.id]!;
+      v.root.visible = !k.out;
       v.interpolate(k, alpha);
       v.animate(k, dt, s.time);
       if (racing && dt > 0 && this.effects) {
@@ -345,6 +438,9 @@ export class World {
     this.effects?.update(dt);
     this.ambient?.update(s.time);
     this.nature?.update(s.time);
+    this.hazardFx?.update(s, dt, this.effects);
+    this.zoneFx?.update(s, dt);
+    this.moveFx?.update(dt, this.views, this.effects);
   }
 
   /** Point the shadow camera at what a view is looking at. */
@@ -521,7 +617,26 @@ export class World {
   }
 
   /** Render each view into its rectangle. Three.js viewports use a bottom-left origin, so flip y. */
+  private warming = false;
+  /**
+   * D67: compile a freshly built scene's shaders in the background (parallel shader compile where the driver has
+   * it) before drawing it, so the first frame of a new track does not stall. Drawing pauses meanwhile; the host
+   * calls this behind its veil.
+   */
+  async warm(camera: THREE.Camera): Promise<void> {
+    if (this.warming) return;
+    this.warming = true;
+    try {
+      await this.renderer.compileAsync(this.scene, camera);
+    } catch {
+      /* the first frame compiles them instead */
+    } finally {
+      this.warming = false;
+    }
+  }
+
   render(list: ViewToRender[], focus: (v: ViewToRender) => THREE.Vector3): void {
+    if (this.warming) return;
     const r = this.renderer,
       H = window.innerHeight,
       st = this.frameStats;
@@ -635,6 +750,16 @@ export class World {
   private disposeTrack(): void {
     this.disposeKarts();
     this.builtTrack = null;
+    if (this.wxGroup) {
+      this.scene.remove(this.wxGroup);
+      this.wxGroup.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.geometry.dispose();
+        (m.material as THREE.Material).dispose();
+      });
+      this.wxGroup = null;
+    }
     if (this.trackWorld) {
       this.scene.remove(this.trackWorld.group);
       this.trackWorld.dispose();

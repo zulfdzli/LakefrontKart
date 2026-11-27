@@ -10,11 +10,13 @@ import type { TrackDef, TrackPoint } from './def';
 
 /** Metres per map pixel: chosen so the Normal AI laps in about 2 minutes (section 11.1); D64: 0.98 to 1.01, since
  * the new jumps' landing boosts made it the quickest track. */
-const S = 1.01;
+const S = 0.66; // D65: 1.01 to 0.66, a lap about half as long
 const OX = 945,
   OY = 576;
 /** Road half-width (m): a little narrower than the other tracks, so the tight Turns 1, 2 and 9 keep their shape. */
-const W = 12;
+const W = 8.5; // D65: was 12
+/** D65: the hairpins (Turns 1, 2, 9, 14 and 15) stay wider, so the tight corners keep room to turn. */
+const HAIRPIN_W = 9;
 const P = (x: number, y: number, h = 0, bank = 0, w = W): TrackPoint => ({
   x: (x - OX) * S,
   z: (y - OY) * S,
@@ -29,19 +31,19 @@ export const SEPANG_DEF: TrackDef = {
   theme: 'tropical',
   points: [
     // main straight, heading west from the start line
-    P(945, 576, 2, 0, 13.5),
-    P(800, 587, 2, 0, 13.5),
+    P(945, 576, 2, 0, 9.5),
+    P(800, 587, 2, 0, 9.5),
     P(650, 597, 2),
     P(565, 604, 2),
     // Turn 1: tight right-hand hairpin
-    P(528, 604, 2, -4),
-    P(507, 588, 2, -6),
-    P(506, 562, 2, -6),
-    P(527, 545, 2, -4),
+    P(528, 604, 2, -4, HAIRPIN_W),
+    P(507, 588, 2, -6, HAIRPIN_W),
+    P(506, 562, 2, -6, HAIRPIN_W),
+    P(527, 545, 2, -4, HAIRPIN_W),
     // Turn 2: sharp left onto the climb
-    P(560, 548, 2.5),
-    P(588, 559, 3, 4),
-    P(604, 541, 3.5, 6),
+    P(560, 548, 2.5, HAIRPIN_W),
+    P(588, 559, 3, 4, HAIRPIN_W),
+    P(604, 541, 3.5, 6, HAIRPIN_W),
     P(596, 513, 4, 4),
     P(572, 482, 5),
     // up the left side into the long left Turn 3
@@ -82,9 +84,9 @@ export const SEPANG_DEF: TrackDef = {
     P(1170, 684, 1),
     P(1080, 696, 1, 4),
     // Turn 9: left hairpin
-    P(1050, 704, 1, 7),
-    P(1038, 725, 1, 7),
-    P(1058, 743, 1, 5),
+    P(1050, 704, 1, 7, HAIRPIN_W),
+    P(1038, 725, 1, 7, HAIRPIN_W),
+    P(1058, 743, 1, 5, HAIRPIN_W),
     P(1095, 756, 1, 3),
     // Turn 10 and the long right Turn 11
     P(1128, 778, 1, -3),
@@ -102,20 +104,20 @@ export const SEPANG_DEF: TrackDef = {
     P(720, 842, 1, 3),
     P(660, 840, 1, -2),
     // Turn 14: right hairpin onto the back straight
-    P(615, 808, 1, -6),
-    P(600, 768, 1, -7),
-    P(625, 738, 1, -5),
+    P(615, 808, 1, -6, HAIRPIN_W),
+    P(600, 768, 1, -7, HAIRPIN_W),
+    P(625, 738, 1, -5, HAIRPIN_W),
     // back straight
     P(720, 718, 1.5),
     P(900, 683, 1.5),
     P(1100, 646, 2),
     P(1280, 614, 2),
     // Turn 15: left hairpin onto the main straight
-    P(1340, 603, 2, 5),
-    P(1366, 578, 2, 7),
-    P(1352, 551, 2, 6),
-    P(1320, 545, 2, 3, 13.5),
-    P(1140, 558, 2, 0, 13.5),
+    P(1340, 603, 2, 5, HAIRPIN_W),
+    P(1366, 578, 2, 7, HAIRPIN_W),
+    P(1352, 551, 2, 6, HAIRPIN_W),
+    P(1320, 545, 2, 3, 9.5),
+    P(1140, 558, 2, 0, 9.5),
   ],
   offroad: 'grass',
   sectors: [
@@ -132,13 +134,13 @@ export const SEPANG_DEF: TrackDef = {
     { at: 0.395, kind: 'whoops', count: 3, gap: 28 },
     { at: 0.5, kind: 'table' },
     { at: 0.84, kind: 'launch' },
-    { at: 0.95, kind: 'lane', lat: [-12, -1.5] },
+    { at: 0.95, kind: 'lane', lat: [-8, -1.5] },
   ],
   zones: [],
   shortcuts: [],
   landmarks: [
-    { kind: 'grandstand', at: 0.97, side: 1, dist: 30 },
-    { kind: 'grandstand', at: 0.83, side: -1, dist: 30 },
+    { kind: 'grandstand', at: 0.97, side: 1, dist: 26 },
+    { kind: 'grandstand', at: 0.83, side: -1, dist: 26 },
   ],
   music: 'sepang',
   traced: true,

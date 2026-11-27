@@ -220,6 +220,9 @@ class Pool {
 
 const SKMAX = 900;
 
+/** D81: faces a kart pulls when it is hit. */
+const HIT_EMOTES = ['😵', '💫', '😖', '😤', '😱', '🤕'] as const;
+
 export class Effects {
   readonly group = new THREE.Group();
   private readonly rng = new Rng(0x5eed);
@@ -227,6 +230,12 @@ export class Effects {
   private readonly puffs: SoftPool;
   /** Track theme: decides spray (wet Frosty), blowing dust (Canyon) and kicked-up snow. */
   theme = 'meadows';
+  /** D71: a rainy race: every kart throws a mist of spray off its rear tyres, and puddles splash. */
+  rain = false;
+  /** D71: how the smoke, spray and dust are lit (dim and blue at night). */
+  setPuffLight(hex: number): void {
+    (this.puffs.material.uniforms.uLight!.value as THREE.Color).setHex(hex);
+  }
   private readonly skPos = new Float32Array(SKMAX * 18);
   private readonly skGeo = new THREE.BufferGeometry();
   private skHead = 0;
@@ -533,8 +542,26 @@ export class Effects {
         0.25,
       );
     if (sp > 18 && !k.offroad && k.rescue <= 0) {
-      const wet = this.theme === 'frosty',
-        dusty = this.theme === 'canyon';
+      const rain = this.rain,
+        wet = this.theme === 'frosty' || rain,
+        dusty = this.theme === 'canyon' && !rain;
+      // D71 rain: a thicker, taller rooster tail of spray behind every kart (a drafting kart drives into it)
+      if (rain && this.rng.next() < 0.7)
+        this.puffs.emit(
+          ix + fx * (CAR.rearZ - 1.2) + this.rnd(-0.8, 0.8),
+          iy + 0.6,
+          iz + fz * (CAR.rearZ - 1.2) + this.rnd(-0.8, 0.8),
+          -fx * sp * 0.22 + this.rnd(-1.5, 1.5),
+          this.rnd(1.2, 2.6),
+          -fz * sp * 0.22 + this.rnd(-1.5, 1.5),
+          0xdfe6ee,
+          0.7,
+          1.1,
+          1.2,
+          iy,
+          1,
+          0.16,
+        );
       if ((wet || dusty) && this.rng.next() < (wet ? 0.8 : 0.45))
         for (const s of [-1, 1])
           this.puffs.emit(
@@ -636,6 +663,8 @@ export class Effects {
       case 'hit':
       case 'orbhit':
       case 'bolthit':
+        // D81: the kart that got hit pulls a face
+        if (e.type === 'hit' && v) v.showEmote(HIT_EMOTES[Math.floor(Math.random() * HIT_EMOTES.length)]!);
         if (k && near) {
           this.burst(k.x, k.y + 1.6, k.z, [0xffeb3b, 0xffffff], 22, 7);
           this.puff(k.x, k.y + 1, k.z, 0xeeeeee, 6, 3, 1.6);
@@ -646,8 +675,85 @@ export class Effects {
       case 'orbpop':
         this.puff(e.x!, e.y! + 1, e.z!, 0x80d8ff, 6, 3, 1.6);
         break;
+      case 'guard':
+        // D65: the held item soaks up the hit behind the car
+        if (near) this.burst(e.x!, e.y! + 1, e.z!, [0xffd54f, 0xffffff], 16, 6);
+        break;
       case 'boltbounce':
         this.burst(e.x!, e.y! + 1, e.z!, 0xff7043, 6, 4, 1);
+        break;
+      case 'ko':
+        // D69: knocked out of the brawl: a big burst where the kart was
+        if (k) {
+          this.burst(k.x, k.y + 1.4, k.z, [0xff5252, 0xffd54f, 0xffffff, 0x40c4ff], 46, 11, 1.4);
+          this.burst(k.x, k.y + 0.8, k.z, [0x37474f, 0x90a4ae], 24, 5, 1.6);
+        }
+        break;
+      case 'steal':
+        if (k) this.burst(k.x, k.y + 1.8, k.z, [0xffd54f, 0xfff59d, 0xffffff], 26, 6);
+        break;
+      case 'move':
+        // D74: a signature move fires: a ring of sparks in the kart's colours
+        if (k && near) this.burst(k.x, k.y + 1, k.z, [0xffffff, 0x7ee0ff, 0xffd54f], 18, 6, 1.3);
+        if (k?.ch.id === 'gus' && near) this.burst(k.x, k.y + 0.3, k.z, [0xd7ccc8, 0xffffff], 14, 4, 1.6);
+        break;
+      case 'shoved':
+        if (v) v.showEmote('😠');
+        if (k && near) this.burst(k.x, k.y + 1, k.z, [0xffe082, 0xffffff, 0xff8a65], 20, 7, 1.4);
+        if (v) v.susV += 5;
+        break;
+      case 'decoypop':
+        this.burst(e.x ?? 0, (e.y ?? 0) + 1, e.z ?? 0, [0xc9a6ff, 0xe040fb, 0xffffff], 26, 7, 1.6);
+        break;
+      case 'dodge':
+        if (v) v.showEmote('😎');
+        if (k && near) this.burst(e.x ?? k.x, (e.y ?? k.y) + 1, e.z ?? k.z, [0x9be7ff, 0xffffff], 14, 5, 1.1);
+        break;
+      case 'baa':
+        if (v) v.showEmote('🐑');
+        // D73: a puff of wool
+        if (k && near) this.burst(e.x ?? k.x, (e.y ?? k.y) + 1.2, e.z ?? k.z, [0xffffff, 0xf4f1ea], 12, 4, 1.4);
+        if (v) v.susV += 3;
+        break;
+      case 'zone':
+        // D83: a fun zone done well: a shower of confetti (no emote: the bubble would sit in the middle of the
+        // player's own view, and the HUD already says it)
+        if (k && near) this.burst(k.x, k.y + 1.6, k.z, [0xffd54f, 0xff5252, 0x40c4ff, 0x69f0ae, 0xffffff], 28, 7, 1.2);
+        break;
+      case 'cone':
+        if (near) this.burst(e.x ?? 0, (e.y ?? 0) + 0.6, e.z ?? 0, [0xff6d1f, 0xffffff], 8, 4, 0.9);
+        break;
+      case 'rockhit':
+        if (k && near) this.burst(k.x, k.y + 0.8, k.z, [0xbcaaa4, 0x8d6e63, 0xd7ccc8], 16, 6, 1.5);
+        if (v) v.susV += 5;
+        break;
+      case 'squash':
+        if (v) v.showEmote('🥶');
+        if (k) this.burst(k.x, k.y + 1.5, k.z, [0xffffff, 0xeef4ff], 40, 9, 2.2);
+        break;
+      case 'splash':
+        // D71: a sheet of water thrown out both sides
+        if (k && near)
+          for (let i = 0; i < 14; i++) {
+            const sd = i % 2 ? 1 : -1,
+              rx = Math.cos(k.h),
+              rz = -Math.sin(k.h);
+            this.puffs.emit(
+              k.x + rx * sd * 1.6,
+              k.y + 0.3,
+              k.z + rz * sd * 1.6,
+              rx * sd * this.rnd(3, 7) + k.vx * 0.3,
+              this.rnd(2.5, 5),
+              rz * sd * this.rnd(3, 7) + k.vz * 0.3,
+              0xe8f0f8,
+              0.6,
+              0.7,
+              -6,
+              k.y,
+              1,
+              0.32,
+            );
+          }
         break;
       case 'bump':
         if (k && near) this.burst(k.x, k.y + 0.8, k.z, 0xffe082, 6, 4, 0.9);

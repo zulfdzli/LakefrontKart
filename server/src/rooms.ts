@@ -10,8 +10,15 @@ import {
   ROOM_CODE_LENGTH,
   SLOT_COLORS,
   TRACK_IDS,
+  ARENA_IDS,
+  isArenaId,
   cleanName,
   isRoomCode,
+  isWeatherSetting,
+  AI_MAX,
+  cleanSetup,
+  defaultSetup,
+  type KartSetup,
   type JoinErrorReason,
   type JoinOk,
   type LeaderConfig,
@@ -29,6 +36,8 @@ export interface Player {
   connected: boolean;
   socketId: string | null;
   characterId: string;
+  /** D72: the phone garage's setup. */
+  setup: KartSetup;
   /** Join order, for leader succession. */
   joinedAt: number;
   /** When the phone dropped (ms), for the lobby grace period. */
@@ -54,8 +63,13 @@ export const DEFAULT_CONFIG: LeaderConfig = {
   gpOrder: ['meadows', 'canyon', 'frosty', 'sepang'],
   laps: 2,
   aiFill: true,
+  aiCount: 5,
   aiDifficulty: 'normal',
   itemsOn: true,
+  weather: 'random',
+  events: true,
+  zones: true,
+  moves: true,
 };
 
 /** A phone that drops in the lobby keeps its slot this long before it is freed. */
@@ -172,6 +186,7 @@ export class RoomManager {
       connected: true,
       socketId,
       characterId: this.freeCharacter(room, slot + 1),
+      setup: defaultSetup(slot),
       joinedAt: room.joinCounter++,
       droppedAt: null,
     };
@@ -201,6 +216,15 @@ export class RoomManager {
     return hit;
   }
 
+  /** D72: a garage setup from the phone (lobby only; anything invalid is ignored). */
+  setSetup(room: Room, p: Player, raw: unknown): boolean {
+    if (room.phase !== 'lobby') return false;
+    const s = cleanSetup(raw);
+    if (!s) return false;
+    p.setup = s;
+    return true;
+  }
+
   remove(room: Room, slot: number): Player | null {
     const p = room.slots[slot] ?? null;
     room.slots[slot] = null;
@@ -224,8 +248,11 @@ export class RoomManager {
     const o = raw as Partial<LeaderConfig>;
     const tracks: readonly string[] = TRACK_IDS;
     const c = room.config;
-    if (o.mode === 'single' || o.mode === 'gp') c.mode = o.mode;
-    if (typeof o.trackId === 'string' && tracks.includes(o.trackId)) c.trackId = o.trackId;
+    if (o.mode === 'single' || o.mode === 'gp' || o.mode === 'brawl') c.mode = o.mode;
+    if (typeof o.trackId === 'string' && (tracks.includes(o.trackId) || isArenaId(o.trackId))) c.trackId = o.trackId;
+    // D69: a brawl is fought in an arena, a race on a track
+    if (c.mode === 'brawl' && !isArenaId(c.trackId)) c.trackId = ARENA_IDS[0]!;
+    if (c.mode !== 'brawl' && isArenaId(c.trackId)) c.trackId = TRACK_IDS[0]!;
     if (
       Array.isArray(o.gpOrder) &&
       o.gpOrder.length >= 1 &&
@@ -236,15 +263,29 @@ export class RoomManager {
       c.gpOrder = [...o.gpOrder];
     if (o.laps === 1 || o.laps === 2 || o.laps === 3) c.laps = o.laps;
     if (typeof o.aiFill === 'boolean') c.aiFill = o.aiFill;
+    // D82: a number of AI karts (none means no AI fill)
+    if (typeof o.aiCount === 'number' && Number.isInteger(o.aiCount) && o.aiCount >= 0 && o.aiCount <= AI_MAX) {
+      c.aiCount = o.aiCount;
+      c.aiFill = o.aiCount > 0;
+    }
     if (o.aiDifficulty === 'easy' || o.aiDifficulty === 'normal' || o.aiDifficulty === 'hard')
       c.aiDifficulty = o.aiDifficulty;
     if (typeof o.itemsOn === 'boolean') c.itemsOn = o.itemsOn;
+    if (isWeatherSetting(o.weather)) c.weather = o.weather;
+    if (typeof o.events === 'boolean') c.events = o.events;
+    if (typeof o.zones === 'boolean') c.zones = o.zones;
+    if (typeof o.moves === 'boolean') c.moves = o.moves;
     return true;
   }
 
   setPhase(room: Room, phase: unknown): boolean {
     const ok =
-      phase === 'lobby' || phase === 'countdown' || phase === 'race' || phase === 'paused' || phase === 'results';
+      phase === 'lobby' ||
+      phase === 'countdown' ||
+      phase === 'race' ||
+      phase === 'paused' ||
+      phase === 'replay' ||
+      phase === 'results';
     if (!ok || room.phase === phase) return false;
     room.phase = phase;
     if (phase === 'lobby') {
@@ -267,6 +308,7 @@ export class RoomManager {
       connected: p.connected,
       characterId: p.characterId,
       isLeader: p === leader,
+      setup: p.setup,
     }));
     return { room: room.code, players, config: room.config };
   }

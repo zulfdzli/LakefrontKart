@@ -112,7 +112,7 @@ describe('handling (section 12.2)', () => {
     expect(Math.hypot(b.vx, b.vz)).toBeGreaterThan(1);
   });
 
-  it('releasing a drift right as a tier is reached earns the perfect bonus', () => {
+  it('releasing a drift gives no boost any more (D76), even right as a tier is reached', () => {
     const { g, s } = race();
     const k = s.humans[0]!;
     k.drifting = true;
@@ -122,8 +122,9 @@ describe('handling (section 12.2)', () => {
     g.setInput(0, { steer: 1, throttle: true, brake: false, drift: false });
     g.step(STEP);
     const ev = g.drainEvents();
-    expect(ev.some((e) => e.type === 'driftperfect')).toBe(true);
-    expect(k.boost).toBeGreaterThan(1.2);
+    expect(ev.some((e) => e.type === 'driftperfect' || e.type === 'boost')).toBe(false);
+    expect(k.boost).toBe(0);
+    expect(k.drifting).toBe(false);
   });
 });
 

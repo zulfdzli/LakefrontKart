@@ -5,12 +5,26 @@
  * open-face helmets.
  */
 import * as THREE from 'three';
-import { DEFAULT_HANDLING, RESCUE_T, SPIN_T, clamp, wrapA, type Character, type Kart } from '@tk/shared';
+import {
+  DEFAULT_HANDLING,
+  LIVERIES,
+  PAINTS,
+  RIMS,
+  RESCUE_T,
+  SPIN_T,
+  STICKER_GLYPH,
+  clamp,
+  wrapA,
+  type Character,
+  type Kart,
+  type KartSetup,
+} from '@tk/shared';
 import { P_, merge, jitter, canvasTex, box, cyl, ico, cone, octa, hexStr, type Part } from './geo';
 import { INK, DARK, WHITE, METAL, kartPaint } from './palette';
 import { CAR, CAR_SCALE, FIN, buildCar, buildDecals, buildWheels, helmetParts, mergePbr } from './car';
 import { holoShell } from './holo';
-import type { Materials } from './materials';
+import { carMaterial, type Materials } from './materials';
+import { kartLights } from './weather';
 
 const HOP_T = DEFAULT_HANDLING.driftHop;
 
@@ -34,6 +48,8 @@ export interface KartAssetProvider {
   readonly wheelRear: THREE.BufferGeometry;
   readonly wheelFront: THREE.BufferGeometry;
   readonly drone: THREE.BufferGeometry;
+  /** D72: both wheel sets with the garage's rim colour (cached per colour). */
+  wheelsFor(rim: number): { rear: THREE.BufferGeometry; front: THREE.BufferGeometry };
   dispose(): void;
 }
 
@@ -194,6 +210,15 @@ export class ProceduralKartProvider implements KartAssetProvider {
     P_(ico(0.18, 0), 0xff5252, 0, 0.35, 0.7),
   ]);
   private readonly built: THREE.BufferGeometry[] = [];
+  private readonly rimSets = new Map<number, { rear: THREE.BufferGeometry; front: THREE.BufferGeometry }>();
+  wheelsFor(rim: number): { rear: THREE.BufferGeometry; front: THREE.BufferGeometry } {
+    let w = this.rimSets.get(rim);
+    if (!w) {
+      w = buildWheels(rim);
+      this.rimSets.set(rim, w);
+    }
+    return w;
+  }
 
   build(ch: Character, paint: number): KartModel {
     // D38/D44: no cartoon outline hulls (they would also swell the thin wings)
@@ -210,6 +235,10 @@ export class ProceduralKartProvider implements KartAssetProvider {
 
   dispose(): void {
     for (const g of this.built) g.dispose();
+    for (const w of this.rimSets.values()) {
+      w.rear.dispose();
+      w.front.dispose();
+    }
     this.wheelRear.dispose();
     this.wheelFront.dispose();
     this.drone.dispose();
@@ -228,6 +257,9 @@ export class GltfKartProvider implements KartAssetProvider {
   }
   get drone(): THREE.BufferGeometry {
     return this.fallback.drone;
+  }
+  wheelsFor(rim: number): { rear: THREE.BufferGeometry; front: THREE.BufferGeometry } {
+    return this.fallback.wheelsFor(rim);
   }
   build(ch: Character, paint: number): KartModel {
     return this.fallback.build(ch, paint);
@@ -325,6 +357,35 @@ function nameTag(name: string, color: number): THREE.Sprite {
 
 /* ---------------- kart view ---------------- */
 
+/** D81: emote textures, one canvas per glyph (shared by every kart). */
+const emoteTex = new Map<string, THREE.CanvasTexture>();
+function emoteTexture(glyph: string): THREE.CanvasTexture {
+  let t = emoteTex.get(glyph);
+  if (!t) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d')!;
+    // a white speech bubble with the emoji in it
+    g.fillStyle = 'rgba(255,255,255,0.95)';
+    g.beginPath();
+    g.arc(64, 58, 52, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.moveTo(52, 104);
+    g.lineTo(64, 124);
+    g.lineTo(76, 104);
+    g.fill();
+    g.font = '72px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(glyph, 64, 62);
+    t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    emoteTex.set(glyph, t);
+  }
+  return t;
+}
+
 export class KartView {
   readonly root = new THREE.Group();
   readonly body = new THREE.Group();
@@ -371,15 +432,27 @@ export class KartView {
     displayName: string,
     assets: KartAssetProvider,
     M: Materials,
+    /** D72: the player's garage setup (paint, livery, number, sticker, rims); none for AI karts. */
+    setup?: KartSetup,
   ) {
     const S = sharedFx();
-    this.paint = kartPaint(slot);
+    const hx = (c: string): number => parseInt(c.slice(1), 16);
+    // the body in the garage paint; the name tag and life orbs keep the player's slot colour
+    this.paint = setup ? hx(PAINTS[setup.paint]!) : kartPaint(slot);
+    const ident = kartPaint(slot);
+    if (setup) {
+      this.ownMat = carMaterial(LIVERIES.indexOf(setup.livery), hx(PAINTS[setup.accent]!));
+      this.ownMat.envMap = M.car.envMap;
+    }
+    const wheels = setup
+      ? assets.wheelsFor(hx(RIMS[setup.rims]!))
+      : { rear: assets.wheelRear, front: assets.wheelFront };
     const model = assets.build(ch, this.paint);
     this.root.rotation.order = 'YXZ';
     this.root.scale.setScalar(CAR_SCALE);
     this.body.rotation.order = 'YXZ';
     this.root.add(this.body);
-    const chassis = new THREE.Mesh(model.chassis, M.car);
+    const chassis = new THREE.Mesh(model.chassis, this.ownMat ?? M.car);
     chassis.castShadow = true;
     this.body.add(chassis);
     if (model.chassisOutline) this.body.add(new THREE.Mesh(model.chassisOutline, M.line));
@@ -391,7 +464,7 @@ export class KartView {
     hm.castShadow = true;
     this.head.add(hm);
     if (model.headOutline) this.head.add(new THREE.Mesh(model.headOutline, M.line));
-    this.rear = new THREE.Mesh(assets.wheelRear, M.car);
+    this.rear = new THREE.Mesh(wheels.rear, M.car);
     this.rear.position.set(0, CAR.rearR, CAR.rearZ);
     this.rear.castShadow = true;
     this.body.add(this.rear);
@@ -399,7 +472,7 @@ export class KartView {
       const p = new THREE.Group();
       p.position.set(x, CAR.frontR, CAR.frontZ);
       this.body.add(p);
-      const w = new THREE.Mesh(assets.wheelFront, M.car);
+      const w = new THREE.Mesh(wheels.front, M.car);
       w.castShadow = true;
       p.add(w);
       this.pivots.push(p);
@@ -459,8 +532,8 @@ export class KartView {
     this.shadow.scale.set(0.95, 1, 1.35);
     this.root.add(this.shadow);
     // livery decals: number and fictional sponsors (one atlas per car)
-    const number = slot !== null ? slot + 1 : 10 + kartId;
-    const dec = buildDecals(number, this.paint);
+    const number = setup ? setup.num : slot !== null ? slot + 1 : 10 + kartId;
+    const dec = buildDecals(number, this.paint, setup ? STICKER_GLYPH[setup.sticker] : '');
     this.decalMat = new THREE.MeshPhysicalMaterial({
       map: dec.map,
       roughness: 0.3,
@@ -478,9 +551,52 @@ export class KartView {
     this.drone.visible = false;
     this.drone.position.y = 5;
     this.root.add(this.drone);
-    this.tag = nameTag(displayName, this.paint);
+    this.tag = nameTag(displayName, ident);
     this.root.add(this.tag);
+    // D69 Bumper Brawl: the kart's lives, as glowing orbs circling it
+    const orbMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(ident).multiplyScalar(1.6) });
+    const orbGeo = new THREE.SphereGeometry(0.27, 12, 8);
+    for (let i = 0; i < 3; i++) {
+      const o = new THREE.Mesh(orbGeo, orbMat);
+      const a = (i / 3) * Math.PI * 2;
+      // a halo over the driver: readable from any camera, never in front of the chase camera's lens
+      o.position.set(Math.sin(a) * 1.15, 2.7, Math.cos(a) * 1.15);
+      this.lifeOrbs.add(o);
+    }
+    this.lifeOrbs.visible = false;
+    this.root.add(this.lifeOrbs);
+    this.lifeGeo = orbGeo;
+    this.lifeMat = orbMat;
   }
+  private readonly lifeOrbs = new THREE.Group();
+  private lights: THREE.Group | null = null;
+  /** D81: an emote bubble over the kart (a hit, a dodge), its age and life (s). */
+  private emote: THREE.Sprite | null = null;
+  private emoteT = 0;
+  showEmote(glyph: string): void {
+    if (!this.emote) {
+      this.emote = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
+      this.emote.renderOrder = 6;
+      this.root.add(this.emote);
+    }
+    const m = this.emote.material;
+    m.map = emoteTexture(glyph);
+    m.needsUpdate = true;
+    this.emoteT = 1.9;
+    this.emote.visible = true;
+  }
+  /** D72: a garage car's own body material (its livery and accent). */
+  private ownMat: THREE.MeshPhysicalMaterial | null = null;
+  /** D71: head- and tail-lights and the pool of light ahead (night). Their meshes are shared by every kart. */
+  setLights(on: boolean): void {
+    if (on && !this.lights) {
+      this.lights = kartLights();
+      this.root.add(this.lights);
+    }
+    if (this.lights) this.lights.visible = on && this.body.visible;
+  }
+  private lifeGeo: THREE.BufferGeometry | null = null;
+  private lifeMat: THREE.Material | null = null;
 
   /** Interpolate the transform between the last two simulation steps. */
   interpolate(k: Kart, alpha: number): void {
@@ -499,6 +615,16 @@ export class KartView {
 
   /** Racing pose and procedural animation (prototype syncViews). dt is 0 while paused. */
   animate(k: Kart, dt: number, time: number): void {
+    if (this.emote && this.emoteT > 0) {
+      // pops up with a bounce, bobs, and fades out over its last half second
+      this.emoteT -= dt;
+      const age = 1.9 - this.emoteT;
+      const pop = age < 0.25 ? (age / 0.25) * 1.25 : age < 0.4 ? 1.25 - ((age - 0.25) / 0.15) * 0.25 : 1;
+      this.emote.scale.setScalar(2.1 * pop);
+      this.emote.position.set(0, 4.3 + Math.sin(age * 5) * 0.12 + age * 0.15, 0);
+      this.emote.material.opacity = Math.min(1, this.emoteT / 0.5);
+      this.emote.visible = this.emoteT > 0 && this.body.visible;
+    }
     let lift = 0;
     if (k.rescue > 0) {
       const t = k.rescue / RESCUE_T;
@@ -508,7 +634,9 @@ export class KartView {
     this.root.position.set(this.ix, this.iy + 0.05 + lift, this.iz);
     this.root.rotation.set(0, this.ih, 0);
     const kd = 1 - Math.exp(-10 * dt);
-    this.pitch += (-Math.atan(k.slope) - this.pitch) * kd;
+    // D65: in the air the nose follows the flight path (up off the lip, down into the landing), not the road below
+    const pitchTo = k.air ? -Math.atan2(k.vy, Math.max(10, Math.abs(k.sp))) : -Math.atan(k.slope);
+    this.pitch += (pitchTo - this.pitch) * kd;
     this.root.rotation.x = this.pitch;
     // banked road: roll with it (smoothed)
     this.roll += (-Math.atan(k.bank) - this.roll) * kd;
@@ -568,6 +696,14 @@ export class KartView {
       this.drone.position.y = 5.3;
       this.drone.rotation.y += dt * 3;
     }
+    // D69: life orbs (brawl only; a race has no lives), and a knocked-out kart leaves the arena
+    this.lifeOrbs.visible = k.lives > 0 && !k.out;
+    if (this.lifeOrbs.visible) {
+      this.lifeOrbs.rotation.y += dt * 2.2;
+      this.lifeOrbs.children.forEach((o, i) => (o.visible = i < k.lives));
+      this.lifeOrbs.position.y = Math.sin(time * 3) * 0.12;
+    }
+    if (k.out) this.root.visible = false;
     this.shadow.position.y = 0.06 - lift;
     this.shadow.scale.setScalar(1 - Math.min(0.5, (hop + lift) * 0.1));
   }
@@ -627,13 +763,18 @@ export class KartView {
     this.drone.visible = false;
     this.tag.visible = false;
     this.shadow.position.y = 0.06;
+    if (this.lights) this.lights.visible = false;
   }
 
   dispose(): void {
+    this.lifeGeo?.dispose();
+    this.lifeMat?.dispose();
     this.flameMat.dispose();
     this.decals.geometry.dispose();
     this.decalMat.map?.dispose();
     this.decalMat.dispose();
+    this.ownMat?.dispose();
+    this.emote?.material.dispose();
     (this.shield.material as THREE.Material).dispose();
     const tm = this.tag.material as THREE.SpriteMaterial;
     tm.map?.dispose();

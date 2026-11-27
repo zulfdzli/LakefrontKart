@@ -904,5 +904,717 @@ Track centreline: **1,279 m**. Test driver: AI controller with skill 0.93 (the p
 
 ---
 
+### D65 · Roller-coaster tracks: shorter, narrower, grippier, something every 3 s (2026-11-19, phase 14)
+- **Q**: the user asked for eleven changes:
+  1. the handling is not smooth and hard to control;
+  2. a grippier car;
+  3. tracks that feel too wide and long;
+  4. shorter tracks;
+  5. a roller-coaster road;
+  6. a ramp or slide at least every 4 s;
+  7. something happening at least every 3 s;
+  8. easier overtaking;
+  9. less dull: a roller-coaster ride feeling;
+  10. instant abilities;
+  11. more tactics, so players can plan how to win.
+- **A1, handling and grip** (`DEFAULT_HANDLING`, `game.ts`):
+  - **Turn-rate cap** (`yawGrip` 74): at speed the turn rate is capped at 74 / speed (√handling stat). The car never turns in harder than the tyres hold, so it grips instead of stepping out.
+  - **Tyres**: tyrePeak 52 to 80, tyreFall 0.88 to 0.94. Drifts: driftLatGrip 3.1 to 4.2, driftKick 2.5 to 1.4.
+  - **Measured**: at full lock and 180 km/h the slide peaks at 0.15 rad (9°), against 0.38 rad (22°) with the D64 handling. The car turns about as far and keeps more speed (51 against 48 m/s).
+  - **Steering expo** (`steerExpo` 0.45, phones only): small corrections turn gently; full lock is unchanged.
+  - **Bug fixed, BRAKE during a boost**: the throttle is automatic, and boost acceleration (101 m/s²) beat the brake (48 m/s²), so a boosted kart could not slow for a corner. BRAKE now cancels the throttle. The stuck-kart rescue still counts the throttle input, so it is unchanged.
+  - **Air steering**: in the air the velocity turns with the car, so steering mid-air lines it up for the landing instead of setting up a slide.
+- **A2, shorter and narrower tracks**:
+  - **Scale**: every layout is scaled about 0.55 (S: Meadows 0.67, Canyon 0.69, Frosty 0.71, Sepang 0.66). Lap features are lap fractions, so they keep their places. Landmark distances and lateral zones are scaled by hand.
+  - **Lengths**: 2.75–3.19 km (was 4.9–5.1).
+  - **Road**: half-width 9.5 m (was 13), 10.5 on start straights. Sepang is 8.5 with 9 m hairpins (radius 12.5 m: the inside edge does not fold).
+  - **Run-off**: the 12 m grass run-off is kept. Cutting it to 8 m tripled the AI's wall hits.
+  - **Item rows**: about every 260 m (was 400).
+- **A3, the roller coaster** (new `shared/src/tracks/coaster.ts`, applied in `buildTrackFromDef`):
+  - **Speed estimate**: the planner estimates the race speed along the lap. It is shaped like the Normal AI's corner logic, and its constants are a least-squares fit to the AI's measured speed (laps within 3%).
+  - **Filling the gaps**: it fills every gap over 2.1 s between "big" moments with one of three kinds:
+    - **Crests**: Gaussian hills sized to float a kart at 1.25 g at the expected speed.
+    - **Dips**: drops into a compression of at most 1.45 g. In a corner a dip banks up to 12° into the turn (a valley turn).
+    - **Jumps**: the D64 kinds in rotation.
+  - **Placement rules**:
+    - **Jumps and crests**: only where the run-up, flight and 50 m past the landing stay at pace, because there are no brakes in the air.
+    - **Kept clear**: the grid, the river bridge and shortcut mouths get nothing.
+    - **Dips only**: tunnels and arches take dips only (a dip adds headroom).
+  - **Per lap**: 13–23 dips, 2–5 crests, 4–8 jumps (including the track's own), and 8–14 drift corners.
+  - **Airtime** (`Track.VC`, `Track.airZone`): over a crest, when speed² × the road's vertical curvature exceeds gravity, the kart floats (`float` event). Upward speed is capped at 3.5 m/s. In the air the kart's own height is followed, so the road can drop away under it.
+    - **Where**: floats happen only over the planned crests. Everywhere else the road holds the kart down like a coaster's wheels. Without that rule karts floated about 44 times a lap off every rim at boost speed.
+    - **Landing boost**: a float under 0.3 s gives none.
+  - **Load and banking**:
+    - **Load**: tyre grip follows the vertical load, 0.85–1.5 (heavier in a compression, lighter over a rim). The floor was 0.55 at first, and dip exits into corners threw karts wide.
+    - **Banking**: a banked turn grips up to 1.4 × tan(bank) harder.
+    - **Slopes**: they pull harder (slopeG 9 to 15), so drops feel fast.
+  - **Camera** (`camera.ts`):
+    - **Pitch**: it pitches with the road ahead, tipping down over a crest into a drop and up into a climb.
+    - **Lens**: it widens on fast descents and in the air.
+    - **Shake**: it shakes a little in compressions.
+  - **Kart pose** (`kart.ts`): in the air the nose follows the flight path.
+  - **Sound**: a whoosh over crests, and a soft bump for short touchdowns.
+- **A4, pacing** (`Track.beats`):
+  - **What counts as a moment**: crests, dips, jumps, drift corners (over 40° within 60 m), boost pads, item rows and landmarks (tunnel, arch, bridge, shortcut mouth, the line).
+  - **Ramp or slide**: "a ramp or slide" means a jump, a crest, a dip or a drift corner.
+  - **Measured**: Normal AI, items off, three seeds per track. Time inside a shortcut, a spin or a rescue is not counted, nor is the standing start.
+
+    | Track | Lap | Any moment: 95% / worst | Ramp or slide: 99% / worst |
+    | --- | --- | --- | --- |
+    | Meadows | 63.8 s | 2.33 / 3.10 s | 3.12 / 3.30 s |
+    | Canyon | 63.4 s | 2.72 / 2.97 s | 3.05 / 3.22 s |
+    | Frosty | 60.3 s | 2.52 / 3.07 s | 3.10 / 3.62 s |
+    | Sepang | 70.6 s | 2.40 / 3.28 s | 2.72 / 3.45 s |
+
+  - **Floats**: 27–99 per three races.
+  - **Test**: `tracks.test.ts` asserts the 95th percentile under 3 s for any moment and the 99th under 4 s for a ramp or slide.
+- **A5, overtaking**:
+  - **Slipstream**: the wake reaches 10 samples (30 m, was 5), its lateral tolerance is 3.6 m (was 2.6), it charges 1.8× faster (about 0.55 s), and drafting adds +7 top speed and +10 acceleration (was +4, +6).
+  - **Slingshot**: pulling out of a charged slipstream fires a 0.8 s boost (`slingshot` event, "SLINGSHOT!"). The HUD tag reads "SLIPSTREAM · PULL OUT TO SLINGSHOT".
+  - **Bumps**: kart-to-kart restitution 1.35 to 1.12, so side-by-side contact bounces less.
+- **A6, instant items**:
+  - **No roulette**: itemRoll is 0, so the item is ready the step the box is hit.
+  - **Phone**: ITEM fires on touch-down instead of on release. Holding BRAKE throws it backwards. The swipe-down gesture is gone, because a press that fires at once cannot become a swipe.
+- **A7, tactics**:
+  - **Slingshot**: position behind a rival, then pick the moment to pull out.
+  - **Item guard**: a held Oil Slick, Homing Orb or Bounce Disc trails behind and soaks up one Orb or Disc from behind or the side (`guard` event, "GUARDED!"). The item box shows a GUARD badge, so holding an item is a choice between defence and attack.
+  - **Already there**: lane ramps (one side only), shortcuts, drift tiers and straight landings for a boost. README "Racing tips" lists them.
+- **AI changes** (current handling only; the prototype parity test is untouched):
+  - **Boosting**: a boosting AI still lifts for corners. It used to go flat out, which sent it into Sepang's Turn 15 after the back-straight pad and launch.
+  - **Jumps**: before a jump or crest it judges the corner beyond the landing.
+  - **Drift release**: it lets go of a drift when steering hard against it, or when sliding towards the road edge within 1.5 m of it.
+  - **Corner floor**: 17 to 14 × speedMul, for the tighter hairpins.
+  - **Easy**: corner caution 1.15 to 1.4, because Easy had come within 2% of Normal.
+  - **Stats**: the acceleration stat counts 60% (`statAccel`), as the speed stat already did.
+- **Spec deviations** (to raise at the gate):
+  - **Lap length**: section 11.1's 115–125 s lap is now about 60–71 s, at the user's request. `tracks.test.ts` asserts 55–80 s.
+  - **Road width**: section 11's road width is narrower.
+  - **Swipe**: the swipe-to-throw-back of section 7.2 and 12.3 is removed.
+  - **Prototype track**: the prototype-track lap test's lower bound is 33 × 1.3 / speedMul, about 30 s (was 36 × …). The new grip and slope pull make that hilly track about 5% quicker.
+- **Checked**:
+  - **sim-report**, 10 to 20 races per row:
+    - **Unfinished karts**: none.
+    - **Rescues**: at most 0.3 per race.
+    - **Difficulty gaps**: Easy→Normal 3.9–10.3% and Normal→Hard 5.0–6.9% (all-AI races).
+  - **Character spread** (test driver in a full field): Meadows 0.9–1.2%, Canyon 2.7%, Frosty 1.8%. Sepang measured 4.7–7.6% between runs; the order changes from run to run, so hairpin traffic dominates there. Solo time trials with no traffic spread 1.8–4.2%, and Mochi (handling 5) is quickest, as in D46. **Over the 4% target on Sepang; to raise at the gate.**
+  - **AI wall hits** (3 races × 6 karts × 2 laps): 0 on Meadows, Canyon and Frosty, and 24 on Sepang (D64 baseline: 28). Karts turned round: 3 in 36 on Sepang, at Turn 1 after the main-straight lane ramp, and 0 on the others.
+  - **Tests**: Vitest 79/79, with six new tests in `tests/coaster.test.ts`: instant item, guard against an orb (and a spin without one), slingshot, brake over a boost, full-lock grip against D64, and crest, dip and bank data. Plus the pacing test.
+  - **e2e**: 20/20.
+  - **Static checks**: typecheck, lint, Prettier and the build pass.
+  - **Screenshots**: crests from the run-up and in the air, dips, jumps, the tunnel dip and the slingshot, in `docs/screens/d65-{meadows,canyon,frosty,sepang}/` (`npm run capture -- --beats` shoots the generated crests, dips and jumps). 60 FPS, no console errors.
+
+---
+
+### D66 · Control retest after D65: three fixes (2026-11-19, phase 14)
+- **Q**: the user asked to test the game again, the controls and everything else.
+- **Checked**: typecheck, lint, Prettier, Vitest 80/80 and the build pass; e2e 20/20. A throwaway probe also drove an emulated Pixel 7 and iPhone 15 Pro through a live Meadows race (20/20):
+  - **Inputs**: automatic throttle; the slider's dead zone and curve (full lock at 85%, symmetric); RIGHT turns right on screen.
+  - **Brake**: stops the kart (45 m/s to 0 in 0.8 s, even while boosting), then reverses to −10 m/s.
+  - **Drift**: steer plus DRIFT charges a level, and letting go gives a boost.
+  - **Items**: ITEM fires on touch-down; with BRAKE held it throws backwards.
+  - **Settings**: the + / − sensitivity buttons (×1.2); the cross pad from the pause menu (gentle at 60 ms, about 0.85 at 200 ms, full lock at 450 ms).
+  - **Hidden phone**: held controls are released when the page is hidden.
+  - **Network drop**: the AI takes over after 5.2 s, and the phone regains control 0.8 s after reconnecting.
+  - **Latency**: touch to kart, median 32 ms on this machine.
+  - **Haptics**: they arrive (countdown, GO, boost, item, hits).
+  - **Second phone**: it steers only its own kart.
+  - **Errors**: no page errors.
+- **Fixes**:
+  - **Slingshot after a rescue** (`game.ts`): a slipstream charge survived the rescue drone, so the dropped kart fired a SLINGSHOT from 10 m/s to about 220 km/h in under a second, and its own camera lost it. `startRescue` now clears `draft` and `drafting`. New test in `coaster.test.ts`.
+    - **Tried and dropped**: also requiring slipstream speed for a slingshot. It stops the boost after braking out of a wake, but made every character 3–5 s slower on Canyon, which would undo D65's pacing.
+  - **Road under the river** (Meadows, `track-builder.ts`): the river is a flat sheet 3.2 m under the bridge deck and ran 450 m either side. On the D65 lap (0.67 scale) it crossed the road three more times, in dips up to 6 m below the water, so karts drove under it. The channel now stops 27 m from any other stretch of road (320 m long now).
+    - **Bridge walls**: the stone parapets were built from the first to the last road sample near the river, 507 of 932 samples. They now cover only the crossing (15 samples).
+  - **PAUSE label under the bottom bar** (`controller/src/style.css`): the three small centre buttons had a fixed 72 px minimum. On 8 of 9 phone sizes in landscape, the label sat up to 42 px under the bottom bar (iPhone SE/12/15 Pro, Pixel 5/7, Galaxy S8/S9+, Moto G4). They now size from the deck height. Under 330 px the caption is dropped and the pill is tighter. It now fits on all nine.
+- **Noted, not changed**:
+  - **No brakes in the air**: by design (D64), BRAKE does nothing in the air. With D65's crests the kart is airborne for 7–11.5% of a lap, so 9–15% of 0.8 s presses get under 30 m/s² of braking.
+  - **Blinking after a rescue**: the kart blinks for 1.5 s, which can make it look missing in a still frame.
+  - **Balance after the fix** (20 races): gaps 5.7–10.2% and 4.4–5.8%; character spread Meadows 1.9%, Canyon 2.0%, Frosty 0.8%, Sepang 6.9% (Sepang already raised in D65).
+
+---
+
+### D67 · Slower karts, bigger tracks, more airtime, softer item boxes, faded scene changes (2026-11-20, phase 14)
+- **Q**: the user asked for:
+  - karts 5% slower, so corners are easier to control;
+  - a less shiny item box;
+  - tracks 5% wider and 5% longer, with boundaries, checkpoints and objects still lined up;
+  - more airtime off ramps;
+  - smooth transitions for the main menu, track switches and race finish to podium.
+- **A1, speed**: `speedMul` 1.45 to 1.3775 (×0.95). Everything that scales with it follows: top speeds, boosts, acceleration and the AI's corner braking. The roller-coaster planner's speed model is scaled by 0.95 too (`coaster.ts` PACE), so crests are sized for the slower karts and still float them.
+- **A2, track size** (`growDef` in `def.ts`, applied in `TRACKS`):
+  - **What grows**: each layout ×1.05 in plan, each road half-width ×1.05 (9.5 to 9.98 m; start straights 10.5 to 11.0; Sepang 8.5 to 8.9).
+  - **Kept in place**: lap features are lap fractions, so checkpoints, sectors, pads, ramps and item rows keep their places.
+  - **Grows with the road**: lateral metres (gravel zones, lane-ramp lanes, pad lanes, landmark distances, shortcut corridors and via points).
+  - **Unchanged**: walls stay the same 12 m beyond the road edge, and heights are not scaled.
+  - **Lengths**: 2.89–3.34 km (was 2.75–3.19). `tracks.test.ts` half-width cap 11 to 11.5 m.
+- **A3, airtime**: ramp pops ×1.4 (`RAMP_KINDS`), and the launch adds 2 m/s (was 1.5). The planner's air-time estimates (landing room) are about a quarter longer, so jumps still land on straights at pace. Normal AI, 3 races per track:
+
+  | Track | Mean ramp air | Longest ramp air |
+  | --- | --- | --- |
+  | Meadows | 0.67 → 0.81 s | 1.27 → 1.65 s |
+  | Canyon | 0.63 → 0.71 s | 1.02 → 1.35 s |
+  | Frosty | 0.63 → 0.78 s | 1.15 → 1.68 s |
+  | Sepang | 0.74 → 0.96 s | 1.37 → 1.78 s |
+
+  No rescues.
+- **A4, item box** (`track-builder.ts`, `holo.ts`): the "?" core is drawn at normal brightness (was 2.0, which bloomed white). The shell's rainbow rim is 1.2 (was 2.4), its opacity 0.2 (was 0.26), its roughness 0.35 (was 0.08, less glossy) and its base glow 0.12 (was 0.25).
+- **A5, transitions** (`main.ts`, `session.ts`, `renderer.ts`, `#veil`):
+  - **The veil**: scene changes fade through a dark veil. It sits above the 3D views and HUDs and under the menus, so the lobby, results and pause cards stay while the scene behind them changes.
+  - **Behind the veil**: the swap runs there, then `World.warm` compiles the new scene's shaders with `compileAsync` (drawing paused). The veil lifts once three frames in a row run under 40 ms.
+  - **Covered**:
+    - first load of the main menu;
+    - a track change in the lobby (the preview used to freeze for 0.8–0.9 s, then cut);
+    - starting a race;
+    - finish to podium (was an instant camera cut);
+    - Grand Prix next race and race again;
+    - back to the lobby.
+  - **Double starts**: a `switching` flag blocks them during a fade.
+  - **Automation**: `__tk.race` and autopilot races skip the veil.
+  - **Remaining stall**: a track rebuild still blocks the main thread for up to 0.5–0.75 s (was 0.85–0.97). It now happens while the screen is dark.
+  - **e2e**: the Grand Prix step waits for the next race to start, not just for "in a race".
+- **Laps** (Normal AI, 3 races): Meadows 62.1 → 68.9 s, Canyon 64.7 → 68.0, Frosty 58.5 → 65.3, Sepang 70.8 → 77.7. That is inside `tracks.test.ts`' 55–80 s, with Sepang near the top.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, Vitest 80/80, build, e2e 20/20.
+  - **sim-report** (20 races per row):
+    - **Rescues and finishes**: no rescues, no unfinished karts.
+    - **Difficulty gaps**: 6.1–9.0% and 4.9–6.7%.
+    - **Character spread**: Meadows 3.3%, Canyon 2.5%, Frosty 4.5%, Sepang 3.3%. Frosty is traffic noise: alone on the track the six characters spread 1.4% there (Meadows 2.8%).
+
+---
+
+### D68 · Race highlight replay (2026-11-20, phase 14)
+- **Q**: Part 2 idea 1, accepted by the user: after the race, before the podium, the big screen plays a 15–20 s reel of the best moments in slow motion, with broadcast cameras and captions. Any phone can skip it.
+- **A, recording** (`shared/src/replay.ts`): the simulation is deterministic (seeded RNG, fixed steps, no clocks).
+  - **What is recorded**: `ReplayLog.attach` wraps the live game and records every call into it against the step it came before: phone inputs (only changes and item presses), AI handovers and the countdown start.
+  - **Replaying**: `ReplaySim` runs a fresh game from the same options with the same calls. Re-running a whole race takes well under 0.1 s.
+  - **Test**: `tests/replay.test.ts` shows the replay is exactly the live race after 150 s, with items, a dropped phone and an intro before the countdown.
+- **A, moments**: the session notes these during the race:
+  - **Air**: a ramp jump of 0.75 s or more. Crest floats don't count.
+  - **Hits**: any Orb, Disc or Comet hit.
+  - **Overtakes**: a player gaining a place on a kart within about 24 m, after the first 6 s.
+  - **Photo finish**: two karts within 0.25 s, one of them a player.
+
+  `pickMoments` builds the reel:
+  - **Last clip**: the winner crossing the line closes it, or the photo finish if there is one.
+  - **The rest**: the best other moments fill up to 3 clips, with no overlaps and at most 2 of a kind.
+  - **Scoring**: players' moments, the last lap and bigger air score higher.
+- **A, playback** (`host/src/replay-director.ts`, session stage `replay`):
+  - **Clips**: each clip fast-forwards the re-simulation to its start behind the D67 veil. It then plays about 3.5 s of race time, slowing to 0.3× around the key instant.
+  - **Cameras**:
+    - **Jumps**: a low camera on the run-off beside the flight, looking up.
+    - **Overtakes**: a trackside camera ahead of the pass.
+    - **Finish**: a camera just past the line.
+    - **Hits**: a chase camera behind the kart that is hit.
+    - **Framing**: trackside cameras zoom to keep the kart the same size. They step along the road away from item-box rows, and stay inside tunnel walls and above the ground.
+  - **Look**: letterbox bars and a caption ("1.6 s BIG AIR!", "ZUL PASSES LUNA", "PHOTO FINISH!", "BRUNO WINS!").
+  - **Sound**: landing, jump, hit and finish sounds from the replayed events, which also drive the effects.
+- **A, phones** (protocol and server):
+  - **New phase**: `replay`. The phone shows a REPLAY card with **SKIP ▸**.
+  - **Skip**: `player:skip` is relayed only during the replay. Enter or Space skip on the host too.
+  - **Automation**: autopilot races (`__tk.race`, the capture tools) go straight to the podium.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, Vitest 82/82 (2 new), build.
+  - **e2e**: 21/21. New check: the replay plays, both phones show SKIP, and a non-leader phone skips to the podium. The Grand Prix step skips each replay.
+  - **Live runs**:
+    - **Meadows**: three jumps.
+    - **Canyon**: two jumps and a photo finish.
+    - **Frosty**: jumps and the winner's finish, skipped from the phone at 6 s.
+    - **Length**: reels of 20–21.5 s.
+    - **Frame times**: 16.7 ms median, 99th percentile 16.8 ms; the fast-forwards happen behind the fade.
+    - **Errors**: none.
+  - **Framing fixes from the screenshots**: cameras moved out of the tall grass onto the run-off, clear of item boxes, and past the start gantry posts.
+
+---
+
+### D69 · Bumper Brawl battle mode (2026-11-20, phase 14)
+- **Q**: Part 2 idea 2, accepted by the user: a battle mode next to racing. Arenas, 3 lives each, hits and boosted rams cost lives, last kart standing, sudden death, AI, HUD and phones.
+- **A, arenas** (`shared/src/tracks/arenas.ts`): three short, very wide rings around a central island, built as ordinary TrackDefs so the race physics, walls and renderer work unchanged:
+  - **The arenas**: Meadow Fairground, Canyon Bowl and Frozen Lake, 380–420 m round, three-lobed with a gentle swell, each with 2 kickers, 2 boost pads and 4 item rows.
+  - **Floor**: a 34 m road with the walls 4 m past the kerbs (new `TrackDef.wallGap`), so the whole floor is drivable and bounded like a bumper-car rink.
+  - **Why no run-off**: the first version had the tracks' 12 m run-off. Karts fought in it, slowly, and their snow spray whited out the views.
+  - **Lists**: `TrackId` includes them; `TRACK_IDS` stays the four race tracks (Grand Prix, track tests), and `ARENA_IDS` lists the arenas.
+- **A, rules** (`game.ts`, `mode: 'brawl'`):
+  - **Start**: karts spread evenly round the ring, every other one facing the other way.
+  - **Lives**: `BRAWL_LIVES` 3. Every spin-out costs one, and the last knocks the kart out (`ko`): it is frozen, hidden, skipped by collisions, items and targeting, and marked finished.
+  - **Rams**: a boosting kart that rams one that is not knocks off a life and takes it (`steal`, up to 3).
+  - **Credit**: hits are credited to whoever landed them (`Kart.hits`).
+  - **Sudden death**: at `BRAWL_SUDDEN` 90 s every kart drops to one life.
+  - **Round end**: one kart left, every player out, or `BRAWL_LIMIT` 150 s. Ranking: still in, by lives, then hits landed; then the knocked-out karts, the last one out best.
+  - **Ring rules**: no laps, gates, wrong-way or off-road rescues (only a stuck kart calls the drone). Orbs fire relative to the way the kart faces.
+  - **Items**: arena boxes come back after 2.5 s and hold fighting items only (`brawlItem`: orb, disc, oil, turbo, shield).
+- **A, AI** (`shared/src/brawl-ai.ts`):
+  - **Hunting**: hunts the nearest rival (favouring one on its last life). It goes round the ring the short way, then aims at where the target will be, and keeps off the walls.
+  - **Items**: fires orbs and discs in line, oils a chaser, saves turbos to ram with, and shields when something is incoming.
+  - **Difficulty**: sets aim wobble and how quickly it switches targets.
+- **A, host and phones**:
+  - **On the karts**: each kart carries its lives as a halo of orbs in its colour.
+  - **Big screen**: the HUD lap pill and the standings show hearts. A knocked-out player's view follows the brawl leader. Messages: "N LIVES LEFT", "X IS OUT!", "STOLE A LIFE!", "SUDDEN DEATH!".
+  - **Banners**: the finish banner reads KNOCKED OUT or LAST ONE STANDING.
+  - **Title and results**: "Bumper Brawl · 3 lives · last kart standing" on the title card; results show hearts or "OUT time".
+  - **Highlight reel**: knockouts are moments (score 16, chase camera). The winner's line-crossing clip is skipped.
+  - **Settings**: the leader's phone has a Brawl mode that lists only the arenas and hides laps, and the phone HUD shows hearts. The server accepts `mode: 'brawl'` and keeps a brawl in an arena and a race on a track.
+- **Bug fixed**: START pressed while the lobby preview was still fading to a newly picked track was dropped (D67's `switching` guard). Starts now queue behind the fade.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build. Vitest 86/86, with 4 new in `tests/brawl.test.ts`: lives and knockouts, ram steals, sudden death and round end, and AI rounds in every arena.
+  - **e2e 22/22**: new check: Brawl on the phone, arenas only, hearts on the phone, a winner still standing.
+  - **Headless rounds**, 6 per arena and difficulty, a test driver plus 5 AI:
+    - **Length**: 43–94 s (up to 150).
+    - **Per round**: 2.5–4 knockouts, 3–6 ram steals, about 20 items and under 1 rescue.
+    - **AI movement**: on a wall about 7% of the time, averaging 66–70 km/h.
+  - **Live rounds** (two phones, Frozen Lake and Canyon Bowl): 16.7 ms frames, no errors, replay and podium after.
+  - **Race mode**: unchanged (Meadows Normal AI lap 68.9 s, as in D67).
+
+---
+
+### D70 · A slightly narrower road (2026-11-20, phase 14)
+- **Q**: after seeing the car-to-road screenshots, the user asked for the road to be slightly narrower.
+- **A**: the road is 7% narrower in every mode. `growDef(def, s, ws)` now scales the layout (s 1.05, unchanged) and the road width (ws 1.05 × 0.93) separately.
+  - **Road widths**: race tracks 19.9 to 18.6 m (5.4 to 5.0 car widths; the car is 7.0 × 3.7 m), Sepang 17.9 to 16.6 m (4.8 to 4.5), and arenas 34 to 31.6 m (`HALF` 17 to 15.8).
+  - **What moves with the road edge**: gravel zones, lane-ramp lanes and pad lanes. Walls stay the same distance beyond the edge, and lap lengths are unchanged.
+  - **AI tune**: Hard corner caution 0.78 to 0.76. On the narrower Sepang, the all-AI Normal→Hard gap had fallen to 2.95% (target 3%).
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, Vitest 86/86, build.
+  - **sim-report** (20 races per row):
+    - **Difficulty gaps**: Easy→Normal 5.9–9.2%, Normal→Hard 4.9–5.9%.
+    - **Rescues and finishes**: at most 0.35 rescues per race, no unfinished karts.
+    - **Normal AI laps**: 65.7–77.4 s.
+  - **Screenshots**: car-to-road comparison sheets in `docs/screens/ratio/`.
+
+---
+
+### D71 · Weather and time of day (2026-11-20, phase 14)
+- **Q**: fun idea 7, accepted: each race gets a sky, chosen in the lobby or rolled at random.
+- **A**: a new **Sky** setting on the leader's phone: Random (default), Day, Sunset, Night, Rain, Snow.
+  - **Rolling**: `rollWeather(setting, track, seed)` in `shared/src/weather.ts`. Random rolls from the race seed (odds Day 3, the rest 2 each), so each Grand Prix race gets its own sky, and the replay agrees with the race. Snow is allowed only on the frosty themes (Frosty Peaks, Frozen Lake). A fixed Snow elsewhere gives Rain, and the phone summary says so. The title card shows the forecast. Automation races are Day unless asked otherwise.
+  - **Grip**: rain 0.95, snow 0.975. This scales the lateral grip, the slip-angle cap and the yaw cap. The AI's corner caution is divided by the same factor, so it brakes a little earlier.
+  - **Puddles** (rain only): 6–12 per track and 4 per arena, at fixed spots per track (`puddlesFor`, seeded by the track id). They sit on the road and stay clear of the start, jumps, crests, pads and item rows. Entering one above 12 m/s gives 0.45 s of wet tyres (grip × 0.72) and a sideways nudge (up to 1.8 m/s, side fixed per kart and puddle, so replays stay exact). It fires a `splash` event: a water burst, a hiss, a small camera jolt and a phone buzz (new haptic `splash`).
+  - **Look** (`host/src/art/weather.ts`, `weatherTheme`):
+    - **How each weather is built**: it varies the track's theme (sky, sun, hemisphere light, post-processing fog and grade). Day is each theme's own look, except Frosty, whose own look is already a sunset, so it gets a bright noon and keeps its look for Sunset.
+    - **Night**: stars in the sky shader and moonlight. Each kart gets head- and tail-lights and a beam of light on the road (shared meshes; an additive decal, not real lights). Glowing kerbs, edge lamps every 9 m (one instanced mesh), dimmed clouds and smoke.
+    - **Rain**: overcast with no sun disc. A wet, glossy road (a `uWet` term in the road shader), shiny kerbs, rain streaks (a streak mode in the ambient particles), grey clouds, spray behind every kart, and the puddles drawn as mirror-smooth water draped over the road where the sim has them.
+    - **Snow**: a white-out sky, twice the flakes, and a denser haze.
+  - **Rebuilds**: the world rebuilds when the track or the weather changes (behind the veil), and the lobby preview follows a fixed sky.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build. Vitest 92/92, with 5 new in `tests/weather.test.ts` and 1 in `tests/rooms.test.ts`:
+    - the weather roll and its rules;
+    - puddles on the road and clear of jumps;
+    - a puddle splashes, wets the tyres and nudges the kart;
+    - AI rain races on all 4 tracks finish, within 6% of the dry lap;
+    - a rainy race replays exactly;
+    - the server keeps only a known sky.
+  - **e2e 24/24**, with 2 new checks:
+    - Night picked on the phone turns the host preview to night;
+    - a Random-sky Grand Prix rolls each race's weather.
+  - **sim-report** (20 races per row):
+    - **Rain, Normal AI lap and change from dry**: Meadows 69.5 s (+1.2%), Canyon 67.8 s (+0.7%), Frosty 66.5 s (+1.2%), Sepang 79.7 s (+3.0%).
+    - **Snow on Frosty**: 66.2 s (+0.8%).
+    - **Gaps and finishes**: Easy→Normal 5.6–8.4%, Normal→Hard 5.2–8.1%, no unfinished karts, at most 0.05 rescues per race.
+  - **Character spread**: under 4% everywhere. Sepang showed 7.3% at 20 races, which is traffic noise: at 40 races it is 2.4% in the rain and 3.0% in the dry. This also answers the open "Sepang spread over 4%" item.
+  - **Screenshots and frame rate**: every weather on all 4 tracks and 2 arenas in `docs/screens/d71/`, all 58–60 fps at 1280 × 720 with one view.
+
+---
+
+### D72 · Phone garage: style and tune your kart (2026-11-20, phase 14)
+- **Q**: fun idea 9, accepted, and the user asked for handling and speed to be customisable too.
+- **A**: a **🎨 Garage** screen on the phone's waiting screen.
+  - **Style** (`shared/src/garage.ts`):
+    - paint and accent from 12 colours (no orange, which stays the AI's colour, D11);
+    - 6 liveries: the neon chevrons, stripes, flames, checker, camo and pinstripe;
+    - a race number (0–99);
+    - a sticker (star, bolt, skull, heart, crown or paw) on the nose and both sides of the shark fin;
+    - 5 rim colours.
+    - **Identity**: the name tag, HUD and life orbs keep the player's slot colour, so players stay easy to tell apart.
+  - **Tuning, and why it is a trade-off**: the user asked for speed and handling to be customisable. Free stat boosts would let one setup simply win, which goes against fair races (multiplayer comes first) and the 4% character balance (D46). So tuning moves up to 2 of the character's own stat points between top speed, acceleration and handling: each stat −2 to +2, adding up to 0, applied as a tuned copy of the character (`tunedCharacter`) through the same stat maths as the characters. One point is about 1% top speed, 7% acceleration or 6% turning.
+  - **Network**:
+    - `player:garage` goes from the phone on every change (only while the tune adds up) and on joining or rejoining (the phone keeps the setup in localStorage).
+    - The server validates with `cleanSetup` (lobby only) and puts it in `LobbyPlayer.setup`; a new player gets `defaultSetup(slot)`.
+    - The host passes the tune into the race (`HumanSpec.tune`) and the look into `KartView`.
+  - **Look on the host**:
+    - **Body**: a garage car gets its own body material (`carMaterial(livery, accent)`), which shares the one compiled car shader.
+    - **Rims**: wheel sets are cached per rim colour.
+    - **Decals**: the number and sticker are drawn into the car's decal atlas.
+    - **Lobby preview**: the big screen's lobby now has every player's kart on the grid (still one orbit view) and rebuilds just the karts when someone changes theirs.
+  - **Phone preview**: `controller/src/garage-view.ts` builds the kart with the host's own code (`KartView`, materials) in a small three.js view you can drag. It loads only when the garage opens (about 155 kB gzipped once); the driving controller stays 10 kB gzipped.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build. Vitest 97/97, with 5 new in `tests/garage.test.ts`:
+    - default setups;
+    - validation (range, adds up to 0, known values);
+    - tuning on a copy that the kart drives with;
+    - no extreme tune more than 4% off the standard kart;
+    - the server takes a setup in the lobby only.
+  - **e2e 26/26**, with 2 new checks:
+    - styling and a speed-for-handling tune on the phone, where Done stays locked until the tune adds up and the host gets it;
+    - the tune is on the kart in the race.
+  - **`tools/tune-report.ts`** (4 characters × 8 seeds × 2 laps per row, test driver):
+    - **Every tune is within ±2.2% of standard** on every track. Spread per track: Meadows 1.6%, Canyon 2.8%, Frosty 2.4%, Sepang 3.7%, all under the 4% target.
+    - **The best tune depends on the track**: speed on Canyon, handling on Sepang.
+  - **Screenshots**: phone garage and 4-way split screens of the liveries in `docs/screens/d72/` and `docs/screens/latest/`.
+
+---
+
+### D73 · Living tracks: one signature event per track (2026-11-20, phase 14)
+- **Q**: fun idea 10, accepted: each track gets one event that lands once or twice a race, telegraphed a few seconds ahead.
+- **A**: `shared/src/hazards.ts`, part of the deterministic sim.
+  - **Events**:
+    - **Sunny Meadows, sheep**: 6 sheep amble across a bend at 1.6–2.4 m/s. Touching one is a soft bump: speed ×0.55, a nudge, no spin, and a 0.7 s cooldown.
+    - **Dusty Canyon, rockfall**: rubble over one half of a straight (±15 m). Driving in costs a hard stop (×0.4), drags the kart and shoves it out to the open half. It clears when the leader comes round again.
+    - **Frosty Peaks, giant snowball**: radius 3.4 m, rolling at 10 m/s from the slope on one side, hopping both walls. It spins out anything it touches (a shield pops instead).
+    - **Sepang, monsoon squall**: a 420 m stretch soaked for a lap, with grip ×0.94 and its own puddles on a dry day.
+  - **Timing**:
+    - **Plan**: one event on a 1-lap race and two on longer ones. Rocks and the squall last a lap, so they come once, before the last lap. The plan is drawn from its own RNG seeded from the race seed, so the race's other draws and every old seed are unchanged.
+    - **Spot**: fixed per track, 30–85% round the lap, with 130 m of run-up and the spot itself clear of crests and jumps (no braking in the air). Sheep pick a moderate bend; the others pick the straightest road.
+    - **Trigger**: when the leader is 250–340 m before the spot. A 2.5–4 s warning follows, during which the flock grazes at the roadside, the ball teeters on the slope, pebbles trickle down or the clouds gather. Then it lands as the leader arrives.
+  - **AI**: whether an AI kart sees an event coming is fixed per kart and event: Easy 45%, Normal 75%, Hard always (players on autopilot always do). Those that see it:
+    - take the open half past the rubble;
+    - pick the lane furthest from where each sheep will be on arrival;
+    - brake to stop short of the snowball's path until it has rolled past (never stopping inside the path);
+    - corner more carefully in the squall.
+  - **Big screen** (`host/src/art/hazards.ts`): low-poly sheep that walk, graze and wobble when bumped; boulders that drop in with dust; a faceted, slightly blue snowball with a snow trail; dark clouds, rain and puddles for the squall.
+  - **Warnings and feedback**: players with the spot ahead get a warning ("⚠ ROCKFALL · KEEP LEFT ◀", "⚠ GIANT SNOWBALL FROM THE LEFT ◀"), a two-tone horn and a phone buzz and toast (new haptic `hazard`). There are sounds and effects for a bleat, a rock hit, being flattened and the squall's thunder.
+  - **Setting**: the leader's **Track events** switch, on by default and hidden in Bumper Brawl. Automation races stay without events unless asked.
+- **Bugs found while building it**:
+  - **Lap count**: the trigger first counted laps from the grid (karts start on lap 0 behind the line), so every event fired 2 s after GO.
+  - **Snowball, airborne**: the AI could not brake for it because the run-up had a crest.
+  - **Snowball, stopping short**: the AI stopped in the ball's path instead of short of it.
+  - **Rubble**: it only slowed karts, because the tyres cancelled the sideways shove.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build. Vitest 107/107, with 10 new in `tests/hazards.test.ts`:
+    - the plan and the off switch;
+    - spots;
+    - the race RNG untouched;
+    - warning before landing;
+    - each event's effect and clearing;
+    - all-AI races finish with Hard caught less than Easy;
+    - exact replays.
+  - **e2e 27/27**: new check: the phone switch reaches the host, and the race has its event.
+  - **Headless all-AI races** (6 seeds × 2 laps per row, karts caught per race, Easy / Normal / Hard):
+    - **Caught**: sheep 6.7 / 3.7 / 1.3, rocks 5.0 / 1.3 / 1.3, snowball 1.3 / 1.8 / 0.0.
+    - **Race time and finishes**: race time +0.3–1.5%, no rescues, no unfinished karts.
+  - **sim-report with events** (Normal AI lap, against D70 without):
+    - **Laps**: Meadows 68.8 s, Canyon 67.7 s, Frosty 66.7 s, Sepang 78.7 s.
+    - **Gaps and finishes**: Easy→Normal 7.3–8.1%, Normal→Hard 4.5–7.5%, no unfinished karts, at most 0.05 rescues.
+    - **Character spread**: 1.1–2.8%. Sepang read 6.4% at 20 races and 2.8% at 40 (traffic noise, as in D71).
+  - **Screenshots**: `docs/screens/d73/` has every track's warning and the event as the player arrives.
+
+---
+
+### D74 · Signature moves (2026-11-20, phase 14)
+- **Q**: fun idea 11, accepted: one move of its own per character, charged by driving well rather than item boxes.
+- **A**: `shared/src/moves.ts`, part of the deterministic sim.
+  - **Moves**:
+    - **Bruno, Shoulder Charge**: a 0.45 s boost, and the nearest kart level and beside him (within 4.5 m along, 1.2–7.5 m to the side) is shoved 10 m/s sideways, loses 20% speed and its drift. A shield pops instead.
+    - **Pip, Belly Slide**: a 1.1 s boost, and oil does not spin him for 2.2 s.
+    - **Zed, Overclock**: drift charge ×2 for 6 s.
+    - **Mochi, Mirage**: a 0.5 s boost, and a decoy left for 7 s. An Orb after her goes for the decoy while it is ahead of the orb; a Disc that touches it, or a Seeker Comet striking her, is spent on it. The boost was added so the move counts in races without items.
+    - **Gus, Hop**: a jump at 11 m/s up (about 0.7 s of air), which clears oil, rubble and sheep. The usual landing boost applies.
+    - **Luna, Night Eyes**: 6 s of grip ×1.05 (first tried at 1.07, which made her quickest on three tracks), the first Orb or Disc dodged, and the best line shown on the road ahead.
+  - **Meter**: per second, 0.026 drifting, 0.055 in the air, 0.04 in a slipstream, and 0.0035 always. It fills in about a lap of good driving; a first try at 0.034 / 0.07 / 0.05 / 0.0045 filled it in 40–50 s. It doesn't fill while spinning or being rescued.
+  - **Input**: MOVE is a one-shot like ITEM: `PlayerInput.move` → `sanitizeInput` → `Game.setInput({ move })`, recorded for replays. Keyboard: Q or C.
+  - **AI**: an AI kart uses its move once it has held a full meter for its patience (Easy 6 s, Normal 2 s, Hard 0 s; players on autopilot 0 s), and when the moment suits the move:
+    - **Shove**: a kart beside it.
+    - **Slide**: oil ahead, or a straight.
+    - **Overclock**: a corner coming up.
+    - **Mirage**: something incoming.
+    - **Hop**: oil, rubble or sheep ahead, or a straight for the landing boost.
+    - **Night Eyes**: something incoming, or a twisty stretch.
+  - **Setting**: the leader's **Moves** switch, on by default; it works in Bumper Brawl too. In the sim, moves are off unless asked for (`GameOptions.moves`), so every older seed and test runs as before. Automation races stay without moves unless asked.
+- **Look and feel**:
+  - **Phone**: a MOVE bar under ITEM and DRIFT. The meter fills it; full, it glows in the player's colour, buzzes once and shows the move's name; a tap fires it. It takes the place of the "hold BRAKE + ITEM" hint.
+  - **Big screen**:
+    - a meter under each player's item box, with the move's icon bobbing when ready;
+    - the move's name called out, a whoosh, and "SHOVED!" / "GOT THEM!" / "THE MIRAGE TOOK IT!" / "DODGED!";
+    - bursts for each move; icy trails while sliding and sparks while overclocked;
+    - a holographic copy of Mochi's car as the decoy;
+    - a dashed cyan line along the racing line ahead of Luna, drawn without depth (a vision, not paint) and from 12 m ahead, so never over her own car.
+  - **Highlight reel**: a new `move` moment (score 9) for a shove, a decoy taking a hit, or a dodge, followed by the chase camera and captioned with the move.
+- **Bug found while building it**: the first version of Night Eyes did not show. It read the track position from a custom vertex attribute that arrived as zero, and the line was culled one-sided. It is now a 130 m ribbon rebuilt each frame from the kart forward, with the distance in the standard `uv`.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build. Vitest 118/118, with 11 new in `tests/moves.test.ts`:
+    - charging;
+    - a full meter needed;
+    - the off switch;
+    - each character's move doing its job (shove, slide over oil, double drift charge, decoy taking an orb, hop over oil, dodge);
+    - phone input sanitising;
+    - all-AI races finishing with all six moves used and replaying exactly.
+  - **e2e 28/28**: new check: the phone's MOVE bar lights up when full, and a tap fires the move on the host.
+  - **sim-report with moves** (30 races per row; Frosty and Sepang re-run at 40 after the rebalance):
+    - **Character spread**: Meadows 1.1%, Canyon 1.5%, Frosty 2.2%, Sepang 2.3% (target ≤ 4%).
+    - **Gaps and finishes**: Easy→Normal 6.4–9.2%, Normal→Hard 4.9–7.5%, no unfinished karts, at most 0.1 rescues per race.
+  - **Screenshots**: each move in a 2-player race in `docs/screens/d74/`, and the phone's MOVE bar ready in `docs/screens/latest/phone-move-ready.png`.
+
+---
+
+### D75 · Slower karts and a new soundtrack (2026-11-20, phase 14)
+- **Q**: the user asked for the karts to be slightly slower, the game's sound replaced, different music in the main menu, and the race music lower so the engine can be heard.
+- **A**:
+  - **Speed**: `speedMul` 1.3775 to 1.3224 (4% slower). The coaster plan (`PACE`, which shapes crests and jumps from a speed estimate) is kept as it was. Re-planning it for the new speed moved crests and stretched Canyon's longest gap between big moments to 4.4 s, past the user's 4 s rule (D65). The old plan keeps every pacing check and still floats karts over crests, and the tracks, puddles and event spots stay exactly where they were.
+  - **Music**: both pieces are original and made in WebAudio, replacing the old step-sequencer loop.
+    - **Main menu, "Sunday Garage"**: a laid-back lo-fi groove at 92 BPM with swing. Electric-piano Fmaj7–Em7–Dm7–Cmaj7, a walking bass, soft kick and rim, and a bell melody that thins out in the second half of its 8-bar loop.
+    - **Race, "Turbo Rush"**: synthwave at 146 BPM, also under the podium. Four-on-the-floor drums, a rolling 8th-note bass, a 16th arpeggio, a pad and a lead hook over Am–F–C–G, with a breakdown and a lift an octave up across 16 bars. It still speeds up 10% on the final lap.
+    - A piece starts from its first bar when the mood changes.
+  - **Mix**:
+    - **Music level**: menu 0.75 (measured about −28 dB), race 0.2 (was 0.5, 8 dB down), podium 0.42.
+    - **Engine**: gain 0.045 to 0.08 (5 dB up), so it is about 13 dB stronger against the race music than before. The engine itself is still the original kart engine the user asked for back in D64.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build, Vitest 118/118. The lap-length band was widened to 55–85 s because Sepang's Normal lap is now about 82 s; that adds to the open lap-length item.
+  - **sim-report** (20 races per row):
+    - **Normal AI laps**: Meadows 71.1 s, Canyon 69.7 s, Frosty 68.0 s, Sepang 80.3 s (+3.5–3.7%).
+    - **Gaps and finishes**: Easy→Normal 5.4–9.2%, Normal→Hard 5.4–6.6%, no unfinished karts.
+    - **Character spread**: 0.7–3.1%; Sepang 1.9% at 40 races (6.1% at 20, the known noise).
+  - **Recordings**: `tools/audio-clip.ts` taps everything the page sends to the speakers and records the lobby (21 s) and a race (25 s) to `docs/screens/d75/`. Menu about −28 dB RMS, race about −24 dB RMS, no clipping, no page errors.
+
+---
+
+### D76 · No boosts: no boost pads, no Turbo items, no drift or stunt boosts (2026-11-20, phase 14)
+- **Q**: the user asked to remove the boost on the track and the boost ability. Asked which abilities, they chose the drift and stunt boosts and the Turbo item (signature moves stay).
+- **A**: a new `Handling.boosts` switch, off in `DEFAULT_HANDLING` and on in `PROTOTYPE_HANDLING`, so the parity test is unchanged.
+  - **What is gone**:
+    - **Boost pads**: removed from every race track and arena (`noPads` in `tracks/index.ts`); the art follows the data.
+    - **Driving boosts**: a drift's release boost (and the perfect-release bonus), the landing boost after a jump, and the rocket start. With no rocket start, the early-press stall and the countdown hint go too.
+    - **Slingshot**: `slingshot` 0. The slipstream's tow (more top speed in a wake) stays.
+    - **Items**: Turbo, Triple Turbo and the Rocket Booster leave the item roll. The Rocket is a boost item too, so it went with the Turbo; this is flagged to the user. Their share goes to the other items in proportion. Arena boxes swap the turbos for orbs and discs.
+  - **What stays**: the signature moves (D74), including the short boosts in Shoulder Charge, Belly Slide and Mirage. In Bumper Brawl those are now the only way to land a life-stealing boosted ram.
+    - **Gus's Hop**: still a jump, but it no longer earns a landing boost.
+    - **Zed's Overclock**: it doubled his drift charge, which now earns nothing, so it was reworked to 6 s of 60% more acceleration (top speed unchanged).
+  - **Knock-on changes**:
+    - **Laps**: about 15% longer (Normal AI: Meadows 81 s, Canyon 82 s, Frosty 80 s, Sepang 94 s).
+    - **Crests**: re-shaped for that pace (`PACE` 0.95 to 0.81), so they float karts again and the big moments come at least every 4 s (D65). Plans at 0.72–0.79 and 0.83–0.86 each failed a pacing check; 0.81 passes all four tracks.
+    - **Garage tuning**: handling became the dominant stat (a tune trading it away lost up to 4.4%; per-track spread 4.6–5.9%). Tuning points are now weighted per stat (`TUNE_WEIGHT`: speed 1, accel 1.5, handling 0.4).
+    - **HUD**: the drift charge bars and the "BOOST!" in landing call-outs show only when boosts are on.
+    - **Lap-length test**: the band is now 60–100 s.
+    - **AI shortcuts**: the AI rarely takes shortcuts now (it took them only with a boost to spend); players still can.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build. Vitest 118/118: the slingshot, rocket-start, perfect-drift and landing tests now check for no boost, the layout test checks that no pads remain, and the Overclock test checks the extra pull.
+  - **e2e 28/28**.
+  - **sim-report** (20 races per row): Easy→Normal 8.2–11.6%, Normal→Hard 6.3–7.9%, character spread 1.5–1.9%, no unfinished karts.
+  - **`tools/tune-report.ts`**: every tune within 0.9–2.0% per track.
+
+---
+
+### D77 · A wider road, gentler hills, slightly slower karts (2026-11-20, phase 14)
+- **Q**: the user asked for a wider track, a less aggressive roller coaster, and karts just a little slower.
+- **A**:
+  - **Road**: 10% wider (`ROAD` 1.05 × 0.93 × 1.1). Race tracks go from 18.6 to 20.4 m (5.0 to 5.5 car widths), and Sepang from 16.6 to 18.3 m (4.5 to 4.9). Gravel zones, lane ramps and item rows follow the edge (D70's `growDef` width factor). The arenas are unchanged.
+  - **Hills**:
+    - **Crests**: sized to lift at 1.05 g at the estimated speed (was 1.25 g) and at most 4 m high (was 6).
+    - **Dips**: compress at 1.1 g (was 1.45 g), at most 4 m deep (was 6).
+    - **Result**: the crests no longer throw karts off the road; at most they lighten them. The D65 test that required crests to float a kart is relaxed for this; its pacing checks (something every 3 s, a big moment every 4 s) still hold.
+  - **Speed**: `speedMul` 1.3224 to 1.2827 (3% slower top speed). The coaster plan is re-checked at that pace: `PACE` stays 0.81 (0.76 and 0.786 each failed a pacing check).
+  - **Net effect on laps**: about +1% (Normal AI: Meadows 82.0 s, Canyon 82.2 s, Frosty 80.1 s, Sepang 95.0 s). The wider road and gentler hills give back most of what the slower karts lose; top speed is 3% lower.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build, Vitest 118/118.
+  - **e2e 28/28**.
+  - **sim-report** (20 races per row): Easy→Normal 8.2–11.6%, Normal→Hard 6.4–7.7%, character spread 1.4–1.9%, no rescues, no unfinished karts.
+  - **`tools/tune-report.ts`**: every tune within 1.0–2.0%.
+  - **Frame rate**: 57–60 fps on all four tracks.
+  - **Screenshots**: `docs/screens/d77/`.
+
+---
+
+### D78 · Wider again, two soft crests a track, slower karts, two boxes a row, more motion blur (2026-11-20, phase 14)
+- **Q**: the user asked for:
+  - every track wider;
+  - only two crests per track, just a little soft;
+  - slower karts, with just two item boxes per row;
+  - more motion blur.
+- **A**:
+  - **Width**: race roads 10% wider again (`ROAD` × 1.1): 20.4 to 22.4 m, and Sepang 18.3 to 20.1 m. Arenas 10% wider (`HALF` 15.8 to 17.4: a 34.8 m floor). The track test's half-width cap goes from 11.5 to 13 m.
+  - **Crests**: the coaster planner places at most two crests a track (`MAX_CRESTS`), shaped for 0.9 g at the estimated speed, so the kart stays on the road over the top, and at most 3 m high. The rest of its moments are jumps and dips (dips unchanged from D77: 1.1 g, at most 4 m). Each race track now has 2 crests, 19–27 dips and 7–10 jumps; the dip count is flagged to the user.
+  - **Speed**: `speedMul` 1.2827 to 1.2314 (4% slower). `PACE` stays 0.81: the pacing checks pass at it.
+  - **Item boxes**: `Handling.boxesPerRow` is 2 in a race (at ±4.5 m, scaled with the road) and 4 in the prototype. Bumper Brawl arenas keep four a row: their fights run on items, and two a row left rounds without knockouts. Items used per race halved (about 52 to about 24 on Meadows).
+  - **Brawl AI fix**: in the wider arena, pairs of AI karts aiming at each other locked nose to nose at walking pace (one round had 2 item pickups in 150 s). An AI locked within 10 m below 9 m/s for 1.4 s now backs off for 0.9 s (towards the middle of the floor, clear of the walls) and picks another target.
+  - **Motion blur**:
+    - **Camera blur**: shutter 0.6 to 1.0 of a frame, longest smear 6% to 10% of the view, samples 12 to 14 (high tier).
+    - **Speed blur**: from about 70 km/h (was 100), curve × 0.85 (was 0.55), streak strength 0.085 to 0.12.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build, Vitest 118/118.
+  - **e2e 28/28**.
+  - **sim-report** (20 races per row):
+    - **Normal AI laps**: Meadows 83.2 s, Canyon 82.7 s, Frosty 81.3 s, Sepang 96.4 s.
+    - **Gaps and spread**: Easy→Normal 8.4–10.9%, Normal→Hard 6.2–7.4%, character spread 1.1–1.8%, no unfinished karts.
+  - **`tools/tune-report.ts`**: every tune within 1.2–1.8%.
+  - **Headless AI brawls**: 3–5 knockouts a round and at most 2 rescues.
+  - **Frame rate**: 59–60 fps with one view and in 4-player split screen (day and rain).
+  - **Screenshots**: `docs/screens/d78/`.
+
+---
+
+### D79 · The phone page that came up bare (2026-11-20, phase 14)
+- **Q**: the user's iPhone showed the controller as bare, unstyled HTML (the join form in default fonts). Its scripts had not started; in dev, the styles are injected by those scripts.
+- **Found**:
+  - **The code runs in Safari's engine**: the controller ran in WebKit 18.2 as an iPhone (Playwright's WebKit, newly installed), on the dev server and the production build, over 127.0.0.1 and the LAN address (192.168.0.26), and against the live server on port 3000. So it is not a Safari incompatibility.
+  - **Several dev servers were running**: one `npm run dev` from 16 November and two from today, the newest started a moment before the screenshot. Only one can own port 3000, and the dev server restarts on every file change. A phone that loads the page while the server is restarting, or while Vite re-bundles a newly seen dependency (D72's garage brought in three.js modules), gets the HTML but not its scripts, and Safari does not retry.
+- **A**:
+  - **Boot watchdog** (`controller/index.html`): if the controller has not started within 6 s, the page reloads itself once (remembered in sessionStorage, so it never loops), then shows "The controller didn't load" with a **Tap to retry** button. `main.ts` marks the start; a lazily loaded part that fails (`vite:preloadError`) reloads the page.
+  - **Dependencies pre-bundled** (`vite.config.ts` `optimizeDeps.include`: three, RoomEnvironment, socket.io-client, qrcode), so the dev server never re-bundles in the middle of a phone's first load.
+  - **Port in use**: a second server prints "Port 3000 is already in use: another Turbo Karts server is still running" and exits, instead of a stack trace.
+  - **`tools/webkit-check.ts`**: the controller as an iPhone in WebKit on dev and prod (set `HOSTIP` to test over the LAN address). Our e2e phones run in Chromium, so this closes part of the real-phone gap; the finish-gate real-phone test is still open.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build, Vitest 118/118.
+  - **e2e 28/28**.
+  - **WebKit iPhone**: styled on dev and prod.
+  - **Watchdog**: with the controller's script blocked, the page reloads once, then shows the retry screen.
+
+---
+
+### D80 · Flat tracks and softer motion blur (2026-11-21, phase 14)
+- **Q**: the user asked for less motion blur and flat tracks with no roller coaster.
+- **A**:
+  - **Flat tracks** (`flat()` in `tracks/index.ts`, race tracks only):
+    - **Height**: every point of the four race tracks is at height 0, so there are no designed hills either.
+    - **Roller coaster**: the pass is off (`coaster: false`): no crests, dips, extra jumps or float zones.
+    - **Whoops**: the runs of bumps are removed.
+    - **Kept**: the designed single jumps (launch, table-top, kicker, lane ramp) and the banking in the corners. The scenery's hills and mountains around the tracks stay too.
+    - **Arenas**: unchanged.
+    - **D65's pacing tests** are retired: something every 3 s and a big moment every 4 s needed the crests and dips. They are replaced by a flat-track test (no crests, dips or float zones; road height 0 off the jumps) and a spacing guard: a corner, jump, item row or landmark at least every 15 s at 40 m/s.
+  - **Motion blur**: softer than the original D63/D45 settings, after D78's increase.
+    - **Camera blur**: shutter 0.4 of a frame (D63 0.6, D78 1.0), longest smear 4% of the view (6%, 10%), 12 samples.
+    - **Speed blur**: from about 95 km/h, curve × 0.5, streak 0.06 (D45 0.085, D78 0.12).
+  - **Bumper Brawl fixes** (an intermittent e2e failure, "winner ♥0"):
+    - **Stale standings**: the standings were taken from the ranking made before the step's last hits, so a kart knocked out in that very step could stand first. The round now ranks again when it ends; 60 headless rounds with players and moves had no knocked-out winner.
+    - **Last kart standing**: the last kart still in the round can no longer be knocked out (two going down in the same moment leave the second on one life, the winner).
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build. Vitest 119/119, with a new last-kart-standing test.
+  - **e2e 28/28**, three runs in a row.
+  - **sim-report** (20 races per row):
+    - **Normal AI laps**: Meadows 81.7 s, Canyon 80.4 s, Frosty 79.3 s, Sepang 95.6 s (1–2% quicker without the slopes).
+    - **Gaps and spread**: Easy→Normal 8.7–10.7%, Normal→Hard 6.2–7.3%, character spread 1.0–1.6%, no unfinished karts.
+  - **`tools/tune-report.ts`**: every tune within 1.5–2.0%.
+  - **Frame rate**: 59–60 fps.
+  - **Screenshots**: `docs/screens/d80/`.
+
+---
+
+### D81 · Faster karts, more jumps and boxes, gear shifts, crowd, commentator, tyre tread, hit emotes (2026-11-21, phase 14)
+- **Q**: the user asked for:
+  - karts 3% faster;
+  - more ramps and item boxes on every track;
+  - a louder engine with a gear-change sound;
+  - textured tyres;
+  - more realistic car visuals without changing the design;
+  - a commentator;
+  - crowd sound;
+  - an emote when a player is hit.
+- **A**:
+  - **Speed**: `speedMul` 1.2314 to 1.2683 (+3%).
+  - **Jumps**: a `coaster: 'ramps'` mode. The planner (`planCoaster` with `only: 'ramps'`) places single jumps only (kicker, table, lane, launch; never whoops, crests or dips), at least every 6 estimated seconds, around the designed ones. The tracks stay flat between them. Jumps per track: Meadows 2 to 8, Canyon 3 to 12, Frosty 3 to 10, Sepang 3 to 10.
+  - **Item rows**: every ~170 m (was 260): 16–19 rows a lap (was about 11).
+  - **Engine**: gain 0.08 to 0.13. A `shiftG` stage after the engine filter makes the gear change. On an upshift the drive dips to 30% for 0.17 s with a low clunk and a falling blip; on a downshift a quick rev blip (1.35×) and a lighter clunk.
+  - **Crowd** (`audio.ts`): a murmur of band-passed noise on a slow wobble, by stage (menu off, intro or replay 0.4, race 0.6, podium 0.85). Cheers (three swelling noise bands and a few whistles, at most every 2 s) at:
+    - the start, the final lap and a late lead change;
+    - the win or a photo finish;
+    - knockouts and the podium.
+    A gasp when a player is hit.
+  - **Commentator** (`host/src/commentator.ts`): the browser's speech voices, a natural English one when available, with a caption at the top of the screen.
+    - **Lines**:
+      - the start, the lead changing hands and the final lap;
+      - hits, the snowball, rubble and sheep (players and the top three);
+      - signature moves and hazard warnings;
+      - knockouts and sudden death;
+      - the winner, a photo finish, and each player's finishing place;
+      - a word on the leaders when it has been quiet for 11 s.
+    - **Priorities**: bigger moments interrupt smaller ones, and filler waits its turn.
+    - **When it is silent**: muted with the game; off in automation races unless asked (`comm`).
+  - **Tyres and realism** (car shader, no model or design change):
+    - **Tyres**: near-black rubber; on the tread, blocks between slanted and circumferential grooves (anti-aliased) with rougher grooves; on the sidewalls, fine moulded rings.
+    - **Body**: darker towards the floor (contact shading) with a film of road grime low down, and a fine metallic flake in the paint under the clear coat.
+  - **Hit emotes** (`KartView.showEmote`): a speech bubble pops over the kart for 1.9 s:
+    - a random face (😵 💫 😖 😤 😱 🤕) when hit;
+    - 🥶 flattened by the snowball, 😠 shoved, 🐑 after a sheep, 😎 dodging with Night Eyes.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build. Vitest 119/119; the flat-track test now also wants at least 7 jumps and 15 item rows.
+  - **e2e 28/28**.
+  - **sim-report**:
+    - **Normal AI laps**: Meadows 81.6 s, Canyon 80.9 s, Frosty 79.6 s, Sepang 94.4 s (about level: the extra speed goes into the air over the new jumps).
+    - **Gaps and spread**: Easy→Normal 8.3–11.0%, Normal→Hard 6.2–7.7%, character spread 1.1–1.9%, no unfinished karts.
+  - **`tools/tune-report.ts`**: every tune within 1.4–1.9%.
+  - **Commentator**: in an 80 s real-time race it called the start, two lead changes, four spins, four signature moves, a rockfall warning and the order.
+  - **Race audio**: −20 dB RMS (was −24), no clipping. The voice goes through the system's speech engine, so it is not in the recording.
+  - **Screenshots**: `docs/screens/d81-*.png`, `docs/screens/d81-preview-sheet.png`.
+
+---
+
+### D82 · Controller: number of AI bots, back to the lobby mid-race, − and + sensitivity (2026-11-21, phase 14)
+- **Q**: the user asked for the phone controller to:
+  - set how many AI bots race;
+  - pause and go back to the lobby mid-race;
+  - show "−" and "+" on the steering sensitivity buttons.
+- **A**:
+  - **AI bots**:
+    - **Setting**: `LeaderConfig.aiCount` (0 to `AI_MAX` = 7, default 5) replaces the on/off "AI racers" switch on the leader's phone with a − n + stepper; 0 means no AI (`aiFill` follows it).
+    - **Race size**: the host races `humans + min(aiCount, MAX_KARTS − humans)`, with `MAX_KARTS` = 8 karts in all. Beyond six karts the AI repeats characters, in AI orange.
+    - **Validation**: the server takes whole numbers 0–7 only.
+    - **Behaviour change**: with several players the default field is now bigger than the old fill to 6 (e.g. 3 players and 5 AI make 8).
+    - **Big-screen lobby chip**: shows "N AI bots".
+  - **Back to the lobby**: a **BACK TO LOBBY** button on the pause card, for the party leader. Other players see "The party leader can end the race." A new `player:lobby` message is accepted from the leader only, during countdown, race, pause, replay or results; the host unpauses and fades back to the lobby, and every phone returns to the waiting screen.
+  - **Sensitivity**: the gentler/sharper steering buttons show "−" and "+" instead of curve icons.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build. Vitest 121/121, with 2 new: the server's AI-count rules, and an 8-kart race (1 player, 7 AI) that finishes.
+  - **e2e 29/29**: new check: the leader sets 2 AI bots and the race has 2; a phone pauses, the leader taps BACK TO LOBBY, the host and phones return to the lobby, and the other phone shows the leader note.
+  - **Frame rate**: 57–60 fps with 8 karts in 5-way split screen, and 55–60 fps with one view.
+  - **Screenshots**: `docs/screens/latest/phone-ai-bots.png` and `phone-pause-lobby.png`.
+
+---
+
+### D83 · Fun zones: slalom gates, jump target, draft tunnel (2026-11-21, phase 14)
+- **Q**: the user asked for ideas to make the tracks more fun, one at a time, and said yes to idea 4, "trackside fun zones": short marked sections that reward skill without bringing back speed boosts (slalom gates, a jump target, a draft tunnel). Ideas 1–3 (shortcuts, moving track features, lap-by-lap track changes) were answered no.
+- **A**: `shared/src/zones.ts`, on by default (`LeaderConfig.zones`, a **Fun zones** switch on the leader's phone; races only, not Bumper Brawl). None of the zones gives a boost.
+  - **Slalom gates**:
+    - **Layout**: 4 cone gates 40 m apart, alternately right and left of the middle (centres ±3.2 m, gaps 5.6 m wide). The first gate is on the side the racing line comes in on.
+    - **Reward**: through every gate in order, without knocking a cone, wins a free item from the boxes' pool, rolled by your place. If you already hold one, you get +30% MOVE meter instead.
+    - **Cones**: touching one knocks it over (6% speed lost, and the run is spoilt). It stands up again after 3 s.
+    - **Feedback**: "MISSED A GATE" on a spoilt run.
+  - **Jump target**:
+    - **Placement**: a bullseye (3.5 m radius) where the track's launch ramp comes down, off the racing line (5 m across, on the side the line does not take).
+    - **Landing spot**: where karts land is worked out from the track's speed profile, the jump physics and the game's speed setting, so it follows future speed changes. Measured on the AI's landings, the estimate is within a few metres.
+    - **Reward**: land on it for the same reward as the slalom. Landing close gets "SO CLOSE!". You aim with your line onto the ramp and your speed off its lip.
+  - **Draft tunnel**: a 180 m covered gallery on the straightest free stretch.
+    - **Slipstream**: charges twice as fast inside it.
+    - **Close racing**: tucked in behind another kart, or side by side with one, charges the MOVE meter (+3.5%/s).
+    - **Passes**: each place gained between the tunnel's mouth and its exit adds 12% meter, up to 30%, with "NICE PASS".
+  - **Placement**: computed from the track itself, the same every race. The zones stay clear of the start, the jumps' run-ups and landings, shortcut mouths, existing tunnels and arches, and the track event's run-up. Item rows stay out of the slalom's gates.
+    - **Change to the planner**: the hazard clearance after its spot went from 40 m to 20 m (the rubble reaches 15 m), so Frosty Peaks has room for a slalom.
+  - **AI**:
+    - **Who tries**: a share of AI karts goes for each zone each lap (Easy 35%, Normal 65%, Hard 90%).
+    - **Slalom**: they follow an eased weave through the gates, without drifting, at up to 70% of top speed. Karts not going for it drive round the outside of the cones.
+    - **Target**: they line up with the bullseye before the ramp.
+  - **Big screen** (`host/src/art/zones.ts`):
+    - **Slalom**: orange cones that tumble when hit and pop back up, ski flags beside each gate (red right, blue left), the gaps painted on the road, and a SLALOM banner.
+    - **Jump target**: a red and white bullseye, a JUMP TARGET sign, and a gold ring that bursts out on a hit.
+    - **Draft tunnel**: pillars, beams and roof panels with gaps the sun strobes through, neon strips whose dashes run forward, and a DRAFT TUNNEL sign.
+  - **Feedback**:
+    - **Call-outs**: "⛷️ SLALOM CLEAN! +ITEM", "🎯 BULLSEYE! +MOVE", "💨 NICE PASS ×2!".
+    - **Sound and effects**: a three-note chime and confetti. The crowd cheers for a player.
+    - **Commentator**: has lines for each zone.
+    - **Phone**: a buzz and a toast.
+    - **No emote**: zone rewards show no emote bubble, which would sit in the middle of the player's own view.
+  - **Deterministic**: plain simulation, so replays stay exact. Rewards draw from the race RNG only when given.
+- **Checked**:
+  - **Static checks and tests**: typecheck, lint, Prettier, build. Vitest 133/133, with 12 new in `tests/zones.test.ts`:
+    - placement on every track;
+    - none in arenas or with the switch off;
+    - a clean slalom, a full-handed slalom, a missed gate, a knocked cone;
+    - a bullseye, a near miss, a jump from elsewhere;
+    - tunnel passes, the faster slipstream;
+    - the AI doing all three in a full race, replayed exactly.
+  - **e2e 30/30**. New check: the leader toggles Fun zones on the phone, and a race builds 8 cones, the target and the tunnel.
+  - **`npm run zone-report`** (new; per kart per lap, Normal):
+
+    | Track   | Clean slaloms | Bullseyes | Tunnel passes |
+    | ------- | ------------- | --------- | ------------- |
+    | Meadows | 0.26          | 0.39      | 0.17          |
+    | Canyon  | 0.63          | 0.43      | 0.17          |
+    | Frosty  | 0.35          | 0.40      | 0.11          |
+    | Sepang  | 0.53          | 0.39      | 0.07          |
+
+    Hard AI tries more; Easy AI rarely does them.
+  - **sim-report** (`--zones`, new flag):
+    - **Lap times**: zones on adds 0.6–1.3% to the Normal AI lap (the weaving).
+    - **Gaps and spread**: Easy→Normal 8.0–10.3%, Normal→Hard 5.6–7.4%, character spread 2.2–2.5%.
+    - **Coverage**: Meadows, Canyon and Sepang.
+  - **Frame rate**: 58–60 fps in the tunnel on every track.
+  - **Screenshots**: `docs/screens/d83/` (`npx tsx tools/zone-shot.ts`).
+
+---
+
 ## Gate 0 status
 All decisions are settled (D1 to D16). **You confirmed a shared understanding on 2026-11-16. Gate 0 is closed.**

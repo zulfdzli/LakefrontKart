@@ -12,6 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import './tk-hook';
 import { chromium, devices, type Browser, type BrowserContext, type Page } from 'playwright-core';
+import { CHARS, TUNE_WEIGHT } from '@tk/shared';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const args = process.argv.slice(2);
@@ -169,6 +170,31 @@ async function main(): Promise<void> {
       a2 = await kartIn(0);
     await brakeB;
     check('phone 2 BRAKE reaches kart P2 only', b2.brake && !a2.brake);
+    // D74: the MOVE bar fills on the phone; full, a tap fires the move on the host
+    await host.evaluate(() => {
+      const ses = window.__tk.session() as unknown as { s: { humans: { slot: number; meter: number }[] } };
+      ses.s.humans.find((h) => h.slot === 1)!.meter = 1;
+    });
+    let moveNote = '';
+    const moveOk = await b
+      .waitForSelector('#moveBtn.ready', { timeout: 5000 })
+      .then(async () => {
+        moveNote = ((await b.textContent('#moveLbl')) ?? '').trim();
+        await b.screenshot({ path: path.join(OUT, 'phone-move-ready.png') });
+        await b.dispatchEvent('#moveBtn', 'pointerdown', { pointerId: 9, isPrimary: true });
+        return host
+          .waitForFunction(
+            () =>
+              (window.__tk.session() as unknown as { s: { humans: { slot: number; meter: number }[] } }).s.humans.find(
+                (h) => h.slot === 1,
+              )!.meter < 0.2,
+            null,
+            { timeout: 5000 },
+          )
+          .then(() => true);
+      })
+      .catch(() => false);
+    check('the MOVE bar lights up when full; a tap fires the move on the host', moveOk, moveNote);
     await aPortrait.screenshot({ path: path.join(OUT, 'phone-drive-iphone-race.png') });
 
     // pause (D37): phone 2 pauses the race for everyone; phone 1 sees who paused and resumes it
@@ -252,6 +278,24 @@ async function main(): Promise<void> {
       /* reported below */
     }
     check('a finished player sees their place and time on the phone', /FINISHED \d/.test(finText), finText);
+    // D68: the highlight replay plays on the host; every phone shows SKIP, and any racer can skip it
+    let replayOk = false,
+      replayNote = '';
+    try {
+      await host.waitForFunction(() => window.__tk.state().stage === 'replay', null, { timeout: 15000 });
+      await aPortrait.waitForSelector('#replayCard:not([hidden])', { timeout: 5000 });
+      await b2p.waitForSelector('#replayCard:not([hidden])', { timeout: 5000 });
+      await host.waitForTimeout(2500);
+      replayNote = (await host.textContent('.replayCap b')) ?? '';
+      await host.screenshot({ path: path.join(OUT, 'host-replay.png') });
+      await b2p.screenshot({ path: path.join(OUT, 'phone-replay.png') });
+      await b2p.click('#skipBtn');
+      await host.waitForFunction(() => window.__tk.state().stage === 'podium', null, { timeout: 8000 });
+      replayOk = replayNote.length > 0;
+    } catch (e) {
+      replayNote += ` (${(e as Error).message.split(/\r?\n/)[0]})`;
+    }
+    check('the race highlights replay on the host, and a phone skips to the podium', replayOk, replayNote);
     await aPortrait.waitForSelector('#results:not([hidden])', { timeout: 15000 });
     const resTitle = (await aPortrait.textContent('#resTitle')) ?? '';
     await aPortrait.waitForTimeout(400);
@@ -299,6 +343,67 @@ async function main(): Promise<void> {
     // phase 12: the leader sets up a 1-lap Grand Prix on the phone and the four races run with points
     await host.keyboard.press('Escape');
     await aPortrait.waitForSelector('#wait:not([hidden])', { timeout: 10000 });
+
+    // D72: the phone garage: paint, livery, sticker, rims and a speed-for-handling tune; the host follows
+    await aPortrait.setViewportSize({ width: 393, height: 852 });
+    await aPortrait.click('#garageBtn');
+    await aPortrait.waitForSelector('#garage:not([hidden])', { timeout: 5000 });
+    await aPortrait.click('#gPaint button:nth-child(8)');
+    await aPortrait.click('#gAccent button:nth-child(12)');
+    await aPortrait.click('#gLivery button[data-v="flames"]');
+    await aPortrait.click('#gSticker button[data-v="crown"]');
+    await aPortrait.click('#gRims button:nth-child(3)');
+    for (let i = 0; i < 2; i++) await aPortrait.click('.tRow[data-k="speed"] button[data-d="1"]');
+    const midTune = (await aPortrait.textContent('#gFree')) ?? '';
+    const doneLocked = await aPortrait.isDisabled('#garageDone');
+    for (let i = 0; i < 2; i++) await aPortrait.click('.tRow[data-k="handling"] button[data-d="-1"]');
+    await aPortrait.waitForTimeout(1500);
+    await aPortrait.screenshot({ path: path.join(OUT, 'phone-garage.png') });
+    await aPortrait.locator('#garageView').scrollIntoViewIfNeeded();
+    await aPortrait.waitForTimeout(300);
+    await aPortrait.screenshot({ path: path.join(OUT, 'phone-garage-top.png') });
+    await aPortrait.click('#garageDone');
+    const garageOk = await host
+      .waitForFunction(
+        () => {
+          const p = (
+            window.__tk.lobby() as unknown as {
+              players: {
+                slot: number;
+                setup: {
+                  paint: number;
+                  livery: string;
+                  sticker: string;
+                  rims: number;
+                  tune: { speed: number; handling: number };
+                };
+              }[];
+            }
+          ).players.find((x) => x.slot === 0);
+          const s = p?.setup;
+          return (
+            !!s &&
+            s.paint === 7 &&
+            s.livery === 'flames' &&
+            s.sticker === 'crown' &&
+            s.rims === 2 &&
+            s.tune.speed === 2 &&
+            s.tune.handling === -2
+          );
+        },
+        null,
+        { timeout: 5000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    await host.waitForTimeout(1500);
+    await host.screenshot({ path: path.join(OUT, 'host-lobby-garage.png') });
+    await aPortrait.setViewportSize({ width: 852, height: 393 });
+    check(
+      'the phone garage styles and tunes the kart; Done waits for a balanced tune; the host has it',
+      garageOk && doneLocked && /take/i.test(midTune),
+      midTune,
+    );
     await aPortrait.click('#cfgLaps button[data-v="1"]');
     await aPortrait.click('#cfgMode button[data-v="gp"]');
     const cfgOk = await host
@@ -313,25 +418,96 @@ async function main(): Promise<void> {
       .then(() => true)
       .catch(() => false);
     check('the leader sets mode and laps on the phone; the host follows', cfgOk);
+    // D71: the leader picks a sky on the phone; the host's lobby preview changes to it; then back to Random
+    await aPortrait.click('#cfgSky button[data-v="night"]');
+    const skyOk = await host
+      .waitForFunction(
+        () => {
+          const c = (window.__tk.lobby() as unknown as { config: { weather: string } }).config;
+          const ses = window.__tk.session() as unknown as { s: { weather: string } } | null;
+          return c.weather === 'night' && ses?.s.weather === 'night';
+        },
+        null,
+        { timeout: 8000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    const skyText = (await aPortrait.textContent('#cfgSummary')) ?? '';
+    await host.waitForTimeout(800);
+    await host.screenshot({ path: path.join(OUT, 'host-lobby-night.png') });
+    await aPortrait.click('#cfgSky button[data-v="random"]');
+    check('the leader picks Night on the phone; the host preview turns to night', skyOk, skyText.split(' · ').at(-1));
+    // D73: the Track events switch on the phone reaches the host (off, then back on for the Grand Prix)
+    await aPortrait.click('#cfgEvents');
+    const evOff = await host
+      .waitForFunction(() => !(window.__tk.lobby() as unknown as { config: { events: boolean } }).config.events, null, {
+        timeout: 5000,
+      })
+      .then(() => true)
+      .catch(() => false);
+    await aPortrait.click('#cfgEvents');
+    const evOn = await host
+      .waitForFunction(() => (window.__tk.lobby() as unknown as { config: { events: boolean } }).config.events, null, {
+        timeout: 5000,
+      })
+      .then(() => true)
+      .catch(() => false);
     const finishRace = (): Promise<string> =>
       host.evaluate(() => {
         const ses = window.__tk.session() as unknown as {
           game: { setHumanAi(slot: number, on: boolean): void; startCountdown(): void };
           skipIntro(): void;
-          s: { track: { id: string }; humans: { slot: number; finished: boolean }[] };
+          s: { track: { id: string }; weather: string; humans: { slot: number; finished: boolean }[] };
         };
         ses.skipIntro();
         for (const k of ses.s.humans) ses.game.setHumanAi(k.slot, true);
         for (let i = 0; i < 60 * 400 && !ses.s.humans.every((k) => k.finished); i++) window.__tk.advance(1 / 60);
-        return ses.s.track.id;
+        return `${ses.s.track.id}:${ses.s.weather}`;
       });
-    const tracks: string[] = [];
+    const tracks: string[] = [],
+      skies: string[] = [];
     let gpOk = true,
       gpNote = '';
     await aPortrait.click('#startBtn');
     for (let r = 0; r < 4; r++) {
-      await host.waitForFunction(() => window.__tk.state().inRace, null, { timeout: 10000 });
-      tracks.push(await finishRace());
+      // D67: the next race is built behind a fade, so wait for it to start (not just for "in a race", which the
+      // finished race still is during the fade)
+      await host.waitForFunction(
+        () => window.__tk.state().inRace && ['intro', 'racing'].includes(window.__tk.state().stage),
+        null,
+        { timeout: 10000 },
+      );
+      if (r === 0) {
+        // D73: the race has its track event planned (sheep on Sunny Meadows)
+        const hz = await host.evaluate(() =>
+          (window.__tk.session() as unknown as { s: { hazards: { kind: string }[] } }).s.hazards.map((h) => h.kind),
+        );
+        check(
+          'Track events: the phone switch reaches the host; the race has its event',
+          evOff && evOn && hz[0] === 'sheep',
+          hz.join(', '),
+        );
+        // D72: the garage tune is on the kart: two points from handling into speed
+        const k = await host.evaluate(() => {
+          const ses = window.__tk.session() as unknown as {
+            s: { humans: { slot: number; ch: { id: string; stats: { speed: number; handling: number } } }[] };
+          };
+          const h = ses.s.humans.find((x) => x.slot === 0)!;
+          return { id: h.ch.id, speed: h.ch.stats.speed, handling: h.ch.stats.handling };
+        });
+        const base = CHARS.find((c) => c.id === k.id)!.stats;
+        check(
+          'the garage tune is on the kart in the race',
+          Math.abs(k.speed - (base.speed + 2 * TUNE_WEIGHT.speed)) < 1e-6 &&
+            Math.abs(k.handling - Math.max(0, base.handling - 2 * TUNE_WEIGHT.handling)) < 1e-6,
+          `${k.id}: speed ${base.speed}→${k.speed}, handling ${base.handling}→${k.handling}`,
+        );
+      }
+      const [tid, sky] = (await finishRace()).split(':') as [string, string];
+      tracks.push(tid);
+      skies.push(sky);
+      await aPortrait.waitForSelector('#replayCard:not([hidden])', { timeout: 20000 });
+      await aPortrait.click('#skipBtn');
       await aPortrait.waitForSelector('#results:not([hidden])', { timeout: 20000 });
       await aPortrait.waitForSelector('#gpBox:not([hidden])', { timeout: 5000 });
       const head = (await aPortrait.textContent('#gpHead')) ?? '',
@@ -352,6 +528,180 @@ async function main(): Promise<void> {
       'a 4-race Grand Prix: points after each race, NEXT RACE, final standings and the trophy',
       gpOk && trophy && tracks.join(',') === 'meadows,canyon,frosty,sepang',
       gpNote || tracks.join(' → '),
+    );
+    // D71: a Random sky rolls each race's weather (snow only on Frosty Peaks)
+    check(
+      'Random sky: every Grand Prix race rolls its own weather',
+      skies.length === 4 &&
+        skies.every((w, i) => ['day', 'sunset', 'night', 'rain', 'snow'].includes(w) && (w !== 'snow' || i === 2)),
+      tracks.map((t, i) => `${t} ${skies[i]}`).join(', '),
+    );
+
+    // D69 Bumper Brawl: the leader picks Brawl (arenas only, no laps), the round runs with lives on every phone,
+    // and the last kart standing wins
+    let brawlOk = false,
+      brawlNote = '';
+    try {
+      await aPortrait.click('#lobbyBtn');
+      await aPortrait.waitForSelector('#wait:not([hidden])', { timeout: 10000 });
+      await aPortrait.click('#cfgMode button[data-v="brawl"]');
+      await host.waitForFunction(
+        () => {
+          const c = (window.__tk.lobby() as unknown as { config: { mode: string; trackId: string } }).config;
+          return c.mode === 'brawl' && c.trackId.startsWith('arena-');
+        },
+        null,
+        { timeout: 5000 },
+      );
+      const arenasOnly = await aPortrait.evaluate(() =>
+        Array.from(document.querySelectorAll<HTMLElement>('#cfgTrack button')).every(
+          (b) => b.hidden !== b.dataset.v!.startsWith('arena-'),
+        ),
+      );
+      brawlNote = 'start';
+      await aPortrait.click('#startBtn');
+      await host.waitForFunction(() => ['intro', 'racing'].includes(window.__tk.state().stage), null, {
+        timeout: 15000,
+      });
+      brawlNote = 'hearts';
+      await host.keyboard.press(' ');
+      await aPortrait.waitForFunction(() => /♥/.test(document.getElementById('sLap')?.textContent ?? ''), null, {
+        timeout: 15000,
+      });
+      const hearts = (await aPortrait.textContent('#sLap')) ?? '';
+      await host.waitForTimeout(3000);
+      await host.screenshot({ path: path.join(OUT, 'host-brawl.png') });
+      await aPortrait.screenshot({ path: path.join(OUT, 'phone-brawl.png') });
+      const mode = await host.evaluate(
+        () => (window.__tk.session() as unknown as { s: { mode: string; track: { id: string } } }).s,
+      );
+      // play it out: every kart AI-driven, until the round ends
+      await host.evaluate(() => {
+        const ses = window.__tk.session() as unknown as {
+          game: { setHumanAi(slot: number, on: boolean): void };
+          s: { phase: string; humans: { slot: number }[] };
+        };
+        for (const k of ses.s.humans) ses.game.setHumanAi(k.slot, true);
+        for (let i = 0; i < 60 * 200 && ses.s.phase !== 'finished'; i++) window.__tk.advance(1 / 60);
+      });
+      await aPortrait.waitForSelector('#replayCard:not([hidden]), #results:not([hidden])', { timeout: 20000 });
+      if (await aPortrait.isVisible('#replayCard')) await aPortrait.click('#skipBtn');
+      await aPortrait.waitForSelector('#results:not([hidden])', { timeout: 20000 });
+      const winner = await host.evaluate(() => {
+        const s = (window.__tk.session() as unknown as { s: { standings: { out: boolean; lives: number }[] | null } })
+          .s;
+        return s.standings ? { out: s.standings[0]!.out, lives: s.standings[0]!.lives } : null;
+      });
+      brawlNote = `${mode.track.id}, phone "${hearts}", winner ${winner ? `♥${winner.lives}` : '?'}`;
+      brawlOk = arenasOnly && mode.mode === 'brawl' && /♥/.test(hearts) && !!winner && !winner.out;
+    } catch (e) {
+      brawlNote += ` (${(e as Error).message.split(/\r?\n/)[0]})`;
+    }
+    check(
+      'Bumper Brawl: Brawl on the phone, an arena, lives on the phones, a winner still standing',
+      brawlOk,
+      brawlNote,
+    );
+
+    const b2pOrB = (): typeof aPortrait => b2p;
+    // D82: the leader sets the number of AI bots on the phone, then pauses mid-race and goes back to the lobby
+    let botsOk = false,
+      botsNote = '';
+    try {
+      await aPortrait.click('#lobbyBtn');
+      await aPortrait.waitForSelector('#wait:not([hidden])', { timeout: 15000 });
+      await aPortrait.click('#cfgMode button[data-v="single"]');
+      for (let i = 0; i < 6; i++) {
+        const n = Number((await aPortrait.textContent('#cfgAi')) ?? '0');
+        if (n === 2) break;
+        await aPortrait.click(n > 2 ? '#cfgAiDn' : '#cfgAiUp');
+        await aPortrait.waitForTimeout(250);
+      }
+      const cfgAi = await host
+        .waitForFunction(
+          () => (window.__tk.lobby() as unknown as { config: { aiCount: number } }).config.aiCount === 2,
+          null,
+          { timeout: 5000 },
+        )
+        .then(() => true)
+        .catch(() => false);
+      await aPortrait.locator('#cfgAi').scrollIntoViewIfNeeded();
+      await aPortrait.screenshot({ path: path.join(OUT, 'phone-ai-bots.png') });
+      botsNote = 'start';
+      await aPortrait.click('#startBtn');
+      await host.waitForFunction(() => ['intro', 'racing'].includes(window.__tk.state().stage), null, {
+        timeout: 15000,
+      });
+      await host.keyboard.press(' ');
+      await host.waitForFunction(() => window.__tk.state().stage === 'racing', null, { timeout: 10000 });
+      const karts = await host.evaluate(
+        () =>
+          (window.__tk.session() as unknown as { s: { karts: { slot: number | null }[] } }).s.karts.filter(
+            (k) => k.slot === null,
+          ).length,
+      );
+      botsNote = `${karts} AI karts`;
+      // pause from the phone, then BACK TO LOBBY on the pause card
+      await aPortrait.click('#menuBtn');
+      await aPortrait.waitForSelector('#pauseSheet:not([hidden])', { timeout: 8000 });
+      await aPortrait.waitForTimeout(400);
+      await aPortrait.screenshot({ path: path.join(OUT, 'phone-pause-lobby.png') });
+      const nonLeaderNote = await b2pOrB().isVisible('#pauseLobbyNote');
+      await aPortrait.click('#pauseLobby');
+      await host.waitForFunction(() => !window.__tk.state().inRace, null, { timeout: 10000 });
+      await aPortrait.waitForSelector('#wait:not([hidden])', { timeout: 10000 });
+      botsNote += `, back in the lobby${nonLeaderNote ? ', others told the leader can end it' : ''}`;
+      botsOk = cfgAi && karts === 2 && nonLeaderNote;
+    } catch (e) {
+      botsNote += ` (${(e as Error).message.split(/\r?\n/)[0]})`;
+    }
+    check('the leader sets 2 AI bots; pause mid-race and BACK TO LOBBY on the phone', botsOk, botsNote);
+
+    // D83: the leader turns the fun zones off and on from the phone; a race with them builds the cones, target and tunnel
+    let zonesOk = false,
+      zonesNote = '';
+    try {
+      const cfgZones = (): Promise<boolean> =>
+        host.evaluate(() => (window.__tk.lobby() as unknown as { config: { zones: boolean } }).config.zones);
+      const before = await cfgZones();
+      await aPortrait.click('#cfgZones');
+      await host.waitForFunction(
+        (b) => (window.__tk.lobby() as unknown as { config: { zones: boolean } }).config.zones !== b,
+        before,
+        { timeout: 5000 },
+      );
+      await aPortrait.click('#cfgZones');
+      await host.waitForFunction(
+        (b) => (window.__tk.lobby() as unknown as { config: { zones: boolean } }).config.zones === b,
+        before,
+        { timeout: 5000 },
+      );
+      zonesNote = `toggle ${before ? 'on→off→on' : 'off→on→off'}`;
+      await host.evaluate(() => window.__tk.race({ seed: 4, track: 'frosty', zones: true, laps: 1, diff: 'easy' }));
+      await host.waitForFunction(() => window.__tk.state().stage === 'racing', null, { timeout: 15000 });
+      const z = await host.evaluate(() => {
+        const ses = window.__tk.session() as unknown as {
+          s: { zones: { slalom: { cones: unknown[] } | null; target: unknown; tunnel: unknown } | null };
+        };
+        const w = window.__tk.world() as unknown as { zoneFx: { group: { children: unknown[] } } | null };
+        const z = ses.s.zones;
+        return {
+          cones: z?.slalom?.cones.length ?? 0,
+          target: !!z?.target,
+          tunnel: !!z?.tunnel,
+          parts: w.zoneFx?.group.children.length ?? 0,
+        };
+      });
+      await host.evaluate(() => window.__tk.advance(20));
+      zonesNote += `, ${z.cones} cones, target ${z.target ? 'yes' : 'no'}, tunnel ${z.tunnel ? 'yes' : 'no'}, ${z.parts} meshes`;
+      zonesOk = before && z.cones === 8 && z.target && z.tunnel && z.parts > 5;
+    } catch (e) {
+      zonesNote += ` (${(e as Error).message.split(String.fromCharCode(10))[0]})`;
+    }
+    check(
+      'the leader toggles Fun zones on the phone; a race builds the slalom, jump target and draft tunnel',
+      zonesOk,
+      zonesNote,
     );
 
     // controller next to the reference image

@@ -254,11 +254,26 @@ describe('rocket start', () => {
         g.setInput(0, { steer: 0, throttle: true, brake: false, drift: s.phase === 'countdown' && s.cd <= pressAtCd }),
     );
   };
-  it('pressing DRIFT just before GO gives a rocket start', () => {
-    expect(at(0.2).some((e) => e.type === 'perfect' && e.kart === 0)).toBe(true);
+  // D76: the user removed the start boost: pressing DRIFT at the lights does nothing either way
+  it('pressing DRIFT just before GO no longer gives a rocket start (D76)', () => {
+    const ev = at(0.2);
+    expect(ev.some((e) => e.type === 'perfect' && e.kart === 0)).toBe(false);
+    expect(ev.some((e) => e.type === 'boost' && e.kart === 0)).toBe(false);
   });
-  it('pressing too early stalls', () => {
-    expect(at(1.5).some((e) => e.type === 'stall' && e.kart === 0)).toBe(true);
+  it('pressing too early no longer stalls (D76)', () => {
+    expect(at(1.5).some((e) => e.type === 'stall' && e.kart === 0)).toBe(false);
+  });
+});
+
+describe('AI bots (D82)', () => {
+  it('a race of 8 karts (1 player, 7 AI, characters repeating) runs and finishes', () => {
+    const g = createGame(base({ itemsOn: true, humans: [{ slot: 0, ci: 0 }], totalKarts: 8 }));
+    g.setHumanAi(0, true);
+    g.startCountdown();
+    const s = g.getSnapshot();
+    expect(s.karts).toHaveLength(8);
+    runUntil(g, () => s.karts.every((k) => k.finished), 400);
+    expect(s.karts.every((k) => k.finished)).toBe(true);
   });
 });
 
@@ -280,9 +295,10 @@ describe('rescue', () => {
 });
 
 describe('headless race (prototype track)', () => {
-  // 37-43 s at speedMul 1.3 (D36, D43); laps shorten in proportion when D62 raises the speed
+  // 37-43 s at speedMul 1.3 (D36, D43); laps shorten in proportion when D62 raises the speed. D65's grip, steeper
+  // slope pull and slingshot make this hilly test track about 5% quicker again, so the lower bound is 33 (was 36)
   const r = 1.3 / DEFAULT_HANDLING.speedMul;
-  it(`6 AI karts all finish with laps of about ${(37 * r).toFixed(0)}-${(43 * r).toFixed(0)} s (D36, D43, D62 speed)`, () => {
+  it(`6 AI karts all finish with laps of about ${(34 * r).toFixed(0)}-${(43 * r).toFixed(0)} s (D36, D43, D62, D65)`, () => {
     const laps: number[] = [];
     for (const seed of [1, 2, 3]) {
       const g = createGame(base({ seed, itemsOn: false }));
@@ -292,7 +308,7 @@ describe('headless race (prototype track)', () => {
       expect(s.karts.every((k) => k.finished)).toBe(true);
       for (const k of s.karts) laps.push(...k.lapTimes);
     }
-    expect(median(laps)).toBeGreaterThan(36 * r);
+    expect(median(laps)).toBeGreaterThan(33 * r);
     expect(median(laps)).toBeLessThan(44 * r);
   });
 });

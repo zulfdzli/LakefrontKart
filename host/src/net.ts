@@ -25,6 +25,8 @@ export interface HostNetEvents {
   start(slot: number): void;
   rematch(slot: number, toLobby: boolean): void;
   pause(slot: number, paused: boolean): void;
+  /** D68: a phone skipped the highlight replay. */
+  skip(slot: number): void;
   latency(slot: number, rttMs: number): void;
   settings(slot: number, s: PlayerSettings): void;
   device(slot: number, d: string): void;
@@ -55,6 +57,7 @@ export class HostNet {
     s.on('player:start', (p) => on.start(p.slot));
     s.on('player:rematch', (p) => on.rematch(p.slot, p.toLobby));
     s.on('player:pause', (p) => on.pause(p.slot, p.paused));
+    s.on('player:skip', (p) => on.skip(p.slot));
     s.on('player:latency', (p) => {
       this.latency.set(p.slot, p.rttMs);
       on.latency(p.slot, p.rttMs);

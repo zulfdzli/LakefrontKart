@@ -38,9 +38,10 @@ export type Tier = 'high' | 'medium' | 'low';
 /** D63 motion blur: shutter as a share of a 60 fps frame (0.5 = a 180 degree shutter), samples per tier, the longest
  * smear (share of the view width), and ?mblur=0 to turn it off. */
 const MBLUR = {
-  shutter: 0.6,
+  // D80: softer at the user's request, under the original (D63: 0.6 shutter, 6% smear; D78 had raised it to 1.0, 10%)
+  shutter: 0.4,
   taps: { high: 12, medium: 9, low: 6 } as const,
-  maxLen: 0.06,
+  maxLen: 0.04,
   on: new URLSearchParams(location.search).get('mblur') !== '0',
 };
 /** Karts (moving objects) the motion blur compensates for. */
@@ -197,7 +198,7 @@ const ATMOS = {
       float bl = uBlur[vi];
       if (bl > 0.01) {
         float edge = smoothstep(0.12, 0.62, length(rc * vec2(uAspect[vi], 1.0)) / max(1.0, uAspect[vi] * 0.6));
-        amt = bl * edge * 0.085;
+        amt = bl * edge * 0.06; // D80: softer (D45: 0.085, D78: 0.12)
       }
       // both in one pass: samples spread along the motion (centred on the pixel) and inward along the streak
       if (amt > 0.001 || dot(mv, mv) > 2e-6) {

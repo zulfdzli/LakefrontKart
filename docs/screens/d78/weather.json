@@ -1,0 +1,29 @@
+{
+  "report": [
+    {
+      "track": "frosty",
+      "weather": "day",
+      "fps": 60,
+      "p95": 16.8
+    },
+    {
+      "track": "frosty",
+      "weather": "rain",
+      "fps": 60,
+      "p95": 16.7
+    },
+    {
+      "track": "meadows",
+      "weather": "day",
+      "fps": 60,
+      "p95": 16.7
+    },
+    {
+      "track": "meadows",
+      "weather": "rain",
+      "fps": 59,
+      "p95": 16.7
+    }
+  ],
+  "errors": []
+}

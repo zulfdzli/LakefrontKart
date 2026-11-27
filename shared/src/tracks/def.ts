@@ -6,9 +6,20 @@
  * centreline along (RX, RZ), which is the driver's right.
  */
 import { clamp, wrapA } from '../constants';
-import { rampRise, type LatZone, type Ramp, type RampKind, type Shortcut, type SurfaceId, type Track } from '../track';
+import {
+  rampRise,
+  verticalCurvature,
+  type LatZone,
+  type Ramp,
+  type RampKind,
+  type Shortcut,
+  type SurfaceId,
+  type Track,
+} from '../track';
+import { bumpShape, planCoaster } from './coaster';
 
-export type TrackId = 'meadows' | 'canyon' | 'frosty' | 'sepang';
+/** Race tracks, then (D69) the Bumper Brawl arenas. */
+export type TrackId = 'meadows' | 'canyon' | 'frosty' | 'sepang' | 'arena-meadow' | 'arena-canyon' | 'arena-ice';
 export type ThemeId = 'meadows' | 'canyon' | 'frosty' | 'tropical';
 
 export interface TrackPoint {
@@ -16,7 +27,7 @@ export interface TrackPoint {
   z: number;
   /** Road height (m). Default 0. */
   h?: number;
-  /** Road half-width (m). Default 13. */
+  /** Road half-width (m). Default 9.5 (D65: was 13). */
   w?: number;
   /** Banking (degrees, positive raises the right-hand edge, for a left-hand corner). Default 0. */
   bank?: number;
@@ -66,6 +77,10 @@ export interface TrackDef {
   music: string;
   /** Traced from a real circuit's layout (D42): no invented shortcut, and its tight corners are kept. */
   traced?: boolean;
+  /** D65: fill the lap with roller-coaster crests, dips and jumps (default on). */
+  coaster?: boolean | 'ramps';
+  /** D69: walls this far beyond the road edge (default WALL_GAP; arenas keep theirs just past the kerbs). */
+  wallGap?: number;
 }
 
 /**
@@ -83,16 +98,40 @@ export interface RampDef {
   count?: number;
   gap?: number;
 }
+/** D67: pops 1.4x (more airtime off every ramp); were 0.13, 0.21, 0.16, 0.075, 0.16. */
 export const RAMP_KINDS: Readonly<Record<RampKind, { len: number; lift: number; pop: number }>> = {
-  kicker: { len: 9, lift: 1.1, pop: 0.13 },
-  launch: { len: 20, lift: 2.4, pop: 0.21 },
-  table: { len: 26, lift: 1.9, pop: 0.16 },
-  whoop: { len: 6, lift: 0.7, pop: 0.075 },
-  lane: { len: 10, lift: 1.3, pop: 0.16 },
+  kicker: { len: 9, lift: 1.1, pop: 0.18 },
+  launch: { len: 20, lift: 2.4, pop: 0.29 },
+  table: { len: 26, lift: 1.9, pop: 0.22 },
+  whoop: { len: 6, lift: 0.7, pop: 0.105 },
+  lane: { len: 10, lift: 1.3, pop: 0.22 },
 };
 
-const DEFAULT_HW = 13;
-/** Walls stand this far beyond the road edge. */
+/**
+ * D67: every layout 5% longer and its road 5% wider. Lap features are lap fractions, so checkpoints, pads, ramps
+ * and item rows keep their places; everything given in metres across the road (surface zones, lane ramps, pad
+ * lanes, landmark distances, shortcut corridors) grows with it, so it stays lined up with the road edge.
+ */
+export function growDef(def: TrackDef, s: number, ws = s): TrackDef {
+  // s: the layout (length); ws: the road width, and everything placed across it relative to its edge (D70)
+  return {
+    ...def,
+    points: def.points.map((p) => ({ ...p, x: p.x * s, z: p.z * s, w: (p.w ?? DEFAULT_HW) * ws })),
+    pads: def.pads.map((p) => (p.lat === undefined ? p : { ...p, lat: p.lat * ws })),
+    ramps: def.ramps.map((r) => (r.lat ? { ...r, lat: [r.lat[0] * ws, r.lat[1] * ws] as [number, number] } : r)),
+    zones: def.zones.map((z) => ({ ...z, latMin: z.latMin * ws, latMax: z.latMax * ws })),
+    shortcuts: def.shortcuts.map((c) => ({
+      ...c,
+      via: c.via.map(([x, z]) => [x * s, z * s] as [number, number]),
+      ...(c.half === undefined ? {} : { half: c.half * s }),
+    })),
+    landmarks: def.landmarks.map((l) => ({ ...l, dist: l.dist * s })),
+  };
+}
+
+/** D65: a narrower road (was 13 m) for closer racing on the shorter tracks. */
+const DEFAULT_HW = 9.5;
+/** Walls stand this far beyond the road edge: the road is narrower (D65), the grass run-off is not. */
 const WALL_GAP = 12;
 /** Walls never come closer than this to the road edge (kerb plus a little run-off). */
 const MIN_WALL_GAP = 3.8;
@@ -107,6 +146,9 @@ function cr(p0: number, p1: number, p2: number, p3: number, t: number): number {
     t3 = t2 * t;
   return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
 }
+
+/** D81: on the flat tracks ('ramps' mode), a jump at least every this many seconds (estimated). */
+const RAMP_SPACING = 6;
 
 export function buildTrackFromDef(def: TrackDef): Track {
   const P = def.points,
@@ -148,7 +190,7 @@ export function buildTrackFromDef(def: TrackDef): Track {
     CX.push(v[0]!);
     CZ.push(v[1]!);
     H.push(v[2]!);
-    HW.push(clamp(v[3]!, 9, 18));
+    HW.push(clamp(v[3]!, 7, 18));
     BT.push(Math.tan((clamp(v[4]!, -14, 14) * Math.PI) / 180));
   }
   const TX: number[] = [],
@@ -169,11 +211,108 @@ export function buildTrackFromDef(def: TrackDef): Track {
     ANG.push(Math.atan2(dx, dz));
   }
   const idxOf = (f: number): number => ((Math.round(f * N) % N) + N) % N;
+  const span = (from: number, to: number): number[] => {
+    const a = idxOf(from),
+      b = idxOf(to),
+      out: number[] = [];
+    for (let i = a; ; i = (i + 1) % N) {
+      out.push(i);
+      if (i === b) break;
+    }
+    return out;
+  };
+
+  // item rows: given, or about every 260 m from 150 m after the line (D65: was 400 m)
+  const LAPF = (m: number): number => m / LEN;
+  // D81: item rows every 170 m or so (was 260): more mystery boxes round the lap
+  const nRows = Math.max(3, Math.round((LEN - 150) / 170));
+  const rows = def.itemRows ?? Array.from({ length: nRows }, (_, k) => LAPF(150) + (k * (1 - LAPF(250))) / nRows);
+  const boxRows = rows.map(idxOf);
+
+  // D65 roller coaster: crests, dips and extra jumps between the def's own features
+  const defRampKind = (r: RampDef): RampKind => (r.kind === 'whoops' ? 'whoop' : (r.kind ?? 'kicker'));
+  const extraRamps: RampDef[] = [];
+  let beats: Track['beats'];
+  let airZone = new Array<boolean>(N).fill(false);
+  {
+    const blocked = new Array<boolean>(N).fill(false),
+      dipOnly = new Array<boolean>(N).fill(false),
+      marks: number[] = [];
+    const block = (from: number, to: number, arr = blocked): void => {
+      for (const i of span(from, to)) arr[i] = true;
+    };
+    const mf = (m: number): number => m / LEN;
+    block(-mf(32), mf(18)); // the grid (three rows, up to 27 m back) and the start line
+    marks.push(0); // crossing the line: the lap counter, the split
+    for (const l of def.landmarks) {
+      if (l.kind === 'tunnel' && l.len) {
+        block(l.at - mf(15), l.at + l.len + mf(15), dipOnly);
+        marks.push(idxOf(l.at), idxOf(l.at + l.len));
+      }
+      if (l.kind === 'river' || l.kind === 'bridge') {
+        block(l.at - mf(28), l.at + mf(28));
+        marks.push(idxOf(l.at));
+      }
+      if (l.kind === 'arch') {
+        block(l.at - mf(25), l.at + mf(25), dipOnly);
+        marks.push(idxOf(l.at));
+      }
+    }
+    for (const sc of def.shortcuts) {
+      block(sc.from - mf(18), sc.from + mf(12));
+      block(sc.to - mf(12), sc.to + mf(18));
+      marks.push(idxOf(sc.from), idxOf(sc.to));
+    }
+    const fixed = def.ramps.map((r) => {
+      const k = defRampKind(r),
+        d = RAMP_KINDS[k],
+        n = r.kind === 'whoops' ? (r.count ?? 3) : 1;
+      const i1 = idxOf(r.at);
+      return {
+        i1,
+        from: (i1 - Math.round(((r.len ?? d.len) + 10) / DS) + N) % N,
+        to: i1 + Math.round(((n - 1) * (r.gap ?? 28) + 45) / DS),
+      };
+    });
+    if (def.coaster !== false) {
+      const plan = planCoaster({
+        N,
+        DS,
+        ANG,
+        HW,
+        blocked,
+        dipOnly,
+        marks,
+        ramps: fixed,
+        pads: def.pads.map((p) => idxOf(p.at)),
+        rows: boxRows,
+        ...(def.coaster === 'ramps' ? { only: 'ramps' as const, spacing: RAMP_SPACING } : {}),
+      });
+      for (const b of plan.bumps) {
+        const reach = Math.ceil((3 * b.sigma) / DS);
+        for (let o = -reach; o <= reach; o++) {
+          const i = (b.idx + o + N) % N,
+            w = bumpShape(o * DS, b.sigma);
+          H[i]! += b.amp * w;
+          if (b.bank) BT[i] = clamp(BT[i]! + Math.tan((b.bank * w * Math.PI) / 180), -0.45, 0.45);
+        }
+      }
+      extraRamps.push(...plan.ramps);
+      beats = plan.beats;
+      airZone = plan.airZone;
+    } else {
+      beats = [
+        ...fixed.map((r) => ({ idx: r.i1, kind: 'ramp' as const })),
+        ...def.pads.map((p) => ({ idx: idxOf(p.at), kind: 'pad' as const })),
+        ...boxRows.map((idx) => ({ idx, kind: 'items' as const })),
+      ].sort((a, b) => a.idx - b.idx);
+    }
+  }
 
   // jump ramps raise the road before the lip; the road after the lip stays at its base height (a lane ramp only
   // covers its lane, so it is not part of the road height: see laneLift)
-  const ramps: Ramp[] = def.ramps.flatMap((r) => {
-    const kind: RampKind = r.kind === 'whoops' ? 'whoop' : (r.kind ?? 'kicker');
+  const ramps: Ramp[] = [...def.ramps, ...extraRamps].flatMap((r) => {
+    const kind: RampKind = defRampKind(r);
     const d = RAMP_KINDS[kind];
     const n = r.kind === 'whoops' ? (r.count ?? 3) : 1;
     return Array.from({ length: n }, (_, w): Ramp => {
@@ -199,8 +338,11 @@ export function buildTrackFromDef(def: TrackDef): Track {
     CURV: number[] = [];
   for (let i = 0; i < N; i++) SL.push((H[(i + 1) % N]! - H[(i - 1 + N) % N]!) / (2 * DS));
   for (let i = 0; i < N; i++) CURV.push(wrapA(ANG[(i + 6) % N]! - ANG[(i - 6 + N) % N]!));
+  const VC = verticalCurvature(H, DS);
   // racing line, as the prototype: toward the inside of each corner, smoothed so the AI moves over early
-  let line = CURV.map((c, i) => clamp(-c * 14, -(HW[i]! - 4.5), HW[i]! - 4.5));
+  // D65: 3.5 m inside the edges (was 4.5) on the narrower road
+  const LINE_IN = 3.5;
+  let line = CURV.map((c, i) => clamp(-c * 14, -(HW[i]! - LINE_IN), HW[i]! - LINE_IN));
   for (let pass = 0; pass < 3; pass++) {
     const nl: number[] = [];
     for (let i = 0; i < N; i++) {
@@ -223,7 +365,7 @@ export function buildTrackFromDef(def: TrackDef): Track {
         const mx = (CX[a]! + RX[a]! * line[a]! + CX[b]! + RX[b]! * line[b]!) / 2,
           mz = (CZ[a]! + RZ[a]! * line[a]! + CZ[b]! + RZ[b]! * line[b]!) / 2;
         const target = (mx - CX[i]!) * RX[i]! + (mz - CZ[i]!) * RZ[i]!;
-        const lim = HW[i]! - 4.5;
+        const lim = HW[i]! - LINE_IN;
         nl[i] = clamp(line[i]! * 0.5 + target * 0.5, -lim, lim);
       }
       line = nl;
@@ -231,16 +373,6 @@ export function buildTrackFromDef(def: TrackDef): Track {
   }
 
   const zones: (LatZone[] | null)[] = new Array<LatZone[] | null>(N).fill(null);
-  const span = (from: number, to: number): number[] => {
-    const a = idxOf(from),
-      b = idxOf(to),
-      out: number[] = [];
-    for (let i = a; ; i = (i + 1) % N) {
-      out.push(i);
-      if (i === b) break;
-    }
-    return out;
-  };
   for (const z of def.zones)
     for (const i of span(z.from, z.to))
       (zones[i] ??= []).push({ latMin: z.latMin, latMax: z.latMax, surface: z.surface });
@@ -254,7 +386,7 @@ export function buildTrackFromDef(def: TrackDef): Track {
 
   // walls stand WALL_GAP beyond the road edge, but close in inside tunnels, where another part of the road
   // runs close by (each side's walls stop halfway), and on the inside of very tight corners (no folded walls)
-  const WALLD = HW.map((w) => w + WALL_GAP);
+  const WALLD = HW.map((w) => w + (def.wallGap ?? WALL_GAP));
   const CLEAR = new Array<number>(N).fill(1e9);
   for (const l of def.landmarks)
     if (l.kind === 'tunnel' && l.len) for (const i of span(l.at, l.at + l.len)) WALLD[i] = HW[i]! + TUNNEL_GAP;
@@ -282,16 +414,6 @@ export function buildTrackFromDef(def: TrackDef): Track {
   const gates = [...new Set([...sectors.slice(1), ...(def.gates ?? []).map(idxOf)])]
     .filter((g) => g > 0)
     .sort((a, b) => a - b);
-
-  // item rows: given, or about every 400 m from 150 m after the line
-  const LAPF = (m: number): number => m / LEN;
-  const rows =
-    def.itemRows ??
-    Array.from(
-      { length: Math.max(3, Math.round((LEN - 150) / 400)) },
-      (_, k) => LAPF(150) + (k * (1 - LAPF(250))) / Math.max(3, Math.round((LEN - 150) / 400)),
-    );
-  const boxRows = rows.map(idxOf);
 
   return {
     N,
@@ -321,6 +443,9 @@ export function buildTrackFromDef(def: TrackDef): Track {
     boxRows,
     ramps,
     shortcuts,
+    VC,
+    beats,
+    airZone,
   };
 }
 
